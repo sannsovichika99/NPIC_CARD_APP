@@ -15,21 +15,41 @@ namespace NPIC_CARD_APP.Services
         public static List<Student> Load(string path)
         {
             string[] lines = File.ReadAllLines(path, Encoding.UTF8);
-            var students = new List<Student>();
-            if (lines.Length == 0) return students;
+            var rows = new List<List<string>>(lines.Length);
+            foreach (string line in lines)
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                rows.Add(ParseLine(line));
+            }
+            return FromRows(rows, "CSV header");
+        }
 
-            List<string> header = ParseLine(lines[0]);
+        /// <summary>
+        /// Turns a table (first non-blank row = header) into students. Shared by the CSV and Excel loaders
+        /// so both accept exactly the same columns.
+        /// </summary>
+        internal static List<Student> FromRows(IList<List<string>> rows, string headerName)
+        {
+            var students = new List<Student>();
+            int headerRow = 0;
+            while (headerRow < rows.Count && IsBlank(rows[headerRow])) headerRow++;
+            if (headerRow == rows.Count) return students;
+
+            List<string> header = rows[headerRow];
             var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < header.Count; i++)
-                map[header[i].Trim().TrimStart('\uFEFF')] = i;
+            {
+                string name = (header[i] ?? "").Trim().TrimStart('﻿');
+                if (name.Length > 0 && !map.ContainsKey(name)) map[name] = i;
+            }
 
             if (!map.ContainsKey("StudentId"))
-                throw new InvalidDataException("CSV header must contain a 'StudentId' column.");
+                throw new InvalidDataException(headerName + " must contain a 'StudentId' column.");
 
-            for (int r = 1; r < lines.Length; r++)
+            for (int r = headerRow + 1; r < rows.Count; r++)
             {
-                if (string.IsNullOrWhiteSpace(lines[r])) continue;
-                List<string> cells = ParseLine(lines[r]);
+                List<string> cells = rows[r];
+                if (IsBlank(cells)) continue;
                 string faculty = Get(cells, map, "Faculty");
                 students.Add(new Student
                 {
@@ -48,11 +68,18 @@ namespace NPIC_CARD_APP.Services
             return students;
         }
 
+        private static bool IsBlank(List<string> cells)
+        {
+            foreach (string c in cells)
+                if (!string.IsNullOrWhiteSpace(c)) return false;
+            return true;
+        }
+
         private static string Get(List<string> cells, Dictionary<string, int> map, string column)
         {
             int index;
             if (map.TryGetValue(column, out index) && index < cells.Count)
-                return cells[index].Trim();
+                return (cells[index] ?? "").Trim();
             return "";
         }
 

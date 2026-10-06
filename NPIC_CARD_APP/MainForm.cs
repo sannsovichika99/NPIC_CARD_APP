@@ -92,7 +92,7 @@ namespace NPIC_CARD_APP
             LoadPrinters();
             ApplySettingsToUi();
 
-            if (File.Exists(_settings.LastCsvPath)) LoadCsv(_settings.LastCsvPath);
+            if (File.Exists(_settings.LastCsvPath)) LoadStudents(_settings.LastCsvPath);
             UpdatePageInfo();
             UpdateEmptyState();
             UpdateCount();
@@ -176,6 +176,7 @@ namespace NPIC_CARD_APP
                 FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false,
                 Anchor = AnchorStyles.Right, Margin = new Padding(0), BackColor = Accent
             };
+            actions.Controls.Add(MakeButton("Import Excel…", ButtonKind.OnAccent, (s, e) => ImportExcel(), "Load students from an Excel workbook (.xlsx) (Ctrl+E)"));
             actions.Controls.Add(MakeButton("Import CSV…", ButtonKind.OnAccent, (s, e) => ImportCsv(), "Load students from a UTF-8 CSV file (Ctrl+O)"));
             actions.Controls.Add(MakeButton("Photo Folder…", ButtonKind.OnAccent, (s, e) => ChoosePhotoFolder(), "Folder with photos named {StudentId}.jpg / .png"));
             actions.Controls.Add(MakeButton("Signature…", ButtonKind.OnAccent, (s, e) => ChooseSignature(), "Director signature image (white background is removed)"));
@@ -258,7 +259,9 @@ namespace NPIC_CARD_APP
             body.Controls.Add(_txtSearch, 0, 0);
             body.Controls.Add(gridHost, 0, 1);
 
-            return MakeCard("Students", body, _lblCount);
+            return MakeCard("Students", body, _lblCount,
+                MakeButton("Excel Template", ButtonKind.Ghost, (s, e) => SaveExcelTemplate(),
+                    "Save an empty Excel file with the right columns to fill in, then use Import Excel…"));
         }
 
         /// <summary>Right side: card previews, printer + tray settings, print actions.</summary>
@@ -677,7 +680,8 @@ namespace NPIC_CARD_APP
         {
             if (_lblEmpty == null) return;
             _lblEmpty.Text = _students.Count == 0
-                ? "No students loaded yet.\n\nClick  Import CSV…  in the top bar to begin."
+                ? "No students loaded yet.\n\nClick  Import Excel…  or  Import CSV…  in the top bar to begin.\n" +
+                  "No list yet? Click  Excel Template  above for a file to fill in."
                 : "No students match “" + _txtSearch.Text.Trim() + "”.\n\nPress Esc to clear the search.";
             _lblEmpty.Visible = _view.Count == 0;
         }
@@ -818,15 +822,72 @@ namespace NPIC_CARD_APP
         {
             using (var dlg = new OpenFileDialog { Filter = "CSV UTF-8 (*.csv)|*.csv", Title = "Import students" })
             {
-                if (dlg.ShowDialog(this) == DialogResult.OK) LoadCsv(dlg.FileName);
+                if (dlg.ShowDialog(this) == DialogResult.OK) LoadStudents(dlg.FileName);
             }
         }
 
-        private void LoadCsv(string path)
+        private void ImportExcel()
+        {
+            using (var dlg = new OpenFileDialog
+            {
+                Filter = "Excel workbook (*.xlsx;*.xlsm)|*.xlsx;*.xlsm|Excel 97-2003 (*.xls)|*.xls|All files (*.*)|*.*",
+                Title = "Import students from Excel"
+            })
+            {
+                if (dlg.ShowDialog(this) == DialogResult.OK) LoadStudents(dlg.FileName);
+            }
+        }
+
+        private void SaveExcelTemplate()
+        {
+            string path;
+            using (var dlg = new SaveFileDialog
+            {
+                Filter = "Excel workbook (*.xlsx)|*.xlsx",
+                Title = "Save Excel template",
+                FileName = "students-template.xlsx",
+                OverwritePrompt = true
+            })
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                path = dlg.FileName;
+            }
+
+            try
+            {
+                ExcelTemplateWriter.Write(path);
+            }
+            catch (IOException ex)
+            {
+                MessageBox.Show(this, "Could not save the template:\n\n" + ex.Message +
+                    "\n\nIf the file is open in Excel, close it and try again.",
+                    Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            catch (Exception ex)
+            {
+                ShowError(ex);
+                return;
+            }
+
+            SetStatus("Excel template saved: " + path);
+            if (MessageBox.Show(this,
+                    "Template saved.\n\nFill in the Students sheet (one student per row), save it, then click Import Excel…\n\nOpen it now?",
+                    Text, MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+            {
+                try { System.Diagnostics.Process.Start(path); }
+                catch (Exception ex) { ShowError(ex); }   // e.g. no program associated with .xlsx
+            }
+        }
+
+        /// <summary>Loads a student list from .xlsx or .csv (chosen by extension) and remembers it for next start.</summary>
+        private void LoadStudents(string path)
         {
             try
             {
-                _students = CsvStudentLoader.Load(path);
+                _students = ExcelStudentLoader.IsExcelFile(path)
+                    ? ExcelStudentLoader.Load(path)
+                    : CsvStudentLoader.Load(path);
                 ApplyFilter();
                 _settings.LastCsvPath = path;
                 SaveSettings(false);
@@ -951,6 +1012,7 @@ namespace NPIC_CARD_APP
                 case Keys.F11: ShowFullScreen(PreviewSide.Both); return true;
                 case Keys.Control | Keys.F: _txtSearch.Focus(); _txtSearch.SelectAll(); return true;
                 case Keys.Control | Keys.O: ImportCsv(); return true;
+                case Keys.Control | Keys.E: ImportExcel(); return true;
                 case Keys.Control | Keys.P: PrintSelected(); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
