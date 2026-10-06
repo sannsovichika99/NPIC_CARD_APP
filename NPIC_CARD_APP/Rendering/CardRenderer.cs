@@ -45,6 +45,11 @@ namespace NPIC_CARD_APP.Rendering
         private const float DirectorTitlePt = 6.6f; // នាយកវិទ្យាស្ថាន              (Khmer OS Muol)
         private const float DirectorNamePt = 6.2f;  // director name                (Khmer OS Muol)
 
+        // ---- Positions (mm) ----
+        /// <summary>Moves the signature and director name down (positive = towards the bottom edge).
+        /// Keep at 1.5 mm or less, or the director name runs off the 54 mm card.</summary>
+        private const float SignatureOffsetYMm = 1.5f;
+
         /// <summary>Kept for MainForm (grid / text boxes).</summary>
         public static string KhmerFont { get { return CardFonts.KhmerSiemreap; } }
         public static string MuolFont { get { return CardFonts.Muol; } }
@@ -99,8 +104,8 @@ namespace NPIC_CARD_APP.Rendering
                 // Director, stamp, signature
                 DrawText(g, t.DirectorTitle, CardFonts.Muol, DirectorTitlePt, FontStyle.Regular, Blue, 55f, 37.3f, 24.8f, 3.8f, TextFormatFlags.HorizontalCenter);
                 DrawAsset(g, AssetStore.Get("stamp.png", true, true), 56.7f, 40.1f, 11.2f, 11.2f, 1f, false);
-                DrawAsset(g, AssetStore.GetFile(settings.SignaturePath, true, true), 61.5f, 43.4f, 13f, 5.6f, 1f, false);
-                DrawText(g, t.DirectorName, CardFonts.Muol, DirectorNamePt, FontStyle.Regular, Navy, 60.9f, 48.4f, 20f, 3.6f, TextFormatFlags.HorizontalCenter);
+                DrawAsset(g, AssetStore.GetFile(settings.SignaturePath, true, true), 61.5f, 43.4f + SignatureOffsetYMm, 13f, 5.6f, 1f, false);
+                DrawText(g, t.DirectorName, CardFonts.Muol, DirectorNamePt, FontStyle.Regular, Navy, 60.9f, 48.4f + SignatureOffsetYMm, 20f, 3.6f, TextFormatFlags.HorizontalCenter);
             }
             return bmp;
         }
