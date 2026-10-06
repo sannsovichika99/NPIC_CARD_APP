@@ -41,7 +41,7 @@ namespace NPIC_CARD_APP
             MinimumSize = new Size(900, 640);
             ShowInTaskbar = false;
             MinimizeBox = false;
-            Font = new Font("Segoe UI", 9f);
+            Font = new Font(CardFonts.UI, 9f);
 
             BuildUi();
             _slots[0].Load(settings.Slot1X, settings.Slot1Y);
@@ -159,8 +159,8 @@ namespace NPIC_CARD_APP
         // ===================== One slot's reading =====================
         private class SlotReading
         {
-            private static readonly Font RegularFont = new Font("Segoe UI", 9f, FontStyle.Regular);
-            private static readonly Font BoldFont = new Font("Segoe UI", 9f, FontStyle.Bold);
+            private static readonly Font RegularFont = new Font(CardFonts.UI, 9f, FontStyle.Regular);
+            private static readonly Font BoldFont = new Font(CardFonts.UI, 9f, FontStyle.Bold);
 
             private readonly NumericUpDown _squareX, _squareY, _left, _top;
             private readonly Label _result;
@@ -293,7 +293,7 @@ namespace NPIC_CARD_APP
                 // Card corner = what we are looking for
                 using (var brush = new SolidBrush(Measure))
                 using (var pen = new Pen(Measure, 0.2f))
-                using (var font = new Font("Segoe UI", 2.4f, FontStyle.Bold, GraphicsUnit.World))
+                using (var font = new Font(CardFonts.UI, 2.4f, FontStyle.Bold, GraphicsUnit.World))
                 {
                     g.FillEllipse(brush, ExampleX - 0.9f, ExampleY - 0.9f, 1.8f, 1.8f);
                     g.DrawString("Slot X, Y", font, brush, ExampleX - 12.5f, ExampleY - 10.5f);
@@ -310,7 +310,7 @@ namespace NPIC_CARD_APP
             using (var ext = new Pen(Measure, 0.2f) { DashStyle = DashStyle.Dash })
             using (var cap = new AdjustableArrowCap(4f, 4f))
             using (var brush = new SolidBrush(Measure))
-            using (var font = new Font("Segoe UI", 2.6f, FontStyle.Bold, GraphicsUnit.World))
+            using (var font = new Font(CardFonts.UI, 2.6f, FontStyle.Bold, GraphicsUnit.World))
             {
                 pen.CustomStartCap = cap;
                 pen.CustomEndCap = cap;

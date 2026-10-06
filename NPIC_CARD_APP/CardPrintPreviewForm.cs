@@ -1,3 +1,4 @@
+using NPIC_CARD_APP.Rendering;
 using System;
 using System.Drawing;
 using System.Drawing.Printing;
@@ -31,7 +32,7 @@ namespace NPIC_CARD_APP
             StartPosition = FormStartPosition.CenterParent;
             Size = new Size(1000, 760);
             MinimumSize = new Size(640, 480);
-            Font = new Font("Segoe UI", 9f);
+            Font = new Font(CardFonts.UI, 9f);
             KeyPreview = true;
             ShowInTaskbar = false;
 

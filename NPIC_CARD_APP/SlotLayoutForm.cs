@@ -57,7 +57,7 @@ namespace NPIC_CARD_APP
             MinimumSize = new Size(820, 560);
             ShowInTaskbar = false;
             KeyPreview = true;
-            Font = new Font("Segoe UI", 9f);
+            Font = new Font(CardFonts.UI, 9f);
 
             BuildUi();
             RenderCards();
@@ -724,7 +724,7 @@ namespace NPIC_CARD_APP
 
                 float px = M(5f);
                 if (px < 8f) return;
-                using (var font = new Font("Segoe UI", px, FontStyle.Bold, GraphicsUnit.Pixel))
+                using (var font = new Font(CardFonts.UI, px, FontStyle.Bold, GraphicsUnit.Pixel))
                 using (var ink = new SolidBrush(Engrave))
                 using (var center = new StringFormat { Alignment = StringAlignment.Center })
                     g.DrawString((slot + 1).ToString(CultureInfo.InvariantCulture), font, ink, cx, rc.Top + M(2.5f), center);
@@ -766,8 +766,8 @@ namespace NPIC_CARD_APP
             float numPx = Clamp(5.5f * _scale, 12f, 36f);
             float smallPx = Clamp(2.8f * _scale, 9f, 13f);
 
-            using (var numFont = new Font("Segoe UI", numPx, FontStyle.Bold, GraphicsUnit.Pixel))
-            using (var smallFont = new Font("Segoe UI", smallPx, FontStyle.Regular, GraphicsUnit.Pixel))
+            using (var numFont = new Font(CardFonts.UI, numPx, FontStyle.Bold, GraphicsUnit.Pixel))
+            using (var smallFont = new Font(CardFonts.UI, smallPx, FontStyle.Regular, GraphicsUnit.Pixel))
             using (var center = new StringFormat { Alignment = StringAlignment.Center })
             {
                 for (int slot = 0; slot < 2; slot++)

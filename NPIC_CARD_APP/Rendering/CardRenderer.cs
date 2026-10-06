@@ -39,14 +39,14 @@ namespace NPIC_CARD_APP.Rendering
         private const float CardTitleEnPt = 9.5f;// STUDENT IDENTIFICATION CARD     (Times New Roman Bold)
         private const float ContactPt = 7.2f;    // address / email / website       (Khmer OS Siemreap + Times New Roman)
         private const float ScanPt = 3.6f;       // ស្កេនទីនេះសម្រាប់ព័ត៌មាន        (Siemreap)
-        private const float FieldPt = 7.6f;      // front rows, អត្តលេខ + ID, ជំនាន់ទី (Khmer OS Battambang + Times New Roman)
+        private const float FieldPt = 7.6f;      // front rows, អត្តលេខ + ID, ជំនាន់ទី (Khmer OS Siemreap + Times New Roman)
         private const float ExpiryPt = 6.4f;     // ផុតកំណត់...                     (Khmer OS Siemreap)
         private const float IssuePt = 6.0f;      // ថ្ងៃចេញប័ណ្ណ... / រាជធានីភ្នំពេញ... (Khmer OS Siemreap)
         private const float DirectorTitlePt = 6.6f; // នាយកវិទ្យាស្ថាន              (Khmer OS Muol)
         private const float DirectorNamePt = 6.2f;  // director name                (Khmer OS Muol)
 
         /// <summary>Kept for MainForm (grid / text boxes).</summary>
-        public static string KhmerFont { get { return CardFonts.Battambang; } }
+        public static string KhmerFont { get { return CardFonts.KhmerSiemreap; } }
         public static string MuolFont { get { return CardFonts.Muol; } }
 
         // =====================================================================
@@ -85,11 +85,11 @@ namespace NPIC_CARD_APP.Rendering
                     float y = rowTop[i];
                     float valueW = (i == 5 ? 68.5f : 83f) - valueX;
                     // Label, colon and value share FieldPt; Latin parts of a value switch to Times New Roman automatically
-                    DrawText(g, labels[i], CardFonts.Battambang, FieldPt, FontStyle.Regular, Navy, labelX, y, colonX - labelX, rowH, TextFormatFlags.Left);
-                    DrawText(g, ":", CardFonts.Battambang, FieldPt, FontStyle.Regular, Navy, colonX, y, 1.4f, rowH, TextFormatFlags.Left);
-                    DrawText(g, values[i], CardFonts.Battambang, FieldPt, FontStyle.Regular, Navy, valueX, y, valueW, rowH, TextFormatFlags.Left);
+                    DrawText(g, labels[i], CardFonts.KhmerSiemreap, FieldPt, FontStyle.Regular, Navy, labelX, y, colonX - labelX, rowH, TextFormatFlags.Left);
+                    DrawText(g, ":", CardFonts.KhmerSiemreap, FieldPt, FontStyle.Regular, Navy, colonX, y, 1.4f, rowH, TextFormatFlags.Left);
+                    DrawText(g, values[i], CardFonts.KhmerSiemreap, FieldPt, FontStyle.Regular, Navy, valueX, y, valueW, rowH, TextFormatFlags.Left);
                 }
-                DrawText(g, "ជំនាន់ទី: " + KhmerText.Generation(s.Generation), CardFonts.Battambang, FieldPt, FontStyle.Regular, Navy,
+                DrawText(g, "ជំនាន់ទី: " + KhmerText.Generation(s.Generation), CardFonts.KhmerSiemreap, FieldPt, FontStyle.Regular, Navy,
                     69f, rowTop[5], 15f, rowH, TextFormatFlags.Left);
 
                 // Issue date
@@ -220,11 +220,11 @@ namespace NPIC_CARD_APP.Rendering
             g.SmoothingMode = oldMode;
         }
 
-        /// <summary>"អត្តលេខ:" (Khmer OS Battambang, navy) + ID (Times New Roman, red) — one size, one baseline.</summary>
+        /// <summary>"អត្តលេខ:" (Khmer OS Siemreap, navy) + ID (Times New Roman, red) — one size, one baseline.</summary>
         private static void DrawIdLine(Graphics g, string id, float xMm, float yMm, float wMm, float hMm)
         {
-            var runs = CardFonts.Split("អត្តលេខ: ", CardFonts.Battambang, FontStyle.Regular, Navy);
-            runs.AddRange(CardFonts.Split(id, CardFonts.Battambang, FontStyle.Regular, IdRed));
+            var runs = CardFonts.Split("អត្តលេខ: ", CardFonts.KhmerSiemreap, FontStyle.Regular, Navy);
+            runs.AddRange(CardFonts.Split(id, CardFonts.KhmerSiemreap, FontStyle.Regular, IdRed));
             DrawRuns(g, runs, FieldPt, xMm, yMm, wMm, hMm, TextFormatFlags.Left);
         }
 

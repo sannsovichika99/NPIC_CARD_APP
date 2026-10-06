@@ -44,7 +44,7 @@ namespace NPIC_CARD_APP
             _settings = settings;
             _index = _students.Count == 0 ? 0 : Math.Max(0, Math.Min(startIndex, _students.Count - 1));
             _side = _students.Count == 0 ? PreviewSide.Back : side;
-            _footerFont = new Font(CardRenderer.KhmerFont, 11f);
+            _footerFont = new Font(CardFonts.UI, 11f);
 
             Text = "Card Preview";
             FormBorderStyle = FormBorderStyle.None;

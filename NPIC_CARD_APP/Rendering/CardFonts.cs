@@ -14,8 +14,7 @@ namespace NPIC_CARD_APP.Rendering
     ///   Tacteing             → ornament under the motto
     ///   Times New Roman Bold → STUDENT IDENTIFICATION CARD
     ///   Times New Roman      → every Latin letter/digit (name in Latin, NPIC24836, email, website)
-    ///   Khmer OS Battambang  → front field labels and values, អត្តលេខ
-    ///   Khmer OS Siemreap    → address, issue-date lines, expiry line
+    ///   Khmer OS Siemreap    → front field labels and values, អត្តលេខ,  address, issue-date lines, expiry line
     ///   Siemreap             → ស្កេនទីនេះសម្រាប់ព័ត៌មាន
     /// </summary>
     public static class CardFonts
@@ -23,13 +22,12 @@ namespace NPIC_CARD_APP.Rendering
         public const string KhmerOSMuol = "Khmer OS Muol";
         public const string Tacteing = "Tacteing";
         public const string TimesNewRoman = "Times New Roman";
-        public const string KhmerOSBattambang = "Khmer OS Battambang";
         public const string KhmerOSSiemreap = "Khmer OS Siemreap";
         public const string Siemreap = "Siemreap";
 
         public static readonly string[] Required =
         {
-            KhmerOSMuol, Tacteing, TimesNewRoman, KhmerOSBattambang, KhmerOSSiemreap, Siemreap
+            KhmerOSMuol, Tacteing, TimesNewRoman, KhmerOSSiemreap, Siemreap
         };
 
         private static HashSet<string> _installed;
@@ -37,9 +35,11 @@ namespace NPIC_CARD_APP.Rendering
         // ----- Roles (with fallbacks so the app still runs if a font is missing) -----
         public static string Muol { get { return Resolve(KhmerOSMuol, "Khmer OS Muol Light", "Khmer UI"); } }
         public static string Serif { get { return Resolve(TimesNewRoman, "Liberation Serif"); } }
-        public static string Battambang { get { return Resolve(KhmerOSBattambang, KhmerOSSiemreap, "Khmer UI"); } }
-        public static string KhmerSiemreap { get { return Resolve(KhmerOSSiemreap, KhmerOSBattambang, "Khmer UI"); } }
+        public static string KhmerSiemreap { get { return Resolve(KhmerOSSiemreap, "Khmer UI"); } }
         public static string SiemreapGoogle { get { return Resolve(Siemreap, KhmerOSSiemreap, "Khmer UI"); } }
+
+        /// <summary>Font for all application UI text (forms, buttons, grids, labels).</summary>
+        public static string UI { get { return Resolve(KhmerOSSiemreap, "Segoe UI"); } }
 
         /// <summary>Null when Tacteing is not installed (the renderer then draws the ornament itself).</summary>
         public static string Ornament { get { return IsInstalled(Tacteing) ? Tacteing : null; } }

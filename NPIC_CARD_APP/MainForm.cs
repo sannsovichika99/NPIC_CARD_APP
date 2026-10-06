@@ -37,11 +37,11 @@ namespace NPIC_CARD_APP
         private static readonly Color Danger        = Color.FromArgb(185, 28, 28);
         private static readonly Color Success       = Color.FromArgb(21, 128, 61);
 
-        private static readonly Font UiFont      = new Font("Segoe UI", 9f);
-        private static readonly Font SemiFont    = new Font("Segoe UI Semibold", 9f);
-        private static readonly Font SectionFont = new Font("Segoe UI Semibold", 10f);
-        private static readonly Font TitleFont   = new Font("Segoe UI Semibold", 14f);
-        private static readonly Font CaptionFont = new Font("Segoe UI", 8.25f);
+        private static readonly Font UiFont      = new Font(CardFonts.UI, 9f);
+        private static readonly Font SemiFont    = new Font(CardFonts.UI, 9f, FontStyle.Bold);
+        private static readonly Font SectionFont = new Font(CardFonts.UI, 10f, FontStyle.Bold);
+        private static readonly Font TitleFont   = new Font(CardFonts.UI, 14f, FontStyle.Bold);
+        private static readonly Font CaptionFont = new Font(CardFonts.UI, 8.25f);
 
         private const int FieldLabelWidth = 96;
 
@@ -233,7 +233,7 @@ namespace NPIC_CARD_APP
             _grid.ColumnHeadersDefaultCellStyle.Font = SemiFont;
             _grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
             _grid.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.False;
-            _grid.DefaultCellStyle.Font = new Font(CardRenderer.KhmerFont, 9f);
+            _grid.DefaultCellStyle.Font = new Font(CardFonts.UI, 9f);
             _grid.DefaultCellStyle.BackColor = Surface;
             _grid.DefaultCellStyle.ForeColor = TextMain;
             _grid.DefaultCellStyle.SelectionBackColor = AccentSoft;
@@ -605,7 +605,7 @@ namespace NPIC_CARD_APP
         {
             return new Label
             {
-                Text = text, AutoSize = true, ForeColor = TextMuted, Font = new Font(CardRenderer.KhmerFont, 8.25f),
+                Text = text, AutoSize = true, ForeColor = TextMuted, Font = new Font(CardFonts.UI, 8.25f),
                 Margin = new Padding(0, 8, 8, 0)
             };
         }
@@ -1097,7 +1097,7 @@ namespace NPIC_CARD_APP
                     SelectedObject = _settings.CardText,
                     PropertySort = PropertySort.Categorized,
                     ToolbarVisible = false,
-                    Font = new Font(CardRenderer.KhmerFont, 9f)
+                    Font = new Font(CardFonts.UI, 9f)
                 };
                 var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Dock = DockStyle.Bottom, Height = 34 };
                 dlg.Controls.Add(grid);
