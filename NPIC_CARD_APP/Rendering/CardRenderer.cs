@@ -510,10 +510,16 @@ namespace NPIC_CARD_APP.Rendering
             byte[] value = img.GetPropertyItem(OrientationId).Value;
             if (value == null || value.Length == 0) return;
 
-            switch (value[0])
+            // SHORT tag: the value is in the first byte (Intel) or the second byte (Motorola byte order)
+            int orientation = value.Length >= 2 && value[0] == 0 ? value[1] : value[0];
+            switch (orientation)
             {
+                case 2: img.RotateFlip(RotateFlipType.RotateNoneFlipX); break;   // mirrored (front camera)
                 case 3: img.RotateFlip(RotateFlipType.Rotate180FlipNone); break;
+                case 4: img.RotateFlip(RotateFlipType.RotateNoneFlipY); break;
+                case 5: img.RotateFlip(RotateFlipType.Rotate90FlipX); break;
                 case 6: img.RotateFlip(RotateFlipType.Rotate90FlipNone); break;
+                case 7: img.RotateFlip(RotateFlipType.Rotate270FlipX); break;
                 case 8: img.RotateFlip(RotateFlipType.Rotate270FlipNone); break;
             }
         }

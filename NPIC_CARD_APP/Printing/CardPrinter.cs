@@ -85,9 +85,8 @@ namespace NPIC_CARD_APP.Printing
         }
 
         /// <summary>
-        /// Prints a millimetre grid over the WHOLE page with "X,Y" labels every 10 mm.
-        /// The L8050 only prints inside the ID-card area of the tray, so whatever lands on the card
-        /// shows its real position: the label at the card's top-left corner = Slot X,Y.
+        /// Prints the <see cref="PositionGrid"/> over the WHOLE page. The L8050 only prints inside the ID-card
+        /// area of the tray, so whatever lands on a card shows where that slot really is (see FindPositionForm).
         /// </summary>
         public void PrintPositionFinder()
         {
@@ -95,29 +94,9 @@ namespace NPIC_CARD_APP.Printing
             {
                 // Cover at least 0..330 mm in both directions, whatever page size the driver reports
                 // (anything outside the real page is simply clipped).
-                int maxX = (int)Math.Max(330f, page.Width + 10f);
-                int maxY = (int)Math.Max(330f, page.Height + 10f);
-
-                using (var cellA = new SolidBrush(Color.FromArgb(255, 235, 150)))   // light yellow
-                using (var cellB = new SolidBrush(Color.FromArgb(170, 220, 255)))   // light blue
-                using (var thin = new Pen(Color.FromArgb(90, 90, 90), 0.15f))
-                using (var thick = new Pen(Color.Black, 0.35f))
-                using (var font = new Font("Arial", 5f, FontStyle.Bold, GraphicsUnit.Point))
-                using (var text = new SolidBrush(Color.FromArgb(210, 0, 0)))
-                {
-                    for (int y = 0; y < maxY; y += 10)
-                        for (int x = 0; x < maxX; x += 10)
-                            g.FillRectangle(((x + y) / 10) % 2 == 0 ? cellA : cellB, x, y, 10, 10);
-
-                    for (int x = 0; x <= maxX; x += 5)
-                        g.DrawLine(x % 10 == 0 ? thick : thin, x, 0, x, maxY);
-                    for (int y = 0; y <= maxY; y += 5)
-                        g.DrawLine(y % 10 == 0 ? thick : thin, 0, y, maxX, y);
-
-                    for (int y = 0; y < maxY; y += 10)
-                        for (int x = 0; x < maxX; x += 10)
-                            g.DrawString(x + "," + y, font, text, x + 0.5f, y + 0.5f);
-                }
+                float maxX = Math.Max(330f, page.Width + 10f);
+                float maxY = Math.Max(330f, page.Height + 10f);
+                PositionGrid.Draw(g, new RectangleF(0f, 0f, maxX, maxY));
             });
         }
 
@@ -134,7 +113,10 @@ namespace NPIC_CARD_APP.Printing
                 doc.PrinterSettings = CreatePrinterSettings();
                 byte[] devMode = SavedDevMode();
                 if (devMode != null)
-                    PrinterDevMode.Apply(doc.DefaultPageSettings, devMode);   // paper source / size / orientation for this job
+                    PrinterDevMode.Apply(doc.DefaultPageSettings, devMode);   // paper source / size for this job
+                // Slot X/Y, the tray view and the card pockets all assume a portrait page. A "Landscape" left in
+                // the saved driver settings would make Windows turn the page 90° → the card prints sideways.
+                doc.DefaultPageSettings.Landscape = false;
                 doc.DocumentName = documentName;
                 doc.OriginAtMargins = false;
                 doc.PrintController = new StandardPrintController(); // no "Printing page 1" popup
@@ -227,7 +209,7 @@ namespace NPIC_CARD_APP.Printing
 
         public bool IsCardTraySelected()
         {
-            return IsCardSource(CreatePrinterSettings().DefaultPageSettings.PaperSource.SourceName);
+            return IsCardSource(PortraitPage(CreatePrinterSettings()).PaperSource.SourceName);
         }
 
         private static bool IsCardSource(string source)
@@ -257,11 +239,11 @@ namespace NPIC_CARD_APP.Printing
             if (string.IsNullOrEmpty(_settings.DevModeBase64))
                 problems.Add("'Driver Setup...' has not been done, so Paper Source / Paper Type are still the driver defaults.");
 
-            string source = ps.DefaultPageSettings.PaperSource.SourceName ?? "";
+            string source = PortraitPage(ps).PaperSource.SourceName ?? "";
             if (!IsCardSource(source))
                 problems.Add("Paper Source is \"" + source + "\", not the ID card tray. Fix it in 'Driver Setup...'.");
 
-            SizeF page = PageSizeMm(ps.DefaultPageSettings);
+            SizeF page = PageSizeMm(PortraitPage(ps));
             AddIfNotNull(problems, SlotProblem(1, _settings.Slot1X, _settings.Slot1Y, page));
             // In Auto mode an unusable slot 2 is not a problem: CardsPerLoad() simply prints 1 card per load.
             if (_settings.SlotMode == SlotMode.Two) AddIfNotNull(problems, Slot2Problem(page));
@@ -286,7 +268,7 @@ namespace NPIC_CARD_APP.Printing
             if (cardCount < 2) return 1;
 
             SizeF? page = null;
-            try { page = PageSizeMm(CreatePrinterSettings().DefaultPageSettings); }
+            try { page = PageSizeMm(PortraitPage(CreatePrinterSettings())); }
             catch { /* printer not available: only the overlap check is possible */ }
 
             reason = Slot2Problem(page);
@@ -329,7 +311,18 @@ namespace NPIC_CARD_APP.Printing
             if (item != null) list.Add(item);
         }
 
-        /// <summary>Page size in mm, already swapped for landscape.</summary>
+        /// <summary>
+        /// The page as it is printed: always portrait (see CreateDocument). DefaultPageSettings is a new object
+        /// on every call, so the orientation has to be set on the copy that is actually read.
+        /// </summary>
+        private static PageSettings PortraitPage(PrinterSettings ps)
+        {
+            PageSettings page = ps.DefaultPageSettings;
+            page.Landscape = false;
+            return page;
+        }
+
+        /// <summary>Page size in mm (portrait, as printed).</summary>
         private static SizeF PageSizeMm(PageSettings page)
         {
             Rectangle b = page.Bounds;   // hundredths of an inch, orientation applied
@@ -339,13 +332,13 @@ namespace NPIC_CARD_APP.Printing
         /// <summary>Page size (mm) of the selected printer, or null when it cannot be read.</summary>
         public SizeF? TryGetPageSizeMm()
         {
-            try { return PageSizeMm(CreatePrinterSettings().DefaultPageSettings); }
+            try { return PageSizeMm(PortraitPage(CreatePrinterSettings())); }
             catch { return null; }
         }
 
         public string DescribePage()
         {
-            PageSettings page = CreatePrinterSettings().DefaultPageSettings;
+            PageSettings page = PortraitPage(CreatePrinterSettings());
             return string.Format(CultureInfo.InvariantCulture,
                 "Paper: {0} ({1:0.0} x {2:0.0} mm{6})  |  Source: {3}  |  Hard margin: {4:0.0} / {5:0.0} mm",
                 page.PaperSize.PaperName,

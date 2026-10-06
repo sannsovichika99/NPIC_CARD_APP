@@ -58,6 +58,9 @@
     <Compile Include="PrintQueueForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="FindPositionForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Models\Student.cs" />
     <Compile Include="Services\AppSettings.cs" />
     <Compile Include="Services\CardText.cs" />
@@ -66,6 +69,7 @@
     <Compile Include="Rendering\CardFonts.cs" />
     <Compile Include="Rendering\CardRenderer.cs" />
     <Compile Include="Rendering\KhmerText.cs" />
+    <Compile Include="Rendering\PositionGrid.cs" />
     <Compile Include="Rendering\QrEncoder.cs" />
     <Compile Include="Printing\CardPrinter.cs" />
     <Compile Include="Printing\PrinterDevMode.cs" />

@@ -604,38 +604,46 @@ namespace NPIC_CARD_APP
                 problems.Count == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }
 
-        /// <summary>Prints the X,Y grid so the real card position on the tray page can be read off the card.</summary>
+        /// <summary>Guided Find Position: print the labelled grid, read one square per card, apply the slot X / Y.</summary>
         private void FindPosition()
         {
-            if (!EnsureCardPrinter()) return;
+            ReadUiToSettings();
+            using (var form = new FindPositionForm(_settings, PrintPositionCard))
+            {
+                if (form.ShowDialog(this) != DialogResult.OK) return;
+            }
+            ApplySettingsToUi();
+            SaveSettings(false);
+            UpdateSlotHint();
+            SetStatus(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "Slot positions measured (slot 1: X {0:0.0}, Y {1:0.0} mm). Click 'Test Print' to check them.",
+                _settings.Slot1X, _settings.Slot1Y));
+        }
+
+        /// <summary>Sends the position card. Returns what Windows used, or null when nothing was sent.</summary>
+        private string PrintPositionCard(IWin32Window owner)
+        {
+            if (!EnsureCardPrinter()) return null;
             SaveSettings(false);
             var printer = new CardPrinter(_settings);
 
             List<string> problems = printer.FindProblems()
                 .Where(p => !p.StartsWith("Slot ", StringComparison.Ordinal)).ToList();   // slot position is what we are finding
             if (problems.Count > 0 &&
-                MessageBox.Show(this, "The card may not print:\n\n• " + string.Join("\n\n• ", problems) + "\n\nPrint anyway?",
+                MessageBox.Show(owner, "The card may not print:\n\n• " + string.Join("\n\n• ", problems) + "\n\nPrint anyway?",
                     Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
-                return;
+                return null;
 
             try
             {
                 printer.PrintPositionFinder();
-                MessageBox.Show(this,
-                    "Windows used:\n" + printer.LastJobInfo + "\n\n" +
-                    "Position finder sent. Put a blank card (or plain paper cut to card size) in slot 1" +
-                    (_settings.UseTwoSlots ? " and slot 2" : "") + ", insert the tray when the printer light turns on.\n\n" +
-                    "The card shows a grid with red \"X,Y\" labels every 10 mm.\n" +
-                    "Read the label nearest the card's TOP-LEFT corner and count the small 5 mm lines →\n" +
-                    "that is Slot X and Slot Y (mm). Enter it below, Save Settings, then 'Test Print'.\n\n" +
-                    "The whole page is now filled with yellow/blue squares. If the card still comes out completely blank, " +
-                    "the printer is not printing in ID-card mode: check Source above = Disc/ID Card Tray, " +
-                    "and Paper Type = PVC ID Card in 'Driver Setup...'.",
-                    "Find Position", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                SetStatus("Position card sent — insert the tray when the printer light turns on.");
+                return printer.LastJobInfo ?? "";
             }
             catch (Exception ex)
             {
-                ShowError(ex);
+                ShowError(ex, owner);
+                return null;
             }
         }
 
@@ -806,7 +814,7 @@ namespace NPIC_CARD_APP
         private void SetStatus(string text) { _lblStatus.Text = text; }
 
         /// <summary>Shows the whole error chain (Ctrl+C in the message box copies it).</summary>
-        private void ShowError(Exception ex)
+        private void ShowError(Exception ex, IWin32Window owner = null)
         {
             var text = new System.Text.StringBuilder(ex.Message);
             for (Exception inner = ex.InnerException; inner != null; inner = inner.InnerException)
@@ -814,7 +822,7 @@ namespace NPIC_CARD_APP
             text.Append("\n\n(Press Ctrl+C to copy this message.)");
 
             SetStatus("Error: " + ex.Message.Split('\n')[0]);
-            MessageBox.Show(this, text.ToString(), Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(owner ?? this, text.ToString(), Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 }
