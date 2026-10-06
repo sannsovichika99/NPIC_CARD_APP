@@ -43,10 +43,21 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
-    <Compile Include="MainForm.cs" />
-    <Compile Include="CardPreviewForm.cs" />
-    <Compile Include="CardPrintPreviewForm.cs" />
-    <Compile Include="PrintQueueForm.cs" />
+    <Compile Include="MainForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="CardPreviewForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="CardPrintPreviewForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="SlotLayoutForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="PrintQueueForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Models\Student.cs" />
     <Compile Include="Services\AppSettings.cs" />
     <Compile Include="Services\CardText.cs" />

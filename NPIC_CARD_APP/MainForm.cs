@@ -99,6 +99,7 @@ namespace NPIC_CARD_APP
             toolbar.Controls.Add(MakeButton("Driver Setup...", (s, e) => DriverSetup()));
             toolbar.Controls.Add(MakeButton("Check Printer", (s, e) => CheckPrinter()));
             toolbar.Controls.Add(MakeButton("Find Position", (s, e) => FindPosition()));
+            toolbar.Controls.Add(MakeButton("Slot Layout...", (s, e) => EditSlotLayout()));
             toolbar.Controls.Add(MakeButton("Test Print", (s, e) => TestPrint()));
 
             _lblStatus = new Label
@@ -636,6 +637,21 @@ namespace NPIC_CARD_APP
             {
                 ShowError(ex);
             }
+        }
+
+        /// <summary>Opens the slot position editor (drag cards on the page, live preview).</summary>
+        private void EditSlotLayout()
+        {
+            ReadUiToSettings();
+            SizeF? page = string.IsNullOrEmpty(_settings.PrinterName) ? (SizeF?)null : new CardPrinter(_settings).TryGetPageSizeMm();
+            using (var form = new SlotLayoutForm(_settings, CurrentStudent(), page))
+            {
+                if (form.ShowDialog(this) != DialogResult.OK) return;
+            }
+            ApplySettingsToUi();
+            SaveSettings(false);
+            UpdateSlotHint();
+            SetStatus("Slot positions updated.");
         }
 
         private void TestPrint()

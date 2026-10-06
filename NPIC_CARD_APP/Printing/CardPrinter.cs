@@ -336,6 +336,13 @@ namespace NPIC_CARD_APP.Printing
             return new SizeF(b.Width * HundredthInchToMm, b.Height * HundredthInchToMm);
         }
 
+        /// <summary>Page size (mm) of the selected printer, or null when it cannot be read.</summary>
+        public SizeF? TryGetPageSizeMm()
+        {
+            try { return PageSizeMm(CreatePrinterSettings().DefaultPageSettings); }
+            catch { return null; }
+        }
+
         public string DescribePage()
         {
             PageSettings page = CreatePrinterSettings().DefaultPageSettings;
