@@ -24,8 +24,8 @@ namespace NPIC_CARD_APP
         private ComboBox _cboPrinter;
         private CheckBox _chkAllPrinters;
         private NumericUpDown _numS1X, _numS1Y, _numS2X, _numS2Y;
-        private ComboBox _cboSlots;
-        private CheckBox _chkRotateBack;
+        private ComboBox _cboSlots, _cboOrientation;
+        private CheckBox _chkRotateBack, _chkRotateFront;
         private Label _lblSlotHint;
         private readonly ToolTip _tip = new ToolTip();
         private RadioButton _rdoFront, _rdoBack;
@@ -179,7 +179,23 @@ namespace NPIC_CARD_APP
             _chkRotateBack = new CheckBox { Text = "Rotate back side 180°", AutoSize = true, Margin = new Padding(3, 6, 3, 3) };
             _chkRotateBack.CheckedChanged += (s, e) => { _settings.RotateBack180 = _chkRotateBack.Checked; };
             rows.Controls.Add(Row(MakeLabel("Slots per tray load:"), _cboSlots, _lblSlotHint));
-            rows.Controls.Add(Row(_chkRotateBack));
+            _chkRotateFront = new CheckBox { Text = "Rotate front side 180°", AutoSize = true, Margin = new Padding(3, 6, 3, 3) };
+            _chkRotateFront.CheckedChanged += (s, e) => { _settings.RotateFront180 = _chkRotateFront.Checked; };
+            rows.Controls.Add(Row(_chkRotateFront, _chkRotateBack));
+
+            // Order must match the CardOrientation enum: Horizontal, VerticalRight, VerticalLeft
+            _cboOrientation = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 170, Margin = new Padding(3, 4, 6, 3) };
+            _cboOrientation.Items.AddRange(new object[] { "Horizontal", "Vertical (turn right 90°)", "Vertical (turn left 90°)" });
+            _cboOrientation.SelectedIndexChanged += (s, e) =>
+            {
+                if (_cboOrientation.SelectedIndex >= 0) _settings.CardOrientation = (CardOrientation)_cboOrientation.SelectedIndex;
+                UpdateSlotHint();
+            };
+            _tip.SetToolTip(_cboOrientation,
+                "How the card lies in the tray pocket.\n" +
+                "Vertical = the long side of the card runs in the feed direction (54 x 85.6 mm on the page).\n" +
+                "If the card comes out upside down, pick the other Vertical option.");
+            rows.Controls.Add(Row(MakeLabel("Card on tray:"), _cboOrientation));
 
             _rdoFront = new RadioButton { Text = "Front", AutoSize = true, Checked = true, Margin = new Padding(3, 7, 3, 3) };
             _rdoBack = new RadioButton { Text = "Back", AutoSize = true, Margin = new Padding(3, 7, 16, 3) };
@@ -291,6 +307,8 @@ namespace NPIC_CARD_APP
             _numS2Y.Value = Clamp(_numS2Y, _settings.Slot2Y);
             _cboSlots.SelectedIndex = (int)_settings.SlotMode;
             _chkRotateBack.Checked = _settings.RotateBack180;
+            _chkRotateFront.Checked = _settings.RotateFront180;
+            _cboOrientation.SelectedIndex = (int)_settings.CardOrientation;
             _loading = false;
         }
 
@@ -310,6 +328,8 @@ namespace NPIC_CARD_APP
             _settings.Slot2Y = (float)_numS2Y.Value;
             if (_cboSlots.SelectedIndex >= 0) _settings.SlotMode = (SlotMode)_cboSlots.SelectedIndex;
             _settings.RotateBack180 = _chkRotateBack.Checked;
+            _settings.RotateFront180 = _chkRotateFront.Checked;
+            if (_cboOrientation.SelectedIndex >= 0) _settings.CardOrientation = (CardOrientation)_cboOrientation.SelectedIndex;
         }
 
         private void SaveSettings(bool notify)
@@ -478,11 +498,10 @@ namespace NPIC_CARD_APP
 
         private Bitmap RenderSide(Student s, bool front)
         {
-            if (front) return CardRenderer.RenderFront(s, _settings);
-
-            Bitmap back = CardRenderer.RenderBack(_settings);
-            if (_settings.RotateBack180) back.RotateFlip(RotateFlipType.Rotate180FlipNone);
-            return back;
+            // Turned to match the tray pocket (180° flip and/or 90° for a vertical card)
+            return front
+                ? CardPrinter.TrayImage(CardRenderer.RenderFront(s, _settings), _settings, _settings.RotateFront180)
+                : CardPrinter.TrayImage(CardRenderer.RenderBack(_settings), _settings, _settings.RotateBack180);
         }
 
         // ===================== Full-screen preview =====================
@@ -671,9 +690,11 @@ namespace NPIC_CARD_APP
 
             try
             {
-                using (Bitmap c1 = CardRenderer.RenderCalibration(1, _settings.Slot1X, _settings.Slot1Y))
+                using (Bitmap c1 = CardPrinter.TrayImage(
+                           CardRenderer.RenderCalibration(1, _settings.Slot1X, _settings.Slot1Y), _settings, false))
                 using (Bitmap c2 = _settings.UseTwoSlots
-                           ? CardRenderer.RenderCalibration(2, _settings.Slot2X, _settings.Slot2Y) : null)
+                           ? CardPrinter.TrayImage(CardRenderer.RenderCalibration(2, _settings.Slot2X, _settings.Slot2Y), _settings, false)
+                           : null)
                 {
                     printer.Print(c1, c2, "NPIC Card Calibration");
                 }

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Xml.Serialization;
+using NPIC_CARD_APP.Rendering;
 
 namespace NPIC_CARD_APP.Services
 {
@@ -11,6 +12,17 @@ namespace NPIC_CARD_APP.Services
         Auto,
         One,
         Two
+    }
+
+    /// <summary>How the card lies in the tray pocket, seen on the (portrait) page.</summary>
+    public enum CardOrientation
+    {
+        /// <summary>Long side across the page: slot is 85.6 mm wide x 54 mm high.</summary>
+        Horizontal,
+        /// <summary>Long side down the page, card turned 90° clockwise (card top on the page's right).</summary>
+        VerticalRight,
+        /// <summary>Long side down the page, card turned 90° counter-clockwise (card top on the page's left).</summary>
+        VerticalLeft
     }
 
     /// <summary>Saved to %AppData%\NPIC_CARD_APP\settings.xml</summary>
@@ -58,6 +70,20 @@ namespace NPIC_CARD_APP.Services
             }
         }
         public bool RotateBack180 { get; set; }
+        public bool RotateFront180 { get; set; }
+
+        /// <summary>Card direction in the tray pocket. The PVC tray holds the card upright (vertical).</summary>
+        public CardOrientation CardOrientation { get; set; }
+
+        [XmlIgnore]
+        public bool CardVertical { get { return CardOrientation != CardOrientation.Horizontal; } }
+
+        /// <summary>Size of one slot on the page in mm (card size, swapped when the card lies vertical).</summary>
+        [XmlIgnore]
+        public float SlotWidthMm { get { return CardVertical ? CardRenderer.CardHeightMm : CardRenderer.CardWidthMm; } }
+
+        [XmlIgnore]
+        public float SlotHeightMm { get { return CardVertical ? CardRenderer.CardWidthMm : CardRenderer.CardHeightMm; } }
 
         public CardText CardText { get; set; }
 
@@ -75,6 +101,7 @@ namespace NPIC_CARD_APP.Services
             Slot2X = 0f;
             Slot2Y = 60f;
             SlotModeText = "";
+            CardOrientation = CardOrientation.VerticalRight;
             CardText = new CardText();
         }
 

@@ -104,7 +104,7 @@ namespace NPIC_CARD_APP
             var help = new GroupBox { Text = "How to read the printed card", Dock = DockStyle.Fill, Padding = new Padding(8) };
             _picExample = new PictureBox
             {
-                Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.White, Image = RenderExample()
+                Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.White, Image = RenderExample(_settings.SlotWidthMm, _settings.SlotHeightMm)
             };
             var steps = new Label
             {
@@ -253,11 +253,11 @@ namespace NPIC_CARD_APP
 
         // ===================== Example picture =====================
         /// <summary>A printed card at X 23 / Y 36 on the grid, with the square to read and the two distances.</summary>
-        private static Bitmap RenderExample()
+        private static Bitmap RenderExample(float cardW, float cardH)
         {
             const float scale = 7f;   // px per mm
-            var card = new RectangleF(ExampleX, ExampleY, CardRenderer.CardWidthMm, CardRenderer.CardHeightMm);
-            var view = new RectangleF(ExampleX - 13f, ExampleY - 11f, CardRenderer.CardWidthMm + 21f, CardRenderer.CardHeightMm + 17f);
+            var card = new RectangleF(ExampleX, ExampleY, cardW, cardH);
+            var view = new RectangleF(ExampleX - 13f, ExampleY - 11f, cardW + 21f, cardH + 17f);
 
             var bmp = new Bitmap((int)(view.Width * scale), (int)(view.Height * scale));
             using (Graphics g = Graphics.FromImage(bmp))

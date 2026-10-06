@@ -167,11 +167,11 @@ namespace NPIC_CARD_APP.Printing
             using (var font = new Font("Arial", 6f, FontStyle.Bold, GraphicsUnit.Point))
             using (var brush = new SolidBrush(Color.Red))
             {
-                g.DrawRectangle(pen, _settings.Slot1X, _settings.Slot1Y, CardRenderer.CardWidthMm, CardRenderer.CardHeightMm);
+                g.DrawRectangle(pen, _settings.Slot1X, _settings.Slot1Y, _settings.SlotWidthMm, _settings.SlotHeightMm);
                 g.DrawString("Slot 1", font, brush, _settings.Slot1X, _settings.Slot1Y - 3f);
                 if (_settings.UseTwoSlots)
                 {
-                    g.DrawRectangle(pen, _settings.Slot2X, _settings.Slot2Y, CardRenderer.CardWidthMm, CardRenderer.CardHeightMm);
+                    g.DrawRectangle(pen, _settings.Slot2X, _settings.Slot2Y, _settings.SlotWidthMm, _settings.SlotHeightMm);
                     g.DrawString("Slot 2", font, brush, _settings.Slot2X, _settings.Slot2Y - 3f);
                 }
             }
@@ -202,9 +202,29 @@ namespace NPIC_CARD_APP.Printing
             }
         }
 
-        private static void DrawCard(Graphics g, Bitmap image, float xMm, float yMm)
+        /// <summary>image must already be turned for the tray (see <see cref="TrayImage"/>).</summary>
+        private void DrawCard(Graphics g, Bitmap image, float xMm, float yMm)
         {
-            g.DrawImage(image, new RectangleF(xMm, yMm, CardRenderer.CardWidthMm, CardRenderer.CardHeightMm));
+            g.DrawImage(image, new RectangleF(xMm, yMm, _settings.SlotWidthMm, _settings.SlotHeightMm));
+        }
+
+        /// <summary>
+        /// Turns a rendered card (landscape, 85.6 x 54 mm) in place so it matches the tray pocket:
+        /// optional 180° (front/back flip) plus 90° when the card lies vertical in the tray. Returns the same bitmap.
+        /// </summary>
+        public static Bitmap TrayImage(Bitmap card, AppSettings settings, bool rotate180)
+        {
+            int quarterTurns = rotate180 ? 2 : 0;   // clockwise
+            if (settings.CardOrientation == CardOrientation.VerticalRight) quarterTurns += 1;
+            else if (settings.CardOrientation == CardOrientation.VerticalLeft) quarterTurns += 3;
+
+            switch (quarterTurns % 4)
+            {
+                case 1: card.RotateFlip(RotateFlipType.Rotate90FlipNone); break;
+                case 2: card.RotateFlip(RotateFlipType.Rotate180FlipNone); break;
+                case 3: card.RotateFlip(RotateFlipType.Rotate270FlipNone); break;
+            }
+            return card;
         }
 
         public bool IsCardTraySelected()
@@ -280,7 +300,7 @@ namespace NPIC_CARD_APP.Printing
         {
             float dx = Math.Abs(_settings.Slot2X - _settings.Slot1X);
             float dy = Math.Abs(_settings.Slot2Y - _settings.Slot1Y);
-            if (dx < CardRenderer.CardWidthMm - 1f && dy < CardRenderer.CardHeightMm - 1f)
+            if (dx < _settings.SlotWidthMm - 1f && dy < _settings.SlotHeightMm - 1f)
             {
                 return string.Format(CultureInfo.InvariantCulture,
                     "Slot 2 (X {0:0.0}, Y {1:0.0} mm) overlaps slot 1 (X {2:0.0}, Y {3:0.0} mm). " +
@@ -291,17 +311,17 @@ namespace NPIC_CARD_APP.Printing
         }
 
         /// <summary>A card drawn outside the page is cut off by Windows → the card comes out blank.</summary>
-        private static string SlotProblem(int slot, float x, float y, SizeF page)
+        private string SlotProblem(int slot, float x, float y, SizeF page)
         {
             const float tolerance = 3f;
             if (x < -tolerance || y < -tolerance ||
-                x + CardRenderer.CardWidthMm > page.Width + tolerance ||
-                y + CardRenderer.CardHeightMm > page.Height + tolerance)
+                x + _settings.SlotWidthMm > page.Width + tolerance ||
+                y + _settings.SlotHeightMm > page.Height + tolerance)
             {
                 return string.Format(CultureInfo.InvariantCulture,
                     "Slot {0} (X {1:0.0}, Y {2:0.0} mm, card {3:0.0} x {4:0.0} mm) is outside the page " +
                     "({5:0.0} x {6:0.0} mm), so it will print blank. Use 'Find Position'.",
-                    slot, x, y, CardRenderer.CardWidthMm, CardRenderer.CardHeightMm, page.Width, page.Height);
+                    slot, x, y, _settings.SlotWidthMm, _settings.SlotHeightMm, page.Width, page.Height);
             }
             return null;
         }

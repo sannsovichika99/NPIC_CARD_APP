@@ -5,6 +5,7 @@ using System.Drawing.Imaging;
 using System.Globalization;
 using System.Windows.Forms;
 using NPIC_CARD_APP.Models;
+using NPIC_CARD_APP.Printing;
 using NPIC_CARD_APP.Rendering;
 using NPIC_CARD_APP.Services;
 
@@ -201,9 +202,8 @@ namespace NPIC_CARD_APP
                     StudentId = "000000", NameKh = "គោត្តនាម នាម", NameEn = "SAMPLE NAME", Gender = "M",
                     DateOfBirth = "01/01/2005", Faculty = "Faculty", Level = "Level", Generation = "1", ValidUntil = "01/01/2030"
                 };
-                _front = CardRenderer.RenderFront(s, _settings);
-                _back = CardRenderer.RenderBack(_settings);
-                if (_settings.RotateBack180) _back.RotateFlip(RotateFlipType.Rotate180FlipNone);
+                _front = CardPrinter.TrayImage(CardRenderer.RenderFront(s, _settings), _settings, _settings.RotateFront180);
+                _back = CardPrinter.TrayImage(CardRenderer.RenderBack(_settings), _settings, _settings.RotateBack180);
             }
             catch (Exception ex)
             {
@@ -274,16 +274,16 @@ namespace NPIC_CARD_APP
         // ===================== Status / validation =====================
         private bool Overlaps()
         {
-            return Math.Abs(_x[1] - _x[0]) < CardRenderer.CardWidthMm - 1f &&
-                   Math.Abs(_y[1] - _y[0]) < CardRenderer.CardHeightMm - 1f;
+            return Math.Abs(_x[1] - _x[0]) < _settings.SlotWidthMm - 1f &&
+                   Math.Abs(_y[1] - _y[0]) < _settings.SlotHeightMm - 1f;
         }
 
         private bool Outside(int slot)
         {
             const float tol = 3f;
             return _x[slot] < -tol || _y[slot] < -tol ||
-                   _x[slot] + CardRenderer.CardWidthMm > _page.Width + tol ||
-                   _y[slot] + CardRenderer.CardHeightMm > _page.Height + tol;
+                   _x[slot] + _settings.SlotWidthMm > _page.Width + tol ||
+                   _y[slot] + _settings.SlotHeightMm > _page.Height + tol;
         }
 
         private bool SlotUsed(int slot)
@@ -300,7 +300,7 @@ namespace NPIC_CARD_APP
         {
             string text = string.Format(CultureInfo.InvariantCulture, "Page {0:0.0} x {1:0.0} mm{2}.  Card {3} x {4} mm.",
                 _page.Width, _page.Height, _pageKnown ? "" : " (printer page unknown, A4 assumed)",
-                CardRenderer.CardWidthMm, CardRenderer.CardHeightMm);
+                _settings.SlotWidthMm, _settings.SlotHeightMm);
             bool warn = false;
             if (Outside(0)) { text += "  Slot 1 is outside the page — it will print blank."; warn = true; }
             if (SlotUsed(1))
@@ -371,14 +371,14 @@ namespace NPIC_CARD_APP
 
         private RectangleF SlotRectMm(int slot)
         {
-            return new RectangleF(_x[slot], _y[slot], CardRenderer.CardWidthMm, CardRenderer.CardHeightMm);
+            return new RectangleF(_x[slot], _y[slot], _settings.SlotWidthMm, _settings.SlotHeightMm);
         }
 
-        /// <summary>The slot as it appears on screen (portrait, because the page is rotated).</summary>
+        /// <summary>The slot as it appears on screen (width/height swapped, because the page is rotated).</summary>
         private RectangleF SlotRectCanvas(int slot)
         {
-            PointF tl = ToCanvas(_x[slot] + CardRenderer.CardWidthMm, _y[slot]);
-            return new RectangleF(tl.X, tl.Y, CardRenderer.CardHeightMm * _scale, CardRenderer.CardWidthMm * _scale);
+            PointF tl = ToCanvas(_x[slot] + _settings.SlotWidthMm, _y[slot]);
+            return new RectangleF(tl.X, tl.Y, _settings.SlotHeightMm * _scale, _settings.SlotWidthMm * _scale);
         }
 
         private RectangleF PageRect()
