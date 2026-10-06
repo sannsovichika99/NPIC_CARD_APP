@@ -39,6 +39,9 @@
     <Reference Include="System.Drawing" />
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.Management" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Security" />
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
   </ItemGroup>
@@ -63,6 +66,7 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Models\Student.cs" />
+    <Compile Include="Services\ApiStudentLoader.cs" />
     <Compile Include="Services\AppSettings.cs" />
     <Compile Include="Services\CardText.cs" />
     <Compile Include="Services\CsvStudentLoader.cs" />

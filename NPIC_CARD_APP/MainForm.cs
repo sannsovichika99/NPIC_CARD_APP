@@ -5,6 +5,7 @@ using System.Drawing.Printing;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows.Forms;
 using NPIC_CARD_APP.Models;
 using NPIC_CARD_APP.Printing;
@@ -176,6 +177,7 @@ namespace NPIC_CARD_APP
                 FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false,
                 Anchor = AnchorStyles.Right, Margin = new Padding(0), BackColor = Accent
             };
+            actions.Controls.Add(MakeButton("Import API…", ButtonKind.OnAccent, (s, e) => ImportApi(), "Download students from the school's web API (Ctrl+I)"));
             actions.Controls.Add(MakeButton("Import Excel…", ButtonKind.OnAccent, (s, e) => ImportExcel(), "Load students from an Excel workbook (.xlsx) (Ctrl+E)"));
             actions.Controls.Add(MakeButton("Import CSV…", ButtonKind.OnAccent, (s, e) => ImportCsv(), "Load students from a UTF-8 CSV file (Ctrl+O)"));
             actions.Controls.Add(MakeButton("Photo Folder…", ButtonKind.OnAccent, (s, e) => ChoosePhotoFolder(), "Folder with photos named {StudentId}.jpg / .png"));
@@ -680,7 +682,7 @@ namespace NPIC_CARD_APP
         {
             if (_lblEmpty == null) return;
             _lblEmpty.Text = _students.Count == 0
-                ? "No students loaded yet.\n\nClick  Import Excel…  or  Import CSV…  in the top bar to begin.\n" +
+                ? "No students loaded yet.\n\nClick  Import API…,  Import Excel…  or  Import CSV…  in the top bar to begin.\n" +
                   "No list yet? Click  Excel Template  above for a file to fill in."
                 : "No students match “" + _txtSearch.Text.Trim() + "”.\n\nPress Esc to clear the search.";
             _lblEmpty.Visible = _view.Count == 0;
@@ -836,6 +838,153 @@ namespace NPIC_CARD_APP
             {
                 if (dlg.ShowDialog(this) == DialogResult.OK) LoadStudents(dlg.FileName);
             }
+        }
+
+        /// <summary>Asks for the API address and token, downloads the students and shows them in the list.</summary>
+        private void ImportApi()
+        {
+            List<Student> loaded = null;
+            string url = null;
+
+            using (var dlg = new Form
+            {
+                Text = "Import students from API",
+                ClientSize = new Size(560, 300),
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                StartPosition = FormStartPosition.CenterParent,
+                MinimizeBox = false,
+                MaximizeBox = false,
+                ShowInTaskbar = false,
+                BackColor = Surface,
+                Font = UiFont,
+                Padding = new Padding(16)
+            })
+            {
+                var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 6, BackColor = Surface };
+                layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+                layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                for (int i = 0; i < 5; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+                var txtUrl = new TextBox { Dock = DockStyle.Fill, Text = _settings.ApiUrl ?? "", Margin = new Padding(0, 4, 0, 4) };
+                txtUrl.HandleCreated += (s, e) => SetCueBanner(txtUrl, "https://example.edu.kh/api/students");
+
+                string savedToken = _settings.ApiToken;
+                var txtToken = new TextBox { Dock = DockStyle.Fill, Text = savedToken, UseSystemPasswordChar = true, Margin = new Padding(0, 4, 0, 4) };
+                txtToken.HandleCreated += (s, e) => SetCueBanner(txtToken, "Optional — leave empty if the API is public");
+
+                var chkShow = new CheckBox { Text = "Show token", AutoSize = true, Margin = new Padding(0, 2, 16, 0) };
+                chkShow.CheckedChanged += (s, e) => txtToken.UseSystemPasswordChar = !chkShow.Checked;
+                var chkRemember = new CheckBox
+                {
+                    Text = "Remember token on this PC (encrypted for this Windows user)",
+                    AutoSize = true, Checked = savedToken.Length > 0, Margin = new Padding(0, 2, 0, 0)
+                };
+                var options = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
+                options.Controls.Add(chkShow);
+                options.Controls.Add(chkRemember);
+
+                var hint = new Label
+                {
+                    AutoSize = true, MaximumSize = new Size(410, 0), ForeColor = TextMuted, Font = CaptionFont,
+                    Margin = new Padding(0, 8, 0, 0),
+                    Text = "The API must return a JSON list of students (or CSV) using the CSV column names: StudentId, " +
+                           "NameKh, NameEn, Gender, DateOfBirth, Faculty, Level, Generation, ValidUntil, QrData.\n" +
+                           "The token is sent as “Authorization: Bearer …”. Type “Header-Name: value” to use another header."
+                };
+                var lblBusy = new Label { AutoSize = true, ForeColor = TextMuted, Margin = new Padding(0, 10, 0, 0) };
+
+                layout.Controls.Add(FieldLabel("API address"), 0, 0);
+                layout.Controls.Add(txtUrl, 1, 0);
+                layout.Controls.Add(FieldLabel("Access token"), 0, 1);
+                layout.Controls.Add(txtToken, 1, 1);
+                layout.Controls.Add(options, 1, 2);
+                layout.Controls.Add(hint, 1, 3);
+                layout.Controls.Add(lblBusy, 1, 4);
+
+                var buttons = new FlowLayoutPanel
+                {
+                    Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, BackColor = Surface
+                };
+                Button btnCancel = MakeButton("Cancel", ButtonKind.Secondary, null);
+                Button btnLoad = MakeButton("Load Students", ButtonKind.Primary, null);
+                buttons.Controls.Add(btnCancel);
+                buttons.Controls.Add(btnLoad);
+
+                dlg.Controls.Add(layout);
+                dlg.Controls.Add(buttons);
+                dlg.AcceptButton = btnLoad;
+                dlg.CancelButton = btnCancel;
+
+                CancellationTokenSource cts = null;
+                bool closeWhenDone = false;
+                Action<bool> setBusy = busy =>
+                {
+                    txtUrl.Enabled = txtToken.Enabled = options.Enabled = btnLoad.Enabled = !busy;
+                    dlg.UseWaitCursor = busy;
+                    lblBusy.Text = busy ? "Downloading students…  (Cancel stops the download)" : "";
+                };
+
+                btnLoad.Click += async (s, e) =>
+                {
+                    if (cts != null) return;
+                    cts = new CancellationTokenSource();
+                    setBusy(true);
+                    try
+                    {
+                        loaded = await ApiStudentLoader.LoadAsync(txtUrl.Text, txtToken.Text, cts.Token);
+                        url = txtUrl.Text.Trim();
+                        _settings.ApiUrl = url;
+                        _settings.ApiToken = chkRemember.Checked ? txtToken.Text.Trim() : "";
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Cancel pressed or dialog closed: nothing to report.
+                    }
+                    catch (Exception ex)
+                    {
+                        if (!closeWhenDone) ShowError(ex, dlg);
+                    }
+                    finally
+                    {
+                        cts.Dispose();
+                        cts = null;
+                        setBusy(false);
+                    }
+
+                    if (loaded != null) dlg.DialogResult = DialogResult.OK;
+                    else if (closeWhenDone) dlg.DialogResult = DialogResult.Cancel;
+                    else txtUrl.Focus();
+                };
+
+                btnCancel.Click += (s, e) =>
+                {
+                    if (cts != null) cts.Cancel();               // stop the download, keep the dialog open
+                    else dlg.DialogResult = DialogResult.Cancel;
+                };
+
+                dlg.FormClosing += (s, e) =>
+                {
+                    if (cts == null) return;
+                    // Closed (X / Alt+F4) while downloading: cancel first; the Load handler then closes the dialog.
+                    e.Cancel = true;
+                    closeWhenDone = true;
+                    cts.Cancel();
+                };
+
+                if (dlg.ShowDialog(this) != DialogResult.OK || loaded == null) return;
+            }
+
+            _students = loaded;
+            ApplyFilter();
+            _settings.LastCsvPath = "";   // so the next start doesn't reload an older file over this list
+            SaveSettings(false);
+
+            Uri uri;
+            string source = Uri.TryCreate(url, UriKind.Absolute, out uri) ? uri.Host : url;
+            SetStatus(_students.Count == 0
+                ? "Missing data: the API returned no students (" + source + ")"
+                : string.Format("Loaded {0} student(s) from {1}", _students.Count, source));
         }
 
         private void SaveExcelTemplate()
@@ -1013,6 +1162,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.F: _txtSearch.Focus(); _txtSearch.SelectAll(); return true;
                 case Keys.Control | Keys.O: ImportCsv(); return true;
                 case Keys.Control | Keys.E: ImportExcel(); return true;
+                case Keys.Control | Keys.I: ImportApi(); return true;
                 case Keys.Control | Keys.P: PrintSelected(); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);

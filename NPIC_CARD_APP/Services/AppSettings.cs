@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Xml.Serialization;
 using NPIC_CARD_APP.Rendering;
 
@@ -37,6 +39,40 @@ namespace NPIC_CARD_APP.Services
         public string PhotoFolder { get; set; }
         public string SignaturePath { get; set; }   // optional PNG/JPG of the director's signature
         public string LastCsvPath { get; set; }
+
+        /// <summary>Web API address for Import API… (remembered between runs).</summary>
+        public string ApiUrl { get; set; }
+
+        /// <summary>
+        /// API access token, encrypted with Windows DPAPI so only this Windows user on this PC can read it.
+        /// Use <see cref="ApiToken"/> to read or change it.
+        /// </summary>
+        public string ApiTokenProtected { get; set; }
+
+        [XmlIgnore]
+        public string ApiToken
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(ApiTokenProtected)) return "";
+                try
+                {
+                    byte[] plain = ProtectedData.Unprotect(Convert.FromBase64String(ApiTokenProtected), TokenEntropy, DataProtectionScope.CurrentUser);
+                    return Encoding.UTF8.GetString(plain);
+                }
+                catch (Exception ex) when (ex is CryptographicException || ex is FormatException)
+                {
+                    return "";   // saved by another Windows user / PC: ask for the token again
+                }
+            }
+            set
+            {
+                ApiTokenProtected = string.IsNullOrEmpty(value) ? "" : Convert.ToBase64String(
+                    ProtectedData.Protect(Encoding.UTF8.GetBytes(value), TokenEntropy, DataProtectionScope.CurrentUser));
+            }
+        }
+
+        private static readonly byte[] TokenEntropy = Encoding.UTF8.GetBytes("NPIC_CARD_APP.ApiToken");
 
         // Card position on the page, in millimetres (calibrate with Test Print)
         public float Slot1X { get; set; }
@@ -96,6 +132,8 @@ namespace NPIC_CARD_APP.Services
             PhotoFolder = "";
             SignaturePath = "";
             LastCsvPath = "";
+            ApiUrl = "";
+            ApiTokenProtected = "";
             Slot1X = 0f;
             Slot1Y = 0f;
             Slot2X = 0f;

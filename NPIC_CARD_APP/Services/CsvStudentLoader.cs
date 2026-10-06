@@ -14,14 +14,20 @@ namespace NPIC_CARD_APP.Services
     {
         public static List<Student> Load(string path)
         {
-            string[] lines = File.ReadAllLines(path, Encoding.UTF8);
+            return FromText(File.ReadAllText(path, Encoding.UTF8), "CSV header");
+        }
+
+        /// <summary>Reads students from CSV text (a file's contents, or a CSV download from the API).</summary>
+        internal static List<Student> FromText(string text, string headerName)
+        {
+            string[] lines = (text ?? "").Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None);
             var rows = new List<List<string>>(lines.Length);
             foreach (string line in lines)
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 rows.Add(ParseLine(line));
             }
-            return FromRows(rows, "CSV header");
+            return FromRows(rows, headerName);
         }
 
         /// <summary>
