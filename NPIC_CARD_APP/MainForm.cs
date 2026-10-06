@@ -98,8 +98,6 @@ namespace NPIC_CARD_APP
             toolbar.Controls.Add(_chkAllPrinters);
             toolbar.Controls.Add(MakeButton("Driver Setup...", (s, e) => DriverSetup()));
             toolbar.Controls.Add(MakeButton("Check Printer", (s, e) => CheckPrinter()));
-            toolbar.Controls.Add(MakeButton("Find Position", (s, e) => FindPosition()));
-            toolbar.Controls.Add(MakeButton("Slot Layout...", (s, e) => EditSlotLayout()));
             toolbar.Controls.Add(MakeButton("Test Print", (s, e) => TestPrint()));
 
             _lblStatus = new Label
@@ -621,64 +619,6 @@ namespace NPIC_CARD_APP
                 (problems.Count == 0 ? "No problems found." : "Problems:\n• " + string.Join("\n\n• ", problems));
             MessageBox.Show(this, report, "Check Printer", MessageBoxButtons.OK,
                 problems.Count == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
-        }
-
-        /// <summary>Guided Find Position: print the labelled grid, read one square per card, apply the slot X / Y.</summary>
-        private void FindPosition()
-        {
-            ReadUiToSettings();
-            using (var form = new FindPositionForm(_settings, PrintPositionCard))
-            {
-                if (form.ShowDialog(this) != DialogResult.OK) return;
-            }
-            ApplySettingsToUi();
-            SaveSettings(false);
-            UpdateSlotHint();
-            SetStatus(string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                "Slot positions measured (slot 1: X {0:0.0}, Y {1:0.0} mm). Click 'Test Print' to check them.",
-                _settings.Slot1X, _settings.Slot1Y));
-        }
-
-        /// <summary>Sends the position card. Returns what Windows used, or null when nothing was sent.</summary>
-        private string PrintPositionCard(IWin32Window owner)
-        {
-            if (!EnsureCardPrinter()) return null;
-            SaveSettings(false);
-            var printer = new CardPrinter(_settings);
-
-            List<string> problems = printer.FindProblems()
-                .Where(p => !p.StartsWith("Slot ", StringComparison.Ordinal)).ToList();   // slot position is what we are finding
-            if (problems.Count > 0 &&
-                MessageBox.Show(owner, "The card may not print:\n\n• " + string.Join("\n\n• ", problems) + "\n\nPrint anyway?",
-                    Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
-                return null;
-
-            try
-            {
-                printer.PrintPositionFinder();
-                SetStatus("Position card sent — insert the tray when the printer light turns on.");
-                return printer.LastJobInfo ?? "";
-            }
-            catch (Exception ex)
-            {
-                ShowError(ex, owner);
-                return null;
-            }
-        }
-
-        /// <summary>Opens the slot position editor (drag cards on the page, live preview).</summary>
-        private void EditSlotLayout()
-        {
-            ReadUiToSettings();
-            SizeF? page = string.IsNullOrEmpty(_settings.PrinterName) ? (SizeF?)null : new CardPrinter(_settings).TryGetPageSizeMm();
-            using (var form = new SlotLayoutForm(_settings, CurrentStudent(), page))
-            {
-                if (form.ShowDialog(this) != DialogResult.OK) return;
-            }
-            ApplySettingsToUi();
-            SaveSettings(false);
-            UpdateSlotHint();
-            SetStatus("Slot positions updated.");
         }
 
         private void TestPrint()

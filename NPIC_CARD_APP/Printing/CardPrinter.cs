@@ -304,7 +304,7 @@ namespace NPIC_CARD_APP.Printing
             {
                 return string.Format(CultureInfo.InvariantCulture,
                     "Slot 2 (X {0:0.0}, Y {1:0.0} mm) overlaps slot 1 (X {2:0.0}, Y {3:0.0} mm). " +
-                    "Use 'Find Position' to measure slot 2.",
+                    "Change the Slot 2 X / Y and check it with 'Test Print'.",
                     _settings.Slot2X, _settings.Slot2Y, _settings.Slot1X, _settings.Slot1Y);
             }
             return page.HasValue ? SlotProblem(2, _settings.Slot2X, _settings.Slot2Y, page.Value) : null;
@@ -320,7 +320,7 @@ namespace NPIC_CARD_APP.Printing
             {
                 return string.Format(CultureInfo.InvariantCulture,
                     "Slot {0} (X {1:0.0}, Y {2:0.0} mm, card {3:0.0} x {4:0.0} mm) is outside the page " +
-                    "({5:0.0} x {6:0.0} mm), so it will print blank. Use 'Find Position'.",
+                    "({5:0.0} x {6:0.0} mm), so it will print blank. Change the Slot X / Y.",
                     slot, x, y, _settings.SlotWidthMm, _settings.SlotHeightMm, page.Width, page.Height);
             }
             return null;
