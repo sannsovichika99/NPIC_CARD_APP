@@ -4,6 +4,15 @@ using System.Xml.Serialization;
 
 namespace NPIC_CARD_APP.Services
 {
+    /// <summary>How many tray slots one print job (tray load) uses.</summary>
+    public enum SlotMode
+    {
+        /// <summary>2 cards per load when 2+ cards are printed and slot 2 is usable, otherwise slot 1 only.</summary>
+        Auto,
+        One,
+        Two
+    }
+
     /// <summary>Saved to %AppData%\NPIC_CARD_APP\settings.xml</summary>
     public class AppSettings
     {
@@ -23,7 +32,31 @@ namespace NPIC_CARD_APP.Services
         public float Slot2X { get; set; }
         public float Slot2Y { get; set; }
 
+        /// <summary>
+        /// True when slot 2 is in use (Slot mode Auto or 2). Still saved so older versions of the app
+        /// read the setting; the app itself uses <see cref="SlotMode"/>.
+        /// </summary>
         public bool UseTwoSlots { get; set; }
+
+        /// <summary>Saved form of <see cref="SlotMode"/>; empty in settings files from older versions.</summary>
+        [XmlElement("SlotMode")]
+        public string SlotModeText { get; set; }
+
+        [XmlIgnore]
+        public SlotMode SlotMode
+        {
+            get
+            {
+                SlotMode mode;
+                if (!string.IsNullOrEmpty(SlotModeText) && Enum.TryParse(SlotModeText, out mode)) return mode;
+                return UseTwoSlots ? SlotMode.Auto : SlotMode.One;   // settings from before Slot mode existed
+            }
+            set
+            {
+                SlotModeText = value.ToString();
+                UseTwoSlots = value != SlotMode.One;
+            }
+        }
         public bool RotateBack180 { get; set; }
 
         public CardText CardText { get; set; }
@@ -41,6 +74,7 @@ namespace NPIC_CARD_APP.Services
             Slot1Y = 0f;
             Slot2X = 0f;
             Slot2Y = 60f;
+            SlotModeText = "";
             CardText = new CardText();
         }
 
@@ -85,7 +119,7 @@ namespace NPIC_CARD_APP.Services
             {
                 // Corrupt settings file: fall back to defaults.
             }
-            return new AppSettings();
+            return new AppSettings { SlotMode = SlotMode.Auto };   // first run
         }
 
         public void Save()

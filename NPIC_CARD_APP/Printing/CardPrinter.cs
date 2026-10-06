@@ -262,26 +262,71 @@ namespace NPIC_CARD_APP.Printing
                 problems.Add("Paper Source is \"" + source + "\", not the ID card tray. Fix it in 'Driver Setup...'.");
 
             SizeF page = PageSizeMm(ps.DefaultPageSettings);
-            CheckSlot(problems, 1, _settings.Slot1X, _settings.Slot1Y, page);
-            if (_settings.UseTwoSlots) CheckSlot(problems, 2, _settings.Slot2X, _settings.Slot2Y, page);
+            AddIfNotNull(problems, SlotProblem(1, _settings.Slot1X, _settings.Slot1Y, page));
+            // In Auto mode an unusable slot 2 is not a problem: CardsPerLoad() simply prints 1 card per load.
+            if (_settings.SlotMode == SlotMode.Two) AddIfNotNull(problems, Slot2Problem(page));
 
             problems.AddRange(PrinterStatus.Check(_settings.PrinterName));
             return problems;
         }
 
+        /// <summary>
+        /// How many cards go in one tray load when printing cardCount cards.
+        /// Auto: 2 when there are 2+ cards and slot 2 is usable (on the page, not overlapping slot 1), else 1.
+        /// reason = why Auto fell back to 1 slot although there are 2+ cards, otherwise null. Never throws.
+        /// </summary>
+        public int CardsPerLoad(int cardCount, out string reason)
+        {
+            reason = null;
+            switch (_settings.SlotMode)
+            {
+                case SlotMode.One: return 1;
+                case SlotMode.Two: return 2;
+            }
+            if (cardCount < 2) return 1;
+
+            SizeF? page = null;
+            try { page = PageSizeMm(CreatePrinterSettings().DefaultPageSettings); }
+            catch { /* printer not available: only the overlap check is possible */ }
+
+            reason = Slot2Problem(page);
+            return reason == null ? 2 : 1;
+        }
+
+        /// <summary>Why slot 2 cannot be used (outside the page or on top of slot 1), or null when it is fine.</summary>
+        private string Slot2Problem(SizeF? page)
+        {
+            float dx = Math.Abs(_settings.Slot2X - _settings.Slot1X);
+            float dy = Math.Abs(_settings.Slot2Y - _settings.Slot1Y);
+            if (dx < CardRenderer.CardWidthMm - 1f && dy < CardRenderer.CardHeightMm - 1f)
+            {
+                return string.Format(CultureInfo.InvariantCulture,
+                    "Slot 2 (X {0:0.0}, Y {1:0.0} mm) overlaps slot 1 (X {2:0.0}, Y {3:0.0} mm). " +
+                    "Use 'Find Position' to measure slot 2.",
+                    _settings.Slot2X, _settings.Slot2Y, _settings.Slot1X, _settings.Slot1Y);
+            }
+            return page.HasValue ? SlotProblem(2, _settings.Slot2X, _settings.Slot2Y, page.Value) : null;
+        }
+
         /// <summary>A card drawn outside the page is cut off by Windows → the card comes out blank.</summary>
-        private static void CheckSlot(List<string> problems, int slot, float x, float y, SizeF page)
+        private static string SlotProblem(int slot, float x, float y, SizeF page)
         {
             const float tolerance = 3f;
             if (x < -tolerance || y < -tolerance ||
                 x + CardRenderer.CardWidthMm > page.Width + tolerance ||
                 y + CardRenderer.CardHeightMm > page.Height + tolerance)
             {
-                problems.Add(string.Format(CultureInfo.InvariantCulture,
+                return string.Format(CultureInfo.InvariantCulture,
                     "Slot {0} (X {1:0.0}, Y {2:0.0} mm, card {3:0.0} x {4:0.0} mm) is outside the page " +
                     "({5:0.0} x {6:0.0} mm), so it will print blank. Use 'Find Position'.",
-                    slot, x, y, CardRenderer.CardWidthMm, CardRenderer.CardHeightMm, page.Width, page.Height));
+                    slot, x, y, CardRenderer.CardWidthMm, CardRenderer.CardHeightMm, page.Width, page.Height);
             }
+            return null;
+        }
+
+        private static void AddIfNotNull(List<string> list, string item)
+        {
+            if (item != null) list.Add(item);
         }
 
         /// <summary>Page size in mm, already swapped for landscape.</summary>

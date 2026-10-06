@@ -24,7 +24,10 @@ namespace NPIC_CARD_APP
         private ComboBox _cboPrinter;
         private CheckBox _chkAllPrinters;
         private NumericUpDown _numS1X, _numS1Y, _numS2X, _numS2Y;
-        private CheckBox _chkTwoSlots, _chkRotateBack;
+        private ComboBox _cboSlots;
+        private CheckBox _chkRotateBack;
+        private Label _lblSlotHint;
+        private readonly ToolTip _tip = new ToolTip();
         private RadioButton _rdoFront, _rdoBack;
         private Label _lblPage, _lblStatus;
 
@@ -49,6 +52,7 @@ namespace NPIC_CARD_APP
             if (missing.Length > 0)
                 SetStatus("Missing in " + AssetStore.Folder + ": " + string.Join(", ", missing));
             UpdatePreview();
+            UpdateSlotHint();
         }
 
         protected override void OnLoad(EventArgs e)
@@ -118,7 +122,7 @@ namespace NPIC_CARD_APP
                 RowHeadersWidth = 28
             };
             _grid.DefaultCellStyle.Font = new Font(CardRenderer.KhmerFont, 9f);
-            _grid.SelectionChanged += (s, e) => UpdatePreview();
+            _grid.SelectionChanged += (s, e) => { UpdatePreview(); UpdateSlotHint(); };
             _split.Panel1.Controls.Add(_grid);
 
             var right = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(6) };
@@ -158,19 +162,30 @@ namespace NPIC_CARD_APP
 
             _numS1X = MakeNumber(); _numS1Y = MakeNumber();
             _numS2X = MakeNumber(); _numS2Y = MakeNumber();
+            foreach (NumericUpDown n in new[] { _numS1X, _numS1Y, _numS2X, _numS2Y })
+                n.ValueChanged += (s, e) => UpdateSlotHint();
             rows.Controls.Add(Row(MakeLabel("Slot 1   X (mm):"), _numS1X, MakeLabel("Y (mm):"), _numS1Y));
             rows.Controls.Add(Row(MakeLabel("Slot 2   X (mm):"), _numS2X, MakeLabel("Y (mm):"), _numS2Y));
 
-            _chkTwoSlots = new CheckBox { Text = "Use 2 slots per tray load", AutoSize = true, Margin = new Padding(3, 6, 12, 3) };
+            // Order must match the SlotMode enum: Auto, One, Two
+            _cboSlots = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 70, Margin = new Padding(3, 4, 6, 3) };
+            _cboSlots.Items.AddRange(new object[] { "Auto", "1", "2" });
+            _cboSlots.SelectedIndexChanged += (s, e) => UpdateSlotHint();
+            _tip.SetToolTip(_cboSlots,
+                "Auto = 2 cards per tray load when 2 or more students are selected and slot 2 is set up; " +
+                "otherwise slot 1 only.\n1 = always slot 1 only.   2 = always slot 1 + slot 2.");
+            _lblSlotHint = new Label { AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(0, 8, 12, 0) };
             _chkRotateBack = new CheckBox { Text = "Rotate back side 180°", AutoSize = true, Margin = new Padding(3, 6, 3, 3) };
             _chkRotateBack.CheckedChanged += (s, e) => { _settings.RotateBack180 = _chkRotateBack.Checked; };
-            rows.Controls.Add(Row(_chkTwoSlots, _chkRotateBack));
+            rows.Controls.Add(Row(MakeLabel("Slots per tray load:"), _cboSlots, _lblSlotHint));
+            rows.Controls.Add(Row(_chkRotateBack));
 
             _rdoFront = new RadioButton { Text = "Front", AutoSize = true, Checked = true, Margin = new Padding(3, 7, 3, 3) };
             _rdoBack = new RadioButton { Text = "Back", AutoSize = true, Margin = new Padding(3, 7, 16, 3) };
             rows.Controls.Add(Row(MakeLabel("Side:"), _rdoFront, _rdoBack,
                 MakeButton("Print Preview", (s, e) => ShowPrintPreview()),
                 MakeButton("Print Selected", (s, e) => PrintSelected()),
+                MakeButton("Print Queue...", (s, e) => ShowPrintQueue()),
                 MakeButton("Save Settings", (s, e) => SaveSettings(true))));
 
             group.Controls.Add(rows);
@@ -268,12 +283,14 @@ namespace NPIC_CARD_APP
 
         private void ApplySettingsToUi()
         {
+            _loading = true;   // the controls below must not write back into _settings half-way
             _numS1X.Value = Clamp(_numS1X, _settings.Slot1X);
             _numS1Y.Value = Clamp(_numS1Y, _settings.Slot1Y);
             _numS2X.Value = Clamp(_numS2X, _settings.Slot2X);
             _numS2Y.Value = Clamp(_numS2Y, _settings.Slot2Y);
-            _chkTwoSlots.Checked = _settings.UseTwoSlots;
+            _cboSlots.SelectedIndex = (int)_settings.SlotMode;
             _chkRotateBack.Checked = _settings.RotateBack180;
+            _loading = false;
         }
 
         private static decimal Clamp(NumericUpDown box, float value)
@@ -290,7 +307,7 @@ namespace NPIC_CARD_APP
             _settings.Slot1Y = (float)_numS1Y.Value;
             _settings.Slot2X = (float)_numS2X.Value;
             _settings.Slot2Y = (float)_numS2Y.Value;
-            _settings.UseTwoSlots = _chkTwoSlots.Checked;
+            if (_cboSlots.SelectedIndex >= 0) _settings.SlotMode = (SlotMode)_cboSlots.SelectedIndex;
             _settings.RotateBack180 = _chkRotateBack.Checked;
         }
 
@@ -313,6 +330,26 @@ namespace NPIC_CARD_APP
             if (string.IsNullOrEmpty(_settings.PrinterName)) { _lblPage.Text = "No card printer selected."; return; }
             try { _lblPage.Text = new CardPrinter(_settings).DescribePage(); }
             catch (Exception ex) { _lblPage.Text = ex.Message; }
+            UpdateSlotHint();   // the page size decides whether slot 2 fits
+        }
+
+        /// <summary>Shows next to the Slots box how the selected cards will be split into tray loads.</summary>
+        private void UpdateSlotHint()
+        {
+            if (_loading || _lblSlotHint == null || _cboSlots.SelectedIndex < 0) return;
+            ReadUiToSettings();
+
+            int count = SelectedStudents().Count;
+            string reason;
+            int perLoad = new CardPrinter(_settings).CardsPerLoad(count, out reason);
+            int loads = (count + perLoad - 1) / perLoad;
+
+            string text = count == 0 ? "" : string.Format("{0} card(s) → {1} tray load(s)", count, loads);
+            if (_settings.SlotMode == SlotMode.Auto && count >= 2)
+                text += perLoad == 2 ? ", 2 per load" : ", slot 1 only — slot 2 not usable";
+            _lblSlotHint.Text = text;
+            _lblSlotHint.ForeColor = reason != null ? Color.DarkOrange : Color.DimGray;
+            _tip.SetToolTip(_lblSlotHint, reason ?? "");
         }
 
         // ===================== Data =====================
@@ -553,7 +590,14 @@ namespace NPIC_CARD_APP
             }
             finally { Cursor = Cursors.Default; }
 
-            string report = "Printer: " + _settings.PrinterName + "\n" + page.Replace("  |  ", "\n") + "\n\n" +
+            string slotReason;
+            int perLoad = printer.CardsPerLoad(2, out slotReason);
+            string slots = "Slots per tray load: " + _cboSlots.Text +
+                (_settings.SlotMode == SlotMode.Auto
+                    ? " (" + (perLoad == 2 ? "2 cards when 2+ are selected" : "slot 1 only — " + slotReason) + ")"
+                    : "");
+
+            string report = "Printer: " + _settings.PrinterName + "\n" + page.Replace("  |  ", "\n") + "\n" + slots + "\n\n" +
                 (problems.Count == 0 ? "No problems found." : "Problems:\n• " + string.Join("\n\n• ", problems));
             MessageBox.Show(this, report, "Check Printer", MessageBoxButtons.OK,
                 problems.Count == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
@@ -636,9 +680,11 @@ namespace NPIC_CARD_APP
             SaveSettings(false);
 
             bool front = _rdoFront.Checked;
-            int perLoad = _settings.UseTwoSlots ? 2 : 1;
-            int loads = (list.Count + perLoad - 1) / perLoad;
             var printer = new CardPrinter(_settings);
+            string slotReason;
+            int perLoad = printer.CardsPerLoad(list.Count, out slotReason);
+            int loads = (list.Count + perLoad - 1) / perLoad;
+            if (slotReason != null) SetStatus("Auto slots: slot 1 only. " + slotReason);
 
             try
             {
@@ -681,7 +727,8 @@ namespace NPIC_CARD_APP
 
             bool front = _rdoFront.Checked;
             string side = front ? "FRONT" : "BACK";
-            int perLoad = _settings.UseTwoSlots ? 2 : 1;
+            string slotReason;
+            int perLoad = printer.CardsPerLoad(list.Count, out slotReason);
             int totalLoads = (list.Count + perLoad - 1) / perLoad;
 
             for (int i = 0, load = 1; i < list.Count; i += perLoad, load++)
@@ -691,6 +738,7 @@ namespace NPIC_CARD_APP
 
                 string message =
                     (load > 1 ? "Wait until the previous card is finished and the tray is ejected.\n\n" : "") +
+                    (load == 1 && slotReason != null ? "Auto slots: printing 1 card per tray load.\n" + slotReason + "\n\n" : "") +
                     "Side: " + side + "\n\n" +
                     "Slot 1: " + Describe(a) + "\n" +
                     (b != null ? "Slot 2: " + Describe(b) + "\n" : "") +
@@ -717,6 +765,20 @@ namespace NPIC_CARD_APP
                 }
             }
             SetStatus(string.Format("Done: {0} card(s), {1} side.", list.Count, side));
+        }
+
+        /// <summary>Shows the Windows print queue of the selected printer (cancel stuck jobs).</summary>
+        private void ShowPrintQueue()
+        {
+            if (string.IsNullOrEmpty(_settings.PrinterName))
+            {
+                MessageBox.Show(this, "No card printer selected.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            using (var form = new PrintQueueForm(_settings.PrinterName))
+            {
+                form.ShowDialog(this);
+            }
         }
 
         private static string Describe(Student s)

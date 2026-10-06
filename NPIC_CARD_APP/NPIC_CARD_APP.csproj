@@ -46,6 +46,7 @@
     <Compile Include="MainForm.cs" />
     <Compile Include="CardPreviewForm.cs" />
     <Compile Include="CardPrintPreviewForm.cs" />
+    <Compile Include="PrintQueueForm.cs" />
     <Compile Include="Models\Student.cs" />
     <Compile Include="Services\AppSettings.cs" />
     <Compile Include="Services\CardText.cs" />
