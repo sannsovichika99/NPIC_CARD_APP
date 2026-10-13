@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Serialization;
@@ -155,7 +156,8 @@ namespace NPIC_CARD_APP.Services
             return false;
         }
 
-        private static string FilePath
+        /// <summary>%AppData%\NPIC_CARD_APP\settings.xml</summary>
+        public static string FilePath
         {
             get
             {
@@ -189,10 +191,66 @@ namespace NPIC_CARD_APP.Services
 
         public void Save()
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(FilePath));
+            WriteTo(FilePath, this);
+        }
+
+        /// <summary>Copy of settings.xml made just before Import Settings… replaces it.</summary>
+        public static string BackupFilePath
+        {
+            get { return Path.Combine(Path.GetDirectoryName(FilePath), "settings.backup.xml"); }
+        }
+
+        /// <summary>
+        /// Writes the settings to any file (Export Settings…). The API token is left out: it is encrypted for
+        /// this Windows user only, so it would be useless on another PC and should not travel with the file.
+        /// </summary>
+        public void ExportTo(string path)
+        {
+            var copy = (AppSettings)MemberwiseClone();
+            copy.ApiTokenProtected = "";
+            WriteTo(path, copy);
+        }
+
+        /// <summary>Reads a settings file for Import Settings…; unlike <see cref="Load"/> it fails loudly.</summary>
+        /// <exception cref="InvalidDataException">The file is not an NPIC Card App settings file.</exception>
+        public static AppSettings ReadFile(string path)
+        {
+            try
+            {
+                var serializer = new XmlSerializer(typeof(AppSettings));
+                using (FileStream fs = File.OpenRead(path))
+                {
+                    var settings = (AppSettings)serializer.Deserialize(fs);
+                    if (settings.CardText == null) settings.CardText = new CardText();
+                    return settings;
+                }
+            }
+            catch (InvalidOperationException ex)   // XmlSerializer: not XML, or not <AppSettings>
+            {
+                throw new InvalidDataException("This is not an NPIC Card App settings file:\n" + path, ex);
+            }
+        }
+
+        /// <summary>
+        /// Takes over every saved value of <paramref name="other"/>, keeping this object (the main window holds on to it).
+        /// Copies the properties the XML file stores, so settings added later are copied too.
+        /// </summary>
+        public void CopyFrom(AppSettings other)
+        {
+            foreach (PropertyInfo p in typeof(AppSettings).GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (!p.CanRead || !p.CanWrite || p.IsDefined(typeof(XmlIgnoreAttribute), false)) continue;
+                p.SetValue(this, p.GetValue(other));
+            }
+            if (CardText == null) CardText = new CardText();
+        }
+
+        private static void WriteTo(string path, AppSettings settings)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
             var serializer = new XmlSerializer(typeof(AppSettings));
-            using (FileStream fs = File.Create(FilePath))
-                serializer.Serialize(fs, this);
+            using (FileStream fs = File.Create(path))
+                serializer.Serialize(fs, settings);
         }
     }
 }

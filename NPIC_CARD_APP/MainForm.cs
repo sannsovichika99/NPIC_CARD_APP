@@ -412,6 +412,8 @@ namespace NPIC_CARD_APP
             rows.Controls.Add(Row(FieldLabel("Rotate 180°"), _chkRotateFront, _chkRotateBack));
 
             return MakeCard("Tray layout", rows,
+                MakeButton("All Settings…", ButtonKind.Ghost, (s, e) => ShowAllSettings(),
+                    "Show every setting of the app and this PC: printer, tray, files, API, card text, fonts (Ctrl+,)"),
                 MakeButton("Save", ButtonKind.Ghost, (s, e) => SaveSettings(true), "Save slot positions and print options"));
         }
 
@@ -1264,6 +1266,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.B: RemovePhotoBackground(); return true;
                 case Keys.Control | Keys.H: ShowPrintHistory(); return true;
                 case Keys.Control | Keys.G: ShowGallery(); return true;
+                case Keys.Control | Keys.Oemcomma: ShowAllSettings(); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
@@ -1550,6 +1553,26 @@ namespace NPIC_CARD_APP
             {
                 form.ShowDialog(this);
             }
+        }
+
+        /// <summary>Read-only list of every setting (app + this PC), including tray values not saved yet.</summary>
+        private void ShowAllSettings()
+        {
+            ReadUiToSettings();
+            using (var form = new SettingsOverviewForm(_settings))
+            {
+                form.ShowDialog(this);
+                if (!form.SettingsImported) return;
+            }
+
+            // Import… replaced _settings: refresh every control, or closing the app would save the old tray values back.
+            LoadPrinters();          // falls back to an installed card printer if the imported one is not on this PC
+            ApplySettingsToUi();
+            SaveSettings(false);
+            UpdatePageInfo();
+            UpdatePreview();
+            UpdateSlotHint();
+            SetStatus("Settings imported.");
         }
 
         /// <summary>Photo + details gallery of the loaded students; the student chosen there is selected here.</summary>

@@ -68,6 +68,9 @@
     <Compile Include="PrintHistoryForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="SettingsOverviewForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="FindPositionForm.cs">
       <SubType>Form</SubType>
     </Compile>
