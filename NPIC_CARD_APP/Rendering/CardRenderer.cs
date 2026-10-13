@@ -508,7 +508,7 @@ namespace NPIC_CARD_APP.Rendering
         }
 
         /// <summary>Phone photos are often stored sideways with an EXIF rotation flag.</summary>
-        private static void ApplyExifOrientation(Image img)
+        internal static void ApplyExifOrientation(Image img)
         {
             const int OrientationId = 0x0112;
             if (!img.PropertyIdList.Contains(OrientationId)) return;

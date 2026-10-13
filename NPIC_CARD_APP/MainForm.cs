@@ -289,6 +289,8 @@ namespace NPIC_CARD_APP
 
             Control front = MakeCard("Front", _picFront,
                 KhmerCaption("ព័ត៌មាននិស្សិត"),
+                MakeButton("Remove Background", ButtonKind.Ghost, (s, e) => RemovePhotoBackground(),
+                    "Remove the wall / screen behind the selected student's photo (Ctrl+B)"),
                 MakeButton("Enlarge", ButtonKind.Ghost, (s, e) => ShowFullScreen(PreviewSide.Front)));
             Control back = MakeCard("Back", _picBack,
                 KhmerCaption("ព័ត៌មានវិទ្យាស្ថាន"),
@@ -1079,6 +1081,45 @@ namespace NPIC_CARD_APP
             }
         }
 
+        /// <summary>Opens the background-removal dialog for the current student's photo.</summary>
+        private void RemovePhotoBackground()
+        {
+            Student s = CurrentStudent();
+            if (s == null)
+            {
+                MessageBox.Show(this, "Select a student in the list first.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (string.IsNullOrEmpty(_settings.PhotoFolder) || !Directory.Exists(_settings.PhotoFolder))
+            {
+                MessageBox.Show(this, "Choose the photo folder first (Photo Folder… in the top bar).", Text,
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (CardRenderer.FindPhoto(_settings.PhotoFolder, s.StudentId) == null &&
+                BackgroundRemovalForm.FindOriginal(_settings.PhotoFolder, s.StudentId) == null)
+            {
+                MessageBox.Show(this, "No photo found for " + Describe(s) + ".\n\nExpected " + s.StudentId +
+                    ".jpg / .png in:\n" + _settings.PhotoFolder, Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            BackgroundRemovalForm dlg;
+            Cursor = Cursors.WaitCursor;
+            try { dlg = new BackgroundRemovalForm(_settings.PhotoFolder, s.StudentId); }
+            catch (Exception ex) { ShowError(ex); return; }
+            finally { Cursor = Cursors.Default; }
+
+            using (dlg)
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                UpdatePreview();
+                SetStatus(dlg.Restored
+                    ? "Original photo restored: " + Path.GetFileName(dlg.SavedPath)
+                    : "Background removed: " + Path.GetFileName(dlg.SavedPath) + "  (original kept in _original)");
+            }
+        }
+
         private void EditCardText()
         {
             using (var dlg = new Form
@@ -1164,6 +1205,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.E: ImportExcel(); return true;
                 case Keys.Control | Keys.I: ImportApi(); return true;
                 case Keys.Control | Keys.P: PrintSelected(); return true;
+                case Keys.Control | Keys.B: RemovePhotoBackground(); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
