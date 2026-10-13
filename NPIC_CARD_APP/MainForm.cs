@@ -181,6 +181,8 @@ namespace NPIC_CARD_APP
             actions.Controls.Add(MakeButton("Import Excel…", ButtonKind.OnAccent, (s, e) => ImportExcel(), "Load students from an Excel workbook (.xlsx) (Ctrl+E)"));
             actions.Controls.Add(MakeButton("Import CSV…", ButtonKind.OnAccent, (s, e) => ImportCsv(), "Load students from a UTF-8 CSV file (Ctrl+O)"));
             actions.Controls.Add(MakeButton("Photo Folder…", ButtonKind.OnAccent, (s, e) => ChoosePhotoFolder(), "Folder with photos named {StudentId}.jpg / .png"));
+            actions.Controls.Add(MakeToolStrip(MakeToolButton("Remove Background…", (s, e) => RemovePhotoBackground(),
+                "Crop the selected student's photo and remove the wall / screen behind it (Ctrl+B)")));
             actions.Controls.Add(MakeButton("Signature…", ButtonKind.OnAccent, (s, e) => ChooseSignature(), "Director signature image (white background is removed)"));
             actions.Controls.Add(MakeButton("Card Text…", ButtonKind.OnAccent, (s, e) => EditCardText(), "Edit the fixed text printed on the cards"));
             actions.Controls.Add(new Panel { Width = 1, Height = 24, BackColor = AccentEdge, Margin = new Padding(10, 6, 4, 0) });
@@ -289,8 +291,6 @@ namespace NPIC_CARD_APP
 
             Control front = MakeCard("Front", _picFront,
                 KhmerCaption("ព័ត៌មាននិស្សិត"),
-                MakeButton("Remove Background", ButtonKind.Ghost, (s, e) => RemovePhotoBackground(),
-                    "Remove the wall / screen behind the selected student's photo (Ctrl+B)"),
                 MakeButton("Enlarge", ButtonKind.Ghost, (s, e) => ShowFullScreen(PreviewSide.Front)));
             Control back = MakeCard("Back", _picBack,
                 KhmerCaption("ព័ត៌មានវិទ្យាស្ថាន"),
@@ -552,10 +552,63 @@ namespace NPIC_CARD_APP
                     b.FlatAppearance.BorderColor = AccentEdge;
                     b.FlatAppearance.MouseOverBackColor = AccentOnDark;
                     b.FlatAppearance.MouseDownBackColor = AccentPressed;
+                    b.Padding = new Padding(7, 0, 7, 0);   // the header holds many buttons: keep them compact
                     break;
             }
             b.Click += onClick;
             return b;
+        }
+
+        /// <summary>Tool strip that sits in the navy header and looks like the OnAccent buttons next to it.</summary>
+        private static ToolStrip MakeToolStrip(params ToolStripItem[] items)
+        {
+            var strip = new ToolStrip
+            {
+                Dock = DockStyle.None, AutoSize = true, GripStyle = ToolStripGripStyle.Hidden,
+                BackColor = Accent, ForeColor = Color.White, Font = SemiFont, ShowItemToolTips = true,
+                Padding = new Padding(0), Margin = new Padding(6, 3, 0, 3),
+                Renderer = new HeaderStripRenderer(), CanOverflow = false
+            };
+            strip.Items.AddRange(items);
+            return strip;
+        }
+
+        private static ToolStripButton MakeToolButton(string text, EventHandler onClick, string tooltip)
+        {
+            var b = new ToolStripButton(text)
+            {
+                DisplayStyle = ToolStripItemDisplayStyle.Text, ForeColor = Color.White, Font = SemiFont,
+                AutoSize = true, Padding = new Padding(7, 5, 7, 5), Margin = new Padding(0), ToolTipText = tooltip
+            };
+            b.Click += onClick;
+            return b;
+        }
+
+        /// <summary>Flat navy look for header tool strips: same fill, hover, pressed and edge colours as OnAccent buttons.</summary>
+        private sealed class HeaderStripRenderer : ToolStripProfessionalRenderer
+        {
+            public HeaderStripRenderer() { RoundedEdges = false; }
+
+            protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
+            {
+                using (var brush = new SolidBrush(Accent)) e.Graphics.FillRectangle(brush, e.AffectedBounds);
+            }
+
+            protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e) { /* no border line */ }
+
+            protected override void OnRenderButtonBackground(ToolStripItemRenderEventArgs e)
+            {
+                var bounds = new Rectangle(Point.Empty, e.Item.Size);
+                Color fill = e.Item.Pressed ? AccentPressed : e.Item.Selected ? AccentOnDark : Accent;
+                using (var brush = new SolidBrush(fill)) e.Graphics.FillRectangle(brush, bounds);
+                using (var pen = new Pen(AccentEdge)) e.Graphics.DrawRectangle(pen, 0, 0, bounds.Width - 1, bounds.Height - 1);
+            }
+
+            protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+            {
+                e.TextColor = Color.White;
+                base.OnRenderItemText(e);
+            }
         }
 
         private static Button FillButton(Button b)
@@ -1247,6 +1300,18 @@ namespace NPIC_CARD_APP
             return MessageBox.Show(this,
                 "\"" + _settings.PrinterName + "\" is not a card printer.\n\nPrint to it anyway?",
                 Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+        }
+
+        private void InitializeComponent()
+        {
+            this.SuspendLayout();
+            // 
+            // MainForm
+            // 
+            this.ClientSize = new System.Drawing.Size(282, 253);
+            this.Name = "MainForm";
+            this.ResumeLayout(false);
+
         }
 
         private void DriverSetup()

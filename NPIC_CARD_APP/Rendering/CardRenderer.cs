@@ -25,6 +25,10 @@ namespace NPIC_CARD_APP.Rendering
         public const float CardHeightMm = 54f;
         public const int Dpi = 600;
 
+        /// <summary>Size of the student photo box on the front (the photo editor crops to this shape).</summary>
+        public const float PhotoWidthMm = 18.7f;
+        public const float PhotoHeightMm = 22f;
+
         private static readonly Color Navy = Color.FromArgb(46, 49, 146);
         private static readonly Color Blue = Color.FromArgb(47, 75, 159);
         private static readonly Color Red = Color.FromArgb(172, 30, 37);
@@ -69,7 +73,7 @@ namespace NPIC_CARD_APP.Rendering
                 DrawAsset(g, AssetStore.Get("npic_png.png", true, true), 28.8f, 6.1f, 24.9f, 40.2f, 0.13f, false);
 
                 // Photo, ID, QR, expiry (left column)
-                DrawPhoto(g, FindPhoto(settings.PhotoFolder, s.StudentId), 4.2f, 1.8f, 18.7f, 22f);
+                DrawPhoto(g, FindPhoto(settings.PhotoFolder, s.StudentId), 4.2f, 1.8f, PhotoWidthMm, PhotoHeightMm);
                 DrawIdLine(g, s.StudentId, 3.5f, 24.9f, 21f, 3.6f);
                 DrawQr(g, BuildQrText(s, t.QrTemplate), 4.85f, 28.9f, 17.3f);
                 DrawText(g, KhmerText.Expiry(s.ValidUntil), CardFonts.KhmerSiemreap, ExpiryPt, FontStyle.Regular, IdRed,

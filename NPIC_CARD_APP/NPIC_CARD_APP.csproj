@@ -65,6 +65,9 @@
     <Compile Include="FindPositionForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="PhotoCropView.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="BackgroundRemovalForm.cs">
       <SubType>Form</SubType>
     </Compile>

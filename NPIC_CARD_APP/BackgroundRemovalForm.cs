@@ -8,8 +8,8 @@ using NPIC_CARD_APP.Rendering;
 namespace NPIC_CARD_APP
 {
     /// <summary>
-    /// Removes the plain backdrop from a student photo: before / after preview, a tolerance slider and the
-    /// colour to put behind the subject. Save writes {StudentId}.png and keeps the untouched photo in an
+    /// Crops a student photo and removes its plain backdrop: a crop frame on the original (locked to the card's
+    /// photo shape by default), a live result, a tolerance slider and the colour to put behind the subject. Save writes {StudentId}.png and keeps the untouched photo in an
     /// "_original" sub-folder: editing again always starts from it, and Restore Original puts it back.
     /// </summary>
     public class BackgroundRemovalForm : Form
@@ -18,18 +18,22 @@ namespace NPIC_CARD_APP
         private const string BackupFolderName = "_original";
 
         private static readonly Color IdBlue = Color.FromArgb(67, 142, 219);
+        private const float CardShape = CardRenderer.PhotoWidthMm / CardRenderer.PhotoHeightMm;
 
         private readonly string _photoFolder;
         private readonly string _sourcePath;             // the untouched original (backup when one exists)
         private readonly string _studentId;
         private readonly Bitmap _full;                   // original, full resolution
         private readonly Bitmap _small;                  // downscaled copy for the live preview
-        private readonly PictureBox _picBefore, _picAfter;
+        private readonly PhotoCropView _cropView;
+        private readonly PictureBox _picAfter;
+        private readonly CheckBox _chkCardShape;
         private readonly TrackBar _trkTolerance;
         private readonly Label _lblTolerance;
-        private readonly RadioButton _rdoWhite, _rdoBlue, _rdoTransparent;
+        private readonly RadioButton _rdoWhite, _rdoBlue, _rdoTransparent, _rdoKeep;
         private readonly Timer _debounce;
         private readonly TextureBrush _checker;
+        private readonly ToolTip _tip = new ToolTip();
 
         /// <summary>Path of the saved photo, or null when nothing was saved.</summary>
         public string SavedPath { get; private set; }
@@ -47,7 +51,7 @@ namespace NPIC_CARD_APP
             _small = BackgroundRemover.Downscale(_full, PreviewSide);
             _checker = new TextureBrush(BackgroundRemover.Checkerboard());
 
-            Text = "Remove Background — " + studentId;
+            Text = "Edit Photo — " + studentId;
             StartPosition = FormStartPosition.CenterParent;
             Size = new Size(860, 600);
             MinimumSize = new Size(640, 460);
@@ -57,19 +61,22 @@ namespace NPIC_CARD_APP
             MinimizeBox = false;
             KeyPreview = true;
 
-            // ---- Before / after ----
-            _picBefore = MakePreview();
+            _debounce = new Timer { Interval = 120 };
+            _debounce.Tick += (s, e) => { _debounce.Stop(); UpdateResult(); };
+
+            // ---- Crop frame / result ----
+            _cropView = new PhotoCropView { Dock = DockStyle.Fill, Margin = new Padding(4), Image = _small };
+            _cropView.CropChanged += (s, e) => { _debounce.Stop(); _debounce.Start(); };
             _picAfter = MakePreview();
-            _picBefore.Image = new Bitmap(_small);
 
             var previews = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Padding = new Padding(12, 12, 12, 0) };
             previews.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
             previews.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
             previews.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             previews.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-            previews.Controls.Add(Caption("Original"), 0, 0);
-            previews.Controls.Add(Caption("Background removed"), 1, 0);
-            previews.Controls.Add(_picBefore, 0, 1);
+            previews.Controls.Add(Caption("Original — drag to crop"), 0, 0);
+            previews.Controls.Add(Caption("Result"), 1, 0);
+            previews.Controls.Add(_cropView, 0, 1);
             previews.Controls.Add(_picAfter, 1, 1);
 
             // ---- Options ----
@@ -84,8 +91,20 @@ namespace NPIC_CARD_APP
             _rdoWhite = MakeChoice("White", true);
             _rdoBlue = MakeChoice("Blue", false);
             _rdoTransparent = MakeChoice("Transparent", false);
+            _rdoKeep = MakeChoice("Keep", false);
+            _tip.SetToolTip(_rdoKeep, "Crop only: leave the background as it is");
+
+            _chkCardShape = new CheckBox { Text = "Card photo shape", AutoSize = true, Checked = true, Margin = new Padding(0, 7, 10, 0) };
+            _tip.SetToolTip(_chkCardShape, string.Format("Keep the frame at {0} x {1} mm, the size of the photo box on the card",
+                CardRenderer.PhotoWidthMm, CardRenderer.PhotoHeightMm));
+            _chkCardShape.CheckedChanged += (s, e) => _cropView.AspectRatio = _chkCardShape.Checked ? CardShape : 0f;
+            var btnResetCrop = new Button { Text = "Reset Crop", AutoSize = true, MinimumSize = new Size(0, 28), Margin = new Padding(0, 2, 24, 0) };
+            btnResetCrop.Click += (s, e) => _cropView.ResetCrop();
 
             var options = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, WrapContents = true, Padding = new Padding(12, 10, 12, 0) };
+            options.Controls.Add(new Label { Text = "Crop", AutoSize = true, Margin = new Padding(0, 8, 8, 0) });
+            options.Controls.Add(_chkCardShape);
+            options.Controls.Add(btnResetCrop);
             options.Controls.Add(new Label { Text = "Tolerance", AutoSize = true, Margin = new Padding(0, 8, 6, 0) });
             options.Controls.Add(_trkTolerance);
             options.Controls.Add(_lblTolerance);
@@ -93,12 +112,13 @@ namespace NPIC_CARD_APP
             options.Controls.Add(_rdoWhite);
             options.Controls.Add(_rdoBlue);
             options.Controls.Add(_rdoTransparent);
+            options.Controls.Add(_rdoKeep);
 
             var hint = new Label
             {
-                Dock = DockStyle.Bottom, Height = 36, Padding = new Padding(14, 4, 14, 0), ForeColor = Color.DimGray,
-                Text = "Works best on a plain wall or screen. Raise the tolerance if background is left over; " +
-                       "lower it if parts of the face, hair or clothes disappear."
+                Dock = DockStyle.Bottom, Height = 52, Padding = new Padding(14, 4, 14, 0), ForeColor = Color.DimGray,
+                Text = "Drag inside the frame to move it, drag a corner to resize, drag outside to draw a new one (arrow keys nudge). " +
+                       "Raise the tolerance if background is left over; lower it if parts of the face, hair or clothes disappear."
             };
 
             // ---- Buttons ----
@@ -127,9 +147,8 @@ namespace NPIC_CARD_APP
             AcceptButton = btnSave;
             CancelButton = btnCancel;
 
-            _debounce = new Timer { Interval = 120 };
-            _debounce.Tick += (s, e) => { _debounce.Stop(); UpdateResult(); };
-
+            _cropView.AspectRatio = CardShape;
+            _cropView.ResetCrop();
             UpdateToleranceLabel();
             UpdateResult();
         }
@@ -168,6 +187,24 @@ namespace NPIC_CARD_APP
             return Color.White;
         }
 
+        /// <summary>Crops <paramref name="src"/> to the frame (scaled from preview to <paramref name="src"/> pixels), then removes the background.</summary>
+        private Bitmap Process(Bitmap src)
+        {
+            RectangleF c = _cropView.Crop;
+            float sx = (float)src.Width / _small.Width, sy = (float)src.Height / _small.Height;
+            Rectangle area = Rectangle.Round(new RectangleF(c.X * sx, c.Y * sy, c.Width * sx, c.Height * sy));
+            area.Intersect(new Rectangle(0, 0, src.Width, src.Height));
+            if (area.Width < 1 || area.Height < 1) area = new Rectangle(0, 0, src.Width, src.Height);
+
+            var cropped = new Bitmap(area.Width, area.Height, PixelFormat.Format32bppArgb);
+            using (Graphics g = Graphics.FromImage(cropped))
+                g.DrawImage(src, new Rectangle(0, 0, area.Width, area.Height), area, GraphicsUnit.Pixel);
+
+            if (_rdoKeep.Checked) return cropped;
+            using (cropped)
+                return BackgroundRemover.Remove(cropped, _trkTolerance.Value, FillColor());
+        }
+
         /// <summary>Recomputes the preview on the small copy. Transparent results are shown on a checkerboard.</summary>
         private void UpdateResult()
         {
@@ -175,7 +212,7 @@ namespace NPIC_CARD_APP
             Cursor = Cursors.WaitCursor;
             try
             {
-                using (Bitmap removed = BackgroundRemover.Remove(_small, _trkTolerance.Value, FillColor()))
+                using (Bitmap removed = Process(_small))
                 {
                     result = new Bitmap(removed.Width, removed.Height, PixelFormat.Format32bppArgb);
                     using (Graphics g = Graphics.FromImage(result))
@@ -201,7 +238,7 @@ namespace NPIC_CARD_APP
         // ---------- Save ----------
         /// <summary>
         /// Backs up the original into "_original\" (first time only, so re-running never loses it) and writes
-        /// {StudentId}.png at full resolution. PNG keeps transparency and is lossless for the card print.
+        /// the cropped {StudentId}.png at full resolution. PNG keeps transparency and is lossless for the card print.
         /// </summary>
         private void Save()
         {
@@ -213,7 +250,7 @@ namespace NPIC_CARD_APP
             try
             {
                 // Write to a temp file first, so a failed save never leaves a half-written photo.
-                using (Bitmap result = BackgroundRemover.Remove(_full, _trkTolerance.Value, FillColor()))
+                using (Bitmap result = Process(_full))
                     result.Save(temp, ImageFormat.Png);
 
                 if (FindOriginal(_photoFolder, _studentId) == null)
@@ -296,7 +333,7 @@ namespace NPIC_CARD_APP
             if (disposing)
             {
                 _debounce.Dispose();
-                if (_picBefore.Image != null) _picBefore.Image.Dispose();
+                _tip.Dispose();
                 if (_picAfter.Image != null) _picAfter.Image.Dispose();
                 _checker.Dispose();
                 _small.Dispose();
