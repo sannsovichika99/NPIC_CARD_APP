@@ -1,0 +1,707 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using NPIC_CARD_APP.Models;
+using NPIC_CARD_APP.Rendering;
+using NPIC_CARD_APP.Services;
+
+namespace NPIC_CARD_APP
+{
+    /// <summary>
+    /// Gallery of the loaded students: photo thumbnail + main details per tile, and a details panel with the
+    /// large photo and every field of the selected student. Shows at a glance whose photo is missing and
+    /// whose card is already printed (from <see cref="PrintHistory"/>).
+    /// Thumbnails load in the background, so long lists open immediately.
+    ///   Enter / double-click = select the student in the main list, F5 = reload photos, Ctrl+F = search, Esc = close
+    /// </summary>
+    public class StudentGalleryForm : Form
+    {
+        private static readonly Color Accent     = Color.FromArgb(46, 49, 146);
+        private static readonly Color AccentSoft = Color.FromArgb(232, 233, 248);
+        private static readonly Color AppBack    = Color.FromArgb(243, 244, 247);
+        private static readonly Color Surface    = Color.White;
+        private static readonly Color SurfaceAlt = Color.FromArgb(249, 250, 252);
+        private static readonly Color Border     = Color.FromArgb(222, 224, 231);
+        private static readonly Color TextMain   = Color.FromArgb(28, 30, 40);
+        private static readonly Color TextMuted  = Color.FromArgb(102, 106, 122);
+        private static readonly Color Placeholder = Color.FromArgb(232, 234, 240);
+        private static readonly Color Warning    = Color.FromArgb(180, 98, 0);
+        private static readonly Color Success    = Color.FromArgb(21, 128, 61);
+        private static readonly Color Danger     = Color.FromArgb(185, 28, 28);
+
+        // Thumbnail in the card's photo ratio (18.7 x 22 mm).
+        private const int ThumbW = 84, ThumbH = 99;
+        private static readonly Size TileSize = new Size(310, 132);
+
+        private static readonly Font IdFont    = new Font("Segoe UI", 10f, FontStyle.Bold);
+        private static readonly Font LatinFont = new Font("Segoe UI", 9f);
+        private static readonly Font SmallFont = new Font("Segoe UI", 8f);
+        private static readonly Font BadgeFont = new Font("Segoe UI", 7.5f, FontStyle.Bold);
+        private static readonly Font KhmerFont = new Font(CardFonts.KhmerSiemreap, 9f);
+        private static readonly Font KhmerSmallFont = new Font(CardFonts.KhmerSiemreap, 7.5f);   // faculty / level are Khmer
+
+        private enum Filter { All, MissingPhoto, NotPrinted, PartlyPrinted, Printed }
+
+        private sealed class PrintCount
+        {
+            public int Front, Back;
+            public DateTime Last;
+        }
+
+        private readonly List<Student> _students;
+        private readonly string _photoFolder;
+        private Dictionary<string, PrintCount> _printed = new Dictionary<string, PrintCount>(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, string> _photoPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        // Thumbnails by StudentId. Written by the loader thread, drawn and disposed on the UI thread; guarded by _thumbLock.
+        private readonly Dictionary<string, Bitmap> _thumbs = new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
+        private readonly object _thumbLock = new object();
+        private bool _closed;
+        private Student _detailStudent;   // student the details panel shows now
+        private CancellationTokenSource _loaderCts;
+        private volatile bool _thumbsDirty;
+        private readonly System.Windows.Forms.Timer _repaintTimer;
+
+        private readonly TextBox _txtSearch;
+        private readonly ComboBox _cboFilter;
+        private readonly GalleryList _list;
+        private readonly Label _lblEmpty, _lblSummary;
+        private readonly PictureBox _picPhoto;
+        private readonly TableLayoutPanel _fields;
+        private readonly Label _lblDetailTitle;
+        private readonly Button _btnSelect, _btnOpenPhoto, _btnShowFile;
+
+        /// <summary>StudentId the user chose with Enter / double-click / "Select in List" (DialogResult = OK).</summary>
+        public string SelectedStudentId { get; private set; }
+
+        public StudentGalleryForm(List<Student> students, AppSettings settings, string startStudentId)
+        {
+            _students = students ?? new List<Student>();
+            _photoFolder = settings.PhotoFolder ?? "";
+
+            Text = "Student Gallery";
+            StartPosition = FormStartPosition.CenterParent;
+            Rectangle work = Screen.FromPoint(Cursor.Position).WorkingArea;
+            Size = new Size(Math.Min(1180, work.Width), Math.Min(760, work.Height));
+            MinimumSize = new Size(Math.Min(820, work.Width), Math.Min(480, work.Height));
+            Font = new Font(CardFonts.UI, 9f);
+            BackColor = AppBack;
+            KeyPreview = true;
+            ShowInTaskbar = false;
+
+            // ---- Top bar: search + filter ----
+            _txtSearch = new TextBox { Width = 260, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(3, 8, 14, 3) };
+            _txtSearch.HandleCreated += (s, e) => SetCueBanner(_txtSearch, "Search ID, name or faculty…  (Ctrl+F)");
+            _txtSearch.TextChanged += (s, e) => ShowStudents(CurrentId());
+            _txtSearch.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Down && _list.Items.Count > 0) { _list.Focus(); e.SuppressKeyPress = true; }
+                else if (e.KeyCode == Keys.Enter) { ChooseCurrent(); e.SuppressKeyPress = true; }
+            };
+
+            _cboFilter = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 170, Margin = new Padding(3, 7, 14, 3) };
+            _cboFilter.Items.AddRange(new object[] { "All students", "Missing photo", "Not printed yet", "Partly printed", "Fully printed" });
+            _cboFilter.SelectedIndex = 0;
+            _cboFilter.SelectedIndexChanged += (s, e) => ShowStudents(CurrentId());
+
+            var top = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top, Height = 44, Padding = new Padding(10, 2, 10, 0), WrapContents = false, BackColor = Surface
+            };
+            top.Controls.Add(_txtSearch);
+            top.Controls.Add(new Label { Text = "Show", AutoSize = true, ForeColor = TextMuted, Margin = new Padding(0, 11, 0, 0) });
+            top.Controls.Add(_cboFilter);
+            top.Controls.Add(MakeButton("Reload Photos (F5)", (s, e) => Reload()));
+            top.Controls.Add(MakeButton("Close", (s, e) => Close()));
+
+            // ---- Tiles ----
+            _list = new GalleryList
+            {
+                Dock = DockStyle.Fill, View = View.Tile, OwnerDraw = true, TileSize = TileSize, MultiSelect = false,
+                HideSelection = false, BorderStyle = BorderStyle.None, BackColor = AppBack
+            };
+            _list.DrawItem += DrawTile;
+            _list.SelectedIndexChanged += (s, e) => ShowDetails();
+            _list.ItemActivate += (s, e) => ChooseCurrent();   // double-click or Enter
+
+            _lblEmpty = new Label
+            {
+                Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, ForeColor = TextMuted, BackColor = AppBack, Visible = false
+            };
+            var listHost = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8, 8, 4, 8), BackColor = AppBack };
+            listHost.Controls.Add(_list);
+            listHost.Controls.Add(_lblEmpty);
+            _lblEmpty.BringToFront();
+
+            // ---- Details panel ----
+            _lblDetailTitle = new Label
+            {
+                Dock = DockStyle.Top, Height = 36, Font = new Font(CardFonts.UI, 10f, FontStyle.Bold), ForeColor = TextMain,
+                Padding = new Padding(0, 8, 0, 0), AutoEllipsis = true
+            };
+            _picPhoto = new PictureBox
+            {
+                Dock = DockStyle.Top, Height = 230, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Placeholder,
+                Cursor = Cursors.Hand
+            };
+            _picPhoto.DoubleClick += (s, e) => OpenPhoto();
+            _picPhoto.Paint += (s, e) =>
+            {
+                if (_picPhoto.Image != null) return;
+                TextRenderer.DrawText(e.Graphics, _list.SelectedItems.Count == 0 ? "" : "No photo", LatinFont,
+                    _picPhoto.ClientRectangle, TextMuted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            };
+
+            _fields = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Padding = new Padding(0, 10, 0, 0), BackColor = Surface
+            };
+            _fields.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            _fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+
+            _btnSelect = MakeButton("Select in List", (s, e) => ChooseCurrent());
+            _btnSelect.BackColor = Accent;
+            _btnSelect.ForeColor = Color.White;
+            _btnSelect.FlatStyle = FlatStyle.Flat;
+            _btnSelect.FlatAppearance.BorderSize = 0;
+            _btnOpenPhoto = MakeButton("Open Photo", (s, e) => OpenPhoto());
+            _btnShowFile = MakeButton("Show in Folder", (s, e) => ShowPhotoInFolder());
+            var detailButtons = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Bottom, AutoSize = true, WrapContents = true, BackColor = Surface, Padding = new Padding(0, 6, 0, 0)
+            };
+            detailButtons.Controls.Add(_btnSelect);
+            detailButtons.Controls.Add(_btnOpenPhoto);
+            detailButtons.Controls.Add(_btnShowFile);
+
+            var fieldsScroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Surface };
+            fieldsScroll.Controls.Add(_fields);
+
+            var details = new Panel { Dock = DockStyle.Right, Width = 330, BackColor = Surface, Padding = new Padding(16, 4, 16, 12) };
+            details.Paint += (s, e) => { using (var pen = new Pen(Border)) e.Graphics.DrawLine(pen, 0, 0, 0, details.Height); };
+            details.Controls.Add(fieldsScroll);
+            details.Controls.Add(detailButtons);
+            details.Controls.Add(_picPhoto);
+            details.Controls.Add(_lblDetailTitle);
+
+            _lblSummary = new Label
+            {
+                Dock = DockStyle.Bottom, Height = 28, Padding = new Padding(12, 0, 12, 0), TextAlign = ContentAlignment.MiddleLeft,
+                BackColor = Surface, ForeColor = TextMuted, AutoEllipsis = true
+            };
+
+            Controls.Add(listHost);
+            Controls.Add(details);
+            Controls.Add(top);
+            Controls.Add(_lblSummary);
+
+            _repaintTimer = new System.Windows.Forms.Timer { Interval = 200 };
+            _repaintTimer.Tick += (s, e) =>
+            {
+                if (!_thumbsDirty) return;
+                _thumbsDirty = false;
+                _list.Invalidate();
+            };
+
+            ReadPhotosAndHistory();
+            ShowStudents(startStudentId);
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            _repaintTimer.Start();
+            StartThumbnailLoader();
+            if (_list.SelectedItems.Count > 0)
+            {
+                _list.SelectedItems[0].EnsureVisible();
+                _list.Focus();
+            }
+            else _txtSearch.Focus();
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            _repaintTimer.Stop();
+            _repaintTimer.Dispose();
+            if (_loaderCts != null) _loaderCts.Cancel();
+            lock (_thumbLock)
+            {
+                _closed = true;
+                foreach (Bitmap b in _thumbs.Values) b.Dispose();
+                _thumbs.Clear();
+            }
+            ReplacePhoto(null);
+            base.OnFormClosed(e);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (e.KeyCode == Keys.Escape)
+            {
+                // First Esc clears the search, the next one closes the window.
+                if (_txtSearch.TextLength > 0) _txtSearch.Clear();
+                else Close();
+                e.Handled = e.SuppressKeyPress = true;
+            }
+            else if (e.KeyCode == Keys.F5) { Reload(); e.Handled = true; }
+            else if (e.KeyData == (Keys.Control | Keys.F)) { _txtSearch.Focus(); _txtSearch.SelectAll(); e.Handled = true; }
+        }
+
+        // ===================== Data =====================
+        /// <summary>Finds every student's photo file and counts their printed card sides.</summary>
+        private void ReadPhotosAndHistory()
+        {
+            _photoPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (Student s in _students)
+            {
+                string id = s.StudentId ?? "";
+                if (!_photoPaths.ContainsKey(id)) _photoPaths[id] = CardRenderer.FindPhoto(_photoFolder, id);
+            }
+
+            _printed = new Dictionary<string, PrintCount>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                foreach (PrintRecord r in PrintHistory.Load())
+                {
+                    PrintCount c;
+                    if (!_printed.TryGetValue(r.StudentId ?? "", out c)) _printed[r.StudentId ?? ""] = c = new PrintCount();
+                    if (r.IsFront) c.Front++;
+                    if (r.IsBack) c.Back++;
+                    if (r.PrintedAt > c.Last) c.Last = r.PrintedAt;
+                }
+            }
+            catch
+            {
+                // Unreadable history: the gallery still works, it just shows nothing as printed.
+            }
+        }
+
+        private void Reload()
+        {
+            string current = CurrentId();
+            if (_loaderCts != null) _loaderCts.Cancel();
+            lock (_thumbLock)
+            {
+                foreach (Bitmap b in _thumbs.Values) b.Dispose();
+                _thumbs.Clear();
+            }
+            ReadPhotosAndHistory();
+            _detailStudent = null;   // the photo file may have changed: load it again
+            ShowStudents(current);
+            StartThumbnailLoader();
+        }
+
+        private string PhotoPath(Student s)
+        {
+            string path;
+            return _photoPaths.TryGetValue(s.StudentId ?? "", out path) ? path : null;
+        }
+
+        private PrintCount Printed(Student s)
+        {
+            PrintCount c;
+            return _printed.TryGetValue(s.StudentId ?? "", out c) ? c : null;
+        }
+
+        private bool PassesFilter(Student s)
+        {
+            PrintCount c = Printed(s);
+            switch ((Filter)Math.Max(0, _cboFilter.SelectedIndex))
+            {
+                case Filter.MissingPhoto: return PhotoPath(s) == null;
+                case Filter.NotPrinted: return c == null || (c.Front == 0 && c.Back == 0);
+                case Filter.PartlyPrinted: return c != null && (c.Front > 0) != (c.Back > 0);
+                case Filter.Printed: return c != null && c.Front > 0 && c.Back > 0;
+                default: return true;
+            }
+        }
+
+        private static bool Matches(Student s, string q)
+        {
+            return q.Length == 0 || Has(s.StudentId, q) || Has(s.NameKh, q) || Has(s.NameEn, q) ||
+                   Has(s.Faculty, q) || Has(s.Generation, q);
+        }
+
+        /// <summary>Rebuilds the tiles from the search + filter, keeping selectId selected when it is still shown.</summary>
+        private void ShowStudents(string selectId)
+        {
+            string q = _txtSearch.Text.Trim();
+            List<Student> shown = _students.Where(s => Matches(s, q) && PassesFilter(s)).ToList();
+
+            _list.BeginUpdate();
+            _list.Items.Clear();
+            ListViewItem select = null;
+            foreach (Student s in shown)
+            {
+                var item = new ListViewItem(s.StudentId ?? "") { Tag = s };
+                _list.Items.Add(item);
+                if (select == null && selectId != null && string.Equals(s.StudentId, selectId, StringComparison.OrdinalIgnoreCase))
+                    select = item;
+            }
+            if (select == null && _list.Items.Count > 0) select = _list.Items[0];
+            if (select != null) { select.Selected = true; select.Focused = true; }
+            _list.EndUpdate();
+            if (select != null && _list.IsHandleCreated) select.EnsureVisible();
+
+            _lblEmpty.Text = _students.Count == 0
+                ? "No students loaded.\n\nImport a student list in the main window first."
+                : "No students match the search or the “Show” filter.";
+            _lblEmpty.Visible = shown.Count == 0;
+
+            int withPhoto = _students.Count(s => PhotoPath(s) != null);
+            int done = _students.Count(s => { PrintCount c = Printed(s); return c != null && c.Front > 0 && c.Back > 0; });
+            _lblSummary.Text = string.Format(
+                "{0} of {1} students shown   ·   {2} with photo, {3} missing   ·   {4} fully printed   ·   Photo folder: {5}",
+                shown.Count, _students.Count, withPhoto, _students.Count - withPhoto, done,
+                _photoFolder.Length == 0 ? "(not chosen)" : _photoFolder);
+
+            ShowDetails();
+            if (_loaderCts != null) StartThumbnailLoader();   // load the newly shown tiles first
+        }
+
+        private Student CurrentStudent()
+        {
+            return _list.SelectedItems.Count == 0 ? null : _list.SelectedItems[0].Tag as Student;
+        }
+
+        private string CurrentId()
+        {
+            Student s = CurrentStudent();
+            return s == null ? null : s.StudentId;
+        }
+
+        // ===================== Thumbnails =====================
+        /// <summary>Loads missing thumbnails on a worker thread, tiles in the order they are shown first.</summary>
+        private void StartThumbnailLoader()
+        {
+            if (_loaderCts != null) _loaderCts.Cancel();
+            var cts = new CancellationTokenSource();
+            _loaderCts = cts;
+
+            var shownFirst = _list.Items.Cast<ListViewItem>().Select(i => (Student)i.Tag).ToList();
+            var jobs = shownFirst.Concat(_students.Except(shownFirst))
+                .Select(s => new KeyValuePair<string, string>(s.StudentId ?? "", PhotoPath(s)))
+                .Where(j => j.Value != null)
+                .ToList();
+            CancellationToken token = cts.Token;
+
+            Task.Run(() =>
+            {
+                foreach (KeyValuePair<string, string> job in jobs)
+                {
+                    if (token.IsCancellationRequested) return;
+                    lock (_thumbLock)
+                    {
+                        if (_closed) return;
+                        if (_thumbs.ContainsKey(job.Key)) continue;
+                    }
+
+                    Bitmap thumb;
+                    try { thumb = MakeThumb(job.Value, ThumbW * 2, ThumbH * 2); }   // 2x: sharp on high-DPI screens
+                    catch { continue; }   // unreadable image: tile keeps the placeholder
+
+                    lock (_thumbLock)
+                    {
+                        if (_closed || token.IsCancellationRequested || _thumbs.ContainsKey(job.Key)) thumb.Dispose();
+                        else _thumbs[job.Key] = thumb;
+                    }
+                    _thumbsDirty = true;
+                }
+            }, token);
+        }
+
+        /// <summary>Photo cropped to the card photo ratio (keeps the top third for faces), EXIF rotation applied.</summary>
+        private static Bitmap MakeThumb(string path, int w, int h)
+        {
+            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (Image img = Image.FromStream(fs))
+            {
+                CardRenderer.ApplyExifOrientation(img);
+                var bmp = new Bitmap(w, h, PixelFormat.Format32bppPArgb);
+                using (Graphics g = Graphics.FromImage(bmp))
+                using (var attr = new ImageAttributes())
+                {
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    g.Clear(Color.White);   // transparent PNGs (background removed) show on white, like on the card
+                    attr.SetWrapMode(WrapMode.TileFlipXY);
+                    Rectangle src = CoverCrop(img.Size, new Size(w, h));
+                    g.DrawImage(img, new Rectangle(0, 0, w, h), src.X, src.Y, src.Width, src.Height, GraphicsUnit.Pixel, attr);
+                }
+                return bmp;
+            }
+        }
+
+        private static Rectangle CoverCrop(Size src, Size dst)
+        {
+            float srcRatio = (float)src.Width / src.Height;
+            float dstRatio = (float)dst.Width / dst.Height;
+            if (srcRatio > dstRatio)
+            {
+                int w = (int)(src.Height * dstRatio);
+                return new Rectangle((src.Width - w) / 2, 0, w, src.Height);
+            }
+            int h = (int)(src.Width / dstRatio);
+            return new Rectangle(0, (src.Height - h) / 3, src.Width, h);
+        }
+
+        // ===================== Drawing =====================
+        private void DrawTile(object sender, DrawListViewItemEventArgs e)
+        {
+            var s = e.Item.Tag as Student;
+            if (s == null) return;
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            Rectangle tile = Rectangle.Inflate(e.Bounds, -4, -4);
+            bool selected = e.Item.Selected;
+            using (var back = new SolidBrush(selected ? AccentSoft : Surface)) g.FillRectangle(back, tile);
+            using (var pen = new Pen(selected ? Accent : Border, selected ? 2f : 1f))
+                g.DrawRectangle(pen, tile.X, tile.Y, tile.Width - 1, tile.Height - 1);
+
+            // Photo
+            var photo = new Rectangle(tile.X + 8, tile.Y + (tile.Height - ThumbH) / 2, ThumbW, ThumbH);
+            Bitmap thumb;
+            lock (_thumbLock) _thumbs.TryGetValue(s.StudentId ?? "", out thumb);
+            string photoPath = PhotoPath(s);
+            if (thumb != null)
+            {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.DrawImage(thumb, photo);
+            }
+            else
+            {
+                using (var ph = new SolidBrush(Placeholder)) g.FillRectangle(ph, photo);
+                TextRenderer.DrawText(g, photoPath == null ? "No photo" : "Loading…", SmallFont, photo,
+                    photoPath == null ? Danger : TextMuted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            }
+            using (var pen = new Pen(Border)) g.DrawRectangle(pen, photo.X, photo.Y, photo.Width - 1, photo.Height - 1);
+
+            // Text
+            int x = photo.Right + 10, w = tile.Right - x - 8, y = tile.Y + 6;
+            Color main = selected ? Accent : TextMain;
+            y = Line(g, s.StudentId, IdFont, main, x, y, w);
+            y = Line(g, s.NameKh, KhmerFont, main, x, y - 2, w) - 2;
+            y = Line(g, s.NameEn, LatinFont, main, x, y, w);
+            string meta = string.Join("  ·  ", new[] { s.Faculty, s.Level, string.IsNullOrEmpty(s.Generation) ? null : "Gen " + s.Generation }
+                .Where(t => !string.IsNullOrEmpty(t)));
+            y = Line(g, meta, KhmerSmallFont, TextMuted, x, y - 2, w);
+
+            // Badges under the text (never past the tile edge)
+            int bx = x, by = Math.Min(y + 2, tile.Bottom - 22);
+            PrintCount c = Printed(s);
+            if (photoPath == null) bx = Badge(g, "NO PHOTO", Danger, bx, by);
+            if (c == null || (c.Front == 0 && c.Back == 0)) Badge(g, "NOT PRINTED", TextMuted, bx, by);
+            else
+            {
+                bx = Badge(g, c.Front > 0 ? "FRONT ✓" : "FRONT –", c.Front > 0 ? Success : Danger, bx, by);
+                bx = Badge(g, c.Back > 0 ? "BACK ✓" : "BACK –", c.Back > 0 ? Success : Danger, bx, by);
+                if (c.Front > 1 || c.Back > 1) Badge(g, "REPRINTED", Warning, bx, by);
+            }
+        }
+
+        /// <summary>Draws one line of text (ellipsis when too long) and returns the next line's y.</summary>
+        private static int Line(Graphics g, string text, Font font, Color color, int x, int y, int width)
+        {
+            if (string.IsNullOrEmpty(text)) return y;
+            const TextFormatFlags flags = TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+            Size size = TextRenderer.MeasureText(g, text, font, new Size(width, int.MaxValue), flags);
+            TextRenderer.DrawText(g, text, font, new Rectangle(x, y, width, size.Height), color, flags);
+            return y + size.Height;
+        }
+
+        /// <summary>Small outlined pill; returns the x for the next badge.</summary>
+        private static int Badge(Graphics g, string text, Color color, int x, int y)
+        {
+            Size size = TextRenderer.MeasureText(g, text, BadgeFont, Size.Empty, TextFormatFlags.NoPadding);
+            var rect = new Rectangle(x, y, size.Width + 12, 17);
+            using (GraphicsPath path = RoundRect(rect, 8))
+            using (var fill = new SolidBrush(Color.FromArgb(24, color)))
+            using (var pen = new Pen(Color.FromArgb(120, color)))
+            {
+                g.FillPath(fill, path);
+                g.DrawPath(pen, path);
+            }
+            TextRenderer.DrawText(g, text, BadgeFont, rect, color,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            return rect.Right + 5;
+        }
+
+        private static GraphicsPath RoundRect(Rectangle r, int radius)
+        {
+            int d = radius * 2;
+            var path = new GraphicsPath();
+            path.AddArc(r.X, r.Y, d, d, 180, 90);
+            path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
+        // ===================== Details panel =====================
+        private void ShowDetails()
+        {
+            Student s = CurrentStudent();
+            if (s != null && s == _detailStudent) return;   // selection events repeat while the tiles rebuild
+            _detailStudent = s;
+            _fields.SuspendLayout();
+            _fields.Controls.Clear();
+            _fields.RowStyles.Clear();
+            _fields.RowCount = 0;
+
+            if (s == null)
+            {
+                _lblDetailTitle.Text = "";
+                ReplacePhoto(null);
+                _btnSelect.Enabled = _btnOpenPhoto.Enabled = _btnShowFile.Enabled = false;
+                _fields.ResumeLayout();
+                return;
+            }
+
+            _lblDetailTitle.Text = string.IsNullOrEmpty(s.NameEn) ? s.StudentId : s.StudentId + "  —  " + s.NameEn;
+            string photo = PhotoPath(s);
+            ReplacePhoto(photo == null ? null : LoadPhotoCopy(photo));
+
+            AddField("ID", s.StudentId);
+            AddField("Name (KH)", s.NameKh);
+            AddField("Name (EN)", s.NameEn);
+            AddField("Sex", s.Gender);
+            AddField("Date of birth", s.DateOfBirth);
+            AddField("Faculty", s.Faculty);
+            AddField("Level", s.Level);
+            AddField("Generation", s.Generation);
+            AddField("Valid until", s.ValidUntil);
+            if (!string.IsNullOrEmpty(s.QrData)) AddField("QR data", s.QrData);
+            AddField("Photo", photo == null ? "Missing — expected " + s.StudentId + ".jpg / .png" : Path.GetFileName(photo),
+                photo == null ? Danger : TextMain);
+
+            PrintCount c = Printed(s);
+            if (c == null || (c.Front == 0 && c.Back == 0)) AddField("Printed", "Not printed yet", TextMuted);
+            else
+                AddField("Printed",
+                    string.Format("Front {0}×, Back {1}×\nLast {2:yyyy-MM-dd HH:mm}", c.Front, c.Back, c.Last),
+                    c.Front > 0 && c.Back > 0 ? Success : Warning);
+
+            _fields.ResumeLayout(true);
+            _btnSelect.Enabled = true;
+            _btnOpenPhoto.Enabled = _btnShowFile.Enabled = photo != null;
+        }
+
+        private void AddField(string label, string value, Color? color = null)
+        {
+            int row = _fields.RowCount++;
+            _fields.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _fields.Controls.Add(new Label
+            {
+                Text = label, AutoSize = true, ForeColor = TextMuted, Margin = new Padding(0, 3, 6, 3)
+            }, 0, row);
+            _fields.Controls.Add(new Label
+            {
+                Text = string.IsNullOrEmpty(value) ? "—" : value, AutoSize = true, MaximumSize = new Size(190, 0),
+                ForeColor = color ?? TextMain, UseMnemonic = false, Margin = new Padding(0, 3, 0, 3)
+            }, 1, row);
+        }
+
+        /// <summary>Copy of the photo that does not keep the file locked (so Remove Background can still save it).</summary>
+        private static Bitmap LoadPhotoCopy(string path)
+        {
+            try
+            {
+                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                using (Image img = Image.FromStream(fs))
+                {
+                    CardRenderer.ApplyExifOrientation(img);
+                    return new Bitmap(img);
+                }
+            }
+            catch
+            {
+                return null;   // damaged file: show the "No photo" placeholder
+            }
+        }
+
+        private void ReplacePhoto(Image image)
+        {
+            Image old = _picPhoto.Image;
+            _picPhoto.Image = image;
+            if (old != null) old.Dispose();
+            _picPhoto.Invalidate();
+        }
+
+        // ===================== Commands =====================
+        private void ChooseCurrent()
+        {
+            Student s = CurrentStudent();
+            if (s == null) return;
+            SelectedStudentId = s.StudentId;
+            DialogResult = DialogResult.OK;
+        }
+
+        private void OpenPhoto()
+        {
+            Student s = CurrentStudent();
+            string path = s == null ? null : PhotoPath(s);
+            if (path == null) return;
+            try { Process.Start(path); }
+            catch (Exception ex) { ShowError("Could not open the photo", ex); }
+        }
+
+        private void ShowPhotoInFolder()
+        {
+            Student s = CurrentStudent();
+            string path = s == null ? null : PhotoPath(s);
+            if (path == null) return;
+            try { Process.Start("explorer.exe", "/select,\"" + path + "\""); }
+            catch (Exception ex) { ShowError("Could not open the folder", ex); }
+        }
+
+        private void ShowError(string what, Exception ex)
+        {
+            MessageBox.Show(this, what + ":\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+
+        // ===================== Helpers =====================
+        private static bool Has(string value, string q)
+        {
+            return value != null && value.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static Button MakeButton(string text, EventHandler onClick)
+        {
+            var b = new Button { Text = text, AutoSize = true, Height = 30, Margin = new Padding(3, 5, 3, 3), UseVisualStyleBackColor = true };
+            b.Click += onClick;
+            return b;
+        }
+
+        private const int EM_SETCUEBANNER = 0x1501;
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, string lParam);
+
+        private static void SetCueBanner(TextBox box, string text)
+        {
+            SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, text);
+        }
+
+        /// <summary>Double-buffered list so tiles don't flicker while thumbnails arrive.</summary>
+        private sealed class GalleryList : ListView
+        {
+            public GalleryList()
+            {
+                DoubleBuffered = true;
+            }
+        }
+    }
+}

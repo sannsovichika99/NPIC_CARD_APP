@@ -89,7 +89,7 @@ namespace NPIC_CARD_APP.Services
             return "";
         }
 
-        private static List<string> ParseLine(string line)
+        internal static List<string> ParseLine(string line)
         {
             var result = new List<string>();
             var sb = new StringBuilder();

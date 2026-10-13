@@ -264,6 +264,8 @@ namespace NPIC_CARD_APP
             body.Controls.Add(gridHost, 0, 1);
 
             return MakeCard("Students", body, _lblCount,
+                MakeButton("Gallery", ButtonKind.Ghost, (s, e) => ShowGallery(),
+                    "Photos and details of every student; shows missing photos and print status (Ctrl+G)"),
                 MakeButton("Excel Template", ButtonKind.Ghost, (s, e) => SaveExcelTemplate(),
                     "Save an empty Excel file with the right columns to fill in, then use Import Excel…"));
         }
@@ -441,6 +443,7 @@ namespace NPIC_CARD_APP
             };
             actions.Controls.Add(MakeButton("Print Selected", ButtonKind.Primary, (s, e) => PrintSelected(), "Print the selected students, tray load by tray load (Ctrl+P)"));
             actions.Controls.Add(MakeButton("Print Preview", ButtonKind.Secondary, (s, e) => ShowPrintPreview(), "Show exactly what will be sent to the printer"));
+            actions.Controls.Add(MakeButton("Print History", ButtonKind.Ghost, (s, e) => ShowPrintHistory(), "Cards already printed: who, which side, when (Ctrl+H)"));
 
             bar.Controls.Add(side, 0, 0);
             bar.Controls.Add(actions, 1, 0);
@@ -1259,6 +1262,8 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.I: ImportApi(); return true;
                 case Keys.Control | Keys.P: PrintSelected(); return true;
                 case Keys.Control | Keys.B: RemovePhotoBackground(); return true;
+                case Keys.Control | Keys.H: ShowPrintHistory(); return true;
+                case Keys.Control | Keys.G: ShowGallery(); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
@@ -1477,6 +1482,7 @@ namespace NPIC_CARD_APP
             string slotReason;
             int perLoad = printer.CardsPerLoad(list.Count, out slotReason);
             int totalLoads = (list.Count + perLoad - 1) / perLoad;
+            string historyError = null;
 
             for (int i = 0, load = 1; i < list.Count; i += perLoad, load++)
             {
@@ -1498,12 +1504,14 @@ namespace NPIC_CARD_APP
 
                 try
                 {
+                    string document = "NPIC Card " + a.StudentId + " " + side;
                     using (Bitmap img1 = RenderSide(a, front))
                     using (Bitmap img2 = b != null ? RenderSide(b, front) : null)
                     {
-                        printer.Print(img1, img2, "NPIC Card " + a.StudentId + " " + side);
+                        printer.Print(img1, img2, document);
                     }
                     SetStatus(string.Format("Sent tray load {0} of {1} ({2}).", load, totalLoads, side));
+                    historyError = RecordPrinted(side, document, a, b) ?? historyError;
                 }
                 catch (Exception ex)
                 {
@@ -1511,7 +1519,60 @@ namespace NPIC_CARD_APP
                     return;
                 }
             }
-            SetStatus(string.Format("Done: {0} card(s), {1} side.", list.Count, side));
+            SetStatus(historyError != null
+                ? string.Format("Missing history: {0} card(s) printed, but the print history could not be saved ({1}).", list.Count, historyError)
+                : string.Format("Done: {0} card(s), {1} side.", list.Count, side));
+        }
+
+        /// <summary>
+        /// Adds one tray load to the print history. Never throws — a full disk must not stop the cards printing.
+        /// Returns the error message, or null when saved.
+        /// </summary>
+        private string RecordPrinted(string side, string document, Student slot1, Student slot2)
+        {
+            var records = new List<PrintRecord> { PrintRecord.For(slot1, side, 1, _settings.PrinterName, document) };
+            if (slot2 != null) records.Add(PrintRecord.For(slot2, side, 2, _settings.PrinterName, document));
+            try
+            {
+                PrintHistory.Add(records);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                return ex.Message;
+            }
+        }
+
+        /// <summary>Shows every card printed so far; double-clicking a row selects that student here.</summary>
+        private void ShowPrintHistory()
+        {
+            using (var form = new PrintHistoryForm(SelectStudentById))
+            {
+                form.ShowDialog(this);
+            }
+        }
+
+        /// <summary>Photo + details gallery of the loaded students; the student chosen there is selected here.</summary>
+        private void ShowGallery()
+        {
+            Student current = CurrentStudent();
+            using (var form = new StudentGalleryForm(_students, _settings, current == null ? null : current.StudentId))
+            {
+                if (form.ShowDialog(this) == DialogResult.OK) SelectStudentById(form.SelectedStudentId);
+            }
+        }
+
+        /// <summary>Selects the student in the grid (clearing the search if it hides them). False when not loaded.</summary>
+        private bool SelectStudentById(string studentId)
+        {
+            Func<Student, bool> same = s => string.Equals(s.StudentId, studentId, StringComparison.OrdinalIgnoreCase);
+            if (!_students.Any(same)) return false;
+            if (!_view.Any(same)) _txtSearch.Clear();   // rebinds the grid to every student
+
+            int index = _view.FindIndex(s => same(s));
+            SelectRow(index);
+            if (index >= 0 && index < _grid.Rows.Count) _grid.FirstDisplayedScrollingRowIndex = index;
+            return index >= 0;
         }
 
         /// <summary>Shows the Windows print queue of the selected printer (cancel stuck jobs).</summary>

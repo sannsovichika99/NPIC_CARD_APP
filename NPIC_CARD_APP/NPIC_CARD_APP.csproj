@@ -62,6 +62,12 @@
     <Compile Include="PrintQueueForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="StudentGalleryForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="PrintHistoryForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="FindPositionForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -78,6 +84,7 @@
     <Compile Include="Services\CsvStudentLoader.cs" />
     <Compile Include="Services\ExcelStudentLoader.cs" />
     <Compile Include="Services\ExcelTemplateWriter.cs" />
+    <Compile Include="Services\PrintHistory.cs" />
     <Compile Include="Rendering\AssetStore.cs" />
     <Compile Include="Rendering\BackgroundRemover.cs" />
     <Compile Include="Rendering\CardFonts.cs" />
