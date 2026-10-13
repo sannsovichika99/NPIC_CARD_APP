@@ -17,35 +17,26 @@ namespace NPIC_CARD_APP
     public class MainForm : Form
     {
         // ===================== Theme =====================
-        // Accent = the navy printed on the card itself, so the app and the card read as one brand.
-        private static readonly Color Accent        = Color.FromArgb(46, 49, 146);
-        private static readonly Color AccentHover   = Color.FromArgb(64, 68, 176);
-        private static readonly Color AccentPressed = Color.FromArgb(34, 36, 112);
-        private static readonly Color AccentSoft    = Color.FromArgb(232, 233, 248);
-        private static readonly Color AccentOnDark  = Color.FromArgb(70, 74, 168);
-        private static readonly Color AccentEdge    = Color.FromArgb(98, 102, 186);
-        private static readonly Color AppBack       = Color.FromArgb(243, 244, 247);
-        private static readonly Color Surface       = Color.White;
-        private static readonly Color SurfaceAlt    = Color.FromArgb(249, 250, 252);
-        private static readonly Color SurfaceHover  = Color.FromArgb(242, 243, 248);
-        private static readonly Color Border        = Color.FromArgb(222, 224, 231);
-        private static readonly Color GridLine      = Color.FromArgb(236, 237, 242);
-        private static readonly Color TextMain      = Color.FromArgb(28, 30, 40);
-        private static readonly Color TextMuted     = Color.FromArgb(102, 106, 122);
-        private static readonly Color PreviewBack   = Color.FromArgb(232, 234, 240);
-        private static readonly Color Warning       = Color.FromArgb(180, 98, 0);
-        private static readonly Color Danger        = Color.FromArgb(185, 28, 28);
-        private static readonly Color Success       = Color.FromArgb(21, 128, 61);
+        // Lavender dashboard palette — tokens live in UiKit.Theme; these aliases keep the dialogs below short.
+        private static readonly Color Accent     = Theme.Accent;
+        private static readonly Color AccentSoft = Theme.AccentSoft;
+        private static readonly Color AppBack    = Theme.AppBack;
+        private static readonly Color Surface    = Theme.Surface;
+        private static readonly Color SurfaceAlt = Theme.SurfaceAlt;
+        private static readonly Color Border     = Theme.Border;
+        private static readonly Color GridLine   = Theme.GridLine;
+        private static readonly Color TextMain   = Theme.TextMain;
+        private static readonly Color TextMuted  = Theme.TextMuted;
+        private static readonly Color Warning    = Theme.Warning;
+        private static readonly Color Danger     = Theme.Danger;
+        private static readonly Color Success    = Theme.Success;
 
         private static readonly Font UiFont      = new Font(CardFonts.UI, 9f);
         private static readonly Font SemiFont    = new Font(CardFonts.UI, 9f, FontStyle.Bold);
-        private static readonly Font SectionFont = new Font(CardFonts.UI, 10f, FontStyle.Bold);
-        private static readonly Font TitleFont   = new Font(CardFonts.UI, 14f, FontStyle.Bold);
         private static readonly Font CaptionFont = new Font(CardFonts.UI, 8.25f);
+        private static readonly Font SetupFont   = new Font(Theme.Family, 9f);
 
         private const int FieldLabelWidth = 96;
-
-        private enum ButtonKind { Primary, Secondary, Ghost, OnAccent }
 
         private static readonly Dictionary<string, string> ColumnTitles = new Dictionary<string, string>
         {
@@ -59,12 +50,12 @@ namespace NPIC_CARD_APP
         private List<Student> _students = new List<Student>();
         private List<Student> _view = new List<Student>();   // _students filtered by the search box = what the grid shows
         private bool _loading;
+        private string _source = "";                          // where the list came from: file name, API host or SQL server
 
-        private SplitContainer _split;
         private DataGridView _grid;
         private TextBox _txtSearch;
         private Label _lblCount, _lblEmpty;
-        private PictureBox _picFront, _picBack;
+        private PreviewTile _picFront, _picBack;
         private ComboBox _cboPrinter;
         private CheckBox _chkAllPrinters;
         private NumericUpDown _numS1X, _numS1Y, _numS2X, _numS2Y;
@@ -72,8 +63,14 @@ namespace NPIC_CARD_APP
         private CheckBox _chkRotateBack, _chkRotateFront;
         private Label _lblSlotHint;
         private readonly ToolTip _tip = new ToolTip();
-        private RadioButton _rdoFront, _rdoBack;
+        private PillTabs _sideTabs;
         private Label _lblPage, _lblStatus, _lblStatusDot;
+        private StatCard _statStudents, _statSelected, _statPrinted;
+        private TableLayoutPanel _dashboard;
+        private NavItem _navGallery, _navHistory;
+
+        /// <summary>True when Print Selected / Print Preview send the front side.</summary>
+        private bool PrintFront { get { return _sideTabs.SelectedIndex == 0; } }
 
         public MainForm()
         {
@@ -83,8 +80,8 @@ namespace NPIC_CARD_APP
             StartPosition = FormStartPosition.CenterScreen;
             // Never open larger than the screen (laptops at 125 % scaling only have ~1536 x 824 to work with).
             Rectangle work = Screen.FromPoint(Cursor.Position).WorkingArea;
-            Size = new Size(Math.Min(1320, work.Width), Math.Min(840, work.Height));
-            MinimumSize = new Size(Math.Min(1100, work.Width), Math.Min(700, work.Height));
+            Size = new Size(Math.Min(1380, work.Width), Math.Min(860, work.Height));
+            MinimumSize = new Size(Math.Min(1120, work.Width), Math.Min(700, work.Height));
             Font = UiFont;
             BackColor = AppBack;
             ForeColor = TextMain;
@@ -97,24 +94,32 @@ namespace NPIC_CARD_APP
             UpdatePageInfo();
             UpdateEmptyState();
             UpdateCount();
+            UpdatePrintedStat();
 
             string[] missing = AssetStore.MissingFiles();
             if (missing.Length > 0)
                 SetStatus("Missing in " + AssetStore.Folder + ": " + string.Join(", ", missing));
             UpdatePreview();
-            UpdateSlotHint();
+            UpdateSideHighlight();
+        }
+
+        /// <summary>Short windows (laptops at 125 % scaling) get a lower header and slimmer stat tiles.</summary>
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            if (_dashboard == null || WindowState == FormWindowState.Minimized) return;
+            bool compact = ClientSize.Height < 760;
+            float header = compact ? 58f : 66f, stats = compact ? 100f : 126f;
+            if (_dashboard.RowStyles[1].Height != stats)
+            {
+                _dashboard.RowStyles[0].Height = header;
+                _dashboard.RowStyles[1].Height = stats;
+            }
         }
 
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
-            try
-            {
-                _split.SplitterDistance = (int)(ClientSize.Width * 0.40);
-                _split.Panel1MinSize = 320;
-                _split.Panel2MinSize = 660;
-            }
-            catch (InvalidOperationException) { /* window too small for the min sizes — keep the defaults */ }
             CardFonts.WarnIfMissing(this);
         }
 
@@ -127,78 +132,256 @@ namespace NPIC_CARD_APP
         }
 
         // ===================== UI =====================
+        //  ┌──────────┬───────────────────────────────────────────────────────────┐
+        //  │ brand    │ Good afternoon, …              [Front|Back]  Preview Print│
+        //  │ nav      │ [ Students ]   [ Selected ]   [ Printed today ]           │
+        //  │  …       │ ┌ Students ─────────────┐  ┌ Card preview ─────────────┐  │
+        //  │          │ │ search / grid         │  │ front | back              │  │
+        //  │          │ │                       │  ├ Print setup [Printer|Tray]┤  │
+        //  │          │ └───────────────────────┘  └───────────────────────────┘  │
+        //  │          │ ● status                                                  │
+        //  └──────────┴───────────────────────────────────────────────────────────┘
         private void BuildUi()
         {
             SuspendLayout();
 
-            _split = new SplitContainer { Dock = DockStyle.Fill, BackColor = AppBack, SplitterWidth = 10 };
-            _split.Panel1.Padding = new Padding(14, 14, 0, 14);
-            _split.Panel2.Padding = new Padding(0, 14, 14, 14);
-            _split.Panel1.Controls.Add(BuildStudentPanel());
-            _split.Panel2.Controls.Add(BuildRightPanel());
+            var content = new DecorPanel { Dock = DockStyle.Fill, Padding = new Padding(16, 8, 16, 4) };
+            content.Controls.Add(BuildDashboard());
 
             // Docking runs in reverse add order: the fill control first, the edges last.
-            Controls.Add(_split);
-            Controls.Add(BuildStatusBar());
-            Controls.Add(BuildHeader());
+            Controls.Add(content);
+            Controls.Add(BuildSidebar());
 
             ResumeLayout(true);
         }
 
-        /// <summary>Navy app bar: title on the left, data commands on the right.</summary>
+        /// <summary>White sidebar: brand, then every command grouped like the sample's navigation.</summary>
+        private Control BuildSidebar()
+        {
+            var side = new Panel { Dock = DockStyle.Left, Width = 232, BackColor = Surface, AutoScroll = true };
+            side.Paint += (s, e) =>
+            {
+                using (var pen = new Pen(GridLine)) e.Graphics.DrawLine(pen, side.Width - 1, 0, side.Width - 1, side.Height);
+            };
+
+            Image logo = null;
+            try { logo = AssetStore.Get("npic_png.png", false, true); }
+            catch (Exception) { /* missing / unreadable logo: the badge falls back to initials */ }
+
+            NavItem dashboard = Nav("Dashboard", Theme.IcoHome, () => { _txtSearch.Focus(); _txtSearch.SelectAll(); },
+                "Student list, card preview and printing (Ctrl+F searches)");
+            dashboard.Active = true;
+            _navGallery = Nav("Gallery", Theme.IcoPhoto, ShowGallery,
+                "Photos and details of every student; shows missing photos and print status (Ctrl+G)");
+            _navHistory = Nav("Print History", Theme.IcoHistory, ShowPrintHistory,
+                "Cards already printed: who, which side, when (Ctrl+H)");
+
+            var items = new List<Control>
+            {
+                new BrandBlock("NPIC Card Studio", "Epson L8050  ·  ID cards", logo),
+                Spacer(14),
+                dashboard,
+                _navGallery,
+                _navHistory,
+                Nav("Print Queue", Theme.IcoPrint, ShowPrintQueue, "See or cancel jobs waiting in Windows"),
+
+                Section("IMPORT STUDENTS"),
+                Nav("From API…", Theme.IcoGlobe, ImportApi, "Download students from the school's web API (Ctrl+I)"),
+                Nav("From Excel…", Theme.IcoList, ImportExcel, "Load students from an Excel workbook (.xlsx) (Ctrl+E)"),
+                Nav("From CSV…", Theme.IcoDocument, ImportCsv, "Load students from a UTF-8 CSV file (Ctrl+O)"),
+                Nav("SQL Server…", Theme.IcoDatabase, ConnectSqlServer,
+                    "Open the SQL Server connection page and load students from a database (Ctrl+D)"),
+                Nav("Excel Template", Theme.IcoDownload, SaveExcelTemplate,
+                    "Save an empty Excel file with the right columns to fill in, then use From Excel…"),
+
+                Section("CARD"),
+                Nav("Photo Folder…", Theme.IcoFolder, ChoosePhotoFolder, "Folder with photos named {StudentId}.jpg / .png"),
+                Nav("Remove Background…", Theme.IcoBrush, RemovePhotoBackground,
+                    "Crop the selected student's photo and remove the wall / screen behind it (Ctrl+B)"),
+                Nav("Signature…", Theme.IcoEdit, ChooseSignature, "Director signature image (white background is removed)"),
+                Nav("Card Text…", Theme.IcoFont, EditCardText, "Edit the fixed text printed on the cards"),
+
+                Section("APP"),
+                Nav("Full Screen", Theme.IcoFullScreen, () => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"),
+                Nav("All Settings…", Theme.IcoSettings, ShowAllSettings,
+                    "Show every setting of the app and this PC: printer, tray, files, API, card text, fonts (Ctrl+,)"),
+                Spacer(10)
+            };
+
+            // Dock = Top stacks the LAST added control on top, so add bottom-up.
+            for (int i = items.Count - 1; i >= 0; i--)
+            {
+                items[i].Dock = DockStyle.Top;
+                side.Controls.Add(items[i]);
+            }
+            return side;
+        }
+
+        private NavItem Nav(string text, string glyph, Action action, string tooltip)
+        {
+            var item = new NavItem(text, glyph, (s, e) => action());
+            _tip.SetToolTip(item, tooltip);
+            return item;
+        }
+
+        private static Label Section(string text)
+        {
+            return new Label
+            {
+                Text = text, Font = Theme.SmallCaps, ForeColor = TextMuted, BackColor = Surface, AutoSize = false,
+                Height = 32, TextAlign = ContentAlignment.BottomLeft, Padding = new Padding(22, 0, 0, 5)
+            };
+        }
+
+        private static Control Spacer(int height)
+        {
+            return new Panel { Height = height, BackColor = Surface };
+        }
+
+        /// <summary>Content area: greeting row, stat tiles, students + preview/printer cards, status line.</summary>
+        private Control BuildDashboard()
+        {
+            var grid = _dashboard = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, BackColor = Color.Transparent, Margin = new Padding(0)
+            };
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 66f));    // greeting + print actions
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 126f));   // stat tiles
+            grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));    // students | preview + printer
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 26f));    // status line
+            grid.Controls.Add(BuildHeader(), 0, 0);
+            grid.Controls.Add(BuildStats(), 0, 1);
+            grid.Controls.Add(BuildBody(), 0, 2);
+            grid.Controls.Add(BuildStatusBar(), 0, 3);
+            return grid;
+        }
+
+        /// <summary>"Good afternoon, …" on the left; print side pills and the print buttons on the right.</summary>
         private Control BuildHeader()
         {
             var header = new TableLayoutPanel
             {
-                Dock = DockStyle.Top, Height = 64, BackColor = Accent, ColumnCount = 2, RowCount = 1,
-                Padding = new Padding(20, 0, 14, 0), Margin = new Padding(0)
+                Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Color.Transparent,
+                Padding = new Padding(Theme.ShadowPad, 0, Theme.ShadowPad, 0), Margin = new Padding(0)
             };
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             header.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
-            var brand = new FlowLayoutPanel
+            var titles = new FlowLayoutPanel
             {
                 FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false,
-                Anchor = AnchorStyles.Left, Margin = new Padding(0), BackColor = Accent
+                Anchor = AnchorStyles.Left, BackColor = Color.Transparent, Margin = new Padding(0)
             };
-            brand.Controls.Add(new Label
+            titles.Controls.Add(new Label
             {
-                Text = "NPIC Card Studio", Font = TitleFont, ForeColor = Color.White, AutoSize = true, Margin = new Padding(0)
+                Text = Greeting(), Font = Theme.Greeting, ForeColor = TextMain, AutoSize = true,
+                BackColor = Color.Transparent, Margin = new Padding(0)
             });
-            brand.Controls.Add(new Label
+            titles.Controls.Add(new Label
             {
-                Text = "Student ID cards  ·  Epson L8050 card tray", Font = CaptionFont,
-                ForeColor = Color.FromArgb(196, 199, 238), AutoSize = true, Margin = new Padding(2, 0, 0, 0)
+                Text = "Pick students, check the card, then print.", Font = Theme.Small,
+                ForeColor = TextMuted, AutoSize = true, BackColor = Color.Transparent, Margin = new Padding(3, 0, 0, 0)
             });
+
+            _sideTabs = new PillTabs("Front", "Back") { Margin = new Padding(0, 6, 4, 0) };
+            _tip.SetToolTip(_sideTabs, "Side of the card that Print Selected and Print Preview send to the printer");
+            _sideTabs.SelectedIndexChanged += (s, e) => UpdateSideHighlight();
 
             var actions = new FlowLayoutPanel
             {
-                FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false,
-                Anchor = AnchorStyles.Right, Margin = new Padding(0), BackColor = Accent
+                AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, BackColor = Color.Transparent,
+                Margin = new Padding(0)
             };
-            actions.Controls.Add(MakeButton("Import API…", ButtonKind.OnAccent, (s, e) => ImportApi(), "Download students from the school's web API (Ctrl+I)"));
-            actions.Controls.Add(MakeButton("Import Excel…", ButtonKind.OnAccent, (s, e) => ImportExcel(), "Load students from an Excel workbook (.xlsx) (Ctrl+E)"));
-            actions.Controls.Add(MakeButton("Import CSV…", ButtonKind.OnAccent, (s, e) => ImportCsv(), "Load students from a UTF-8 CSV file (Ctrl+O)"));
-            actions.Controls.Add(MakeButton("Photo Folder…", ButtonKind.OnAccent, (s, e) => ChoosePhotoFolder(), "Folder with photos named {StudentId}.jpg / .png"));
-            actions.Controls.Add(MakeToolStrip(MakeToolButton("Remove Background…", (s, e) => RemovePhotoBackground(),
-                "Crop the selected student's photo and remove the wall / screen behind it (Ctrl+B)")));
-            actions.Controls.Add(MakeButton("Signature…", ButtonKind.OnAccent, (s, e) => ChooseSignature(), "Director signature image (white background is removed)"));
-            actions.Controls.Add(MakeButton("Card Text…", ButtonKind.OnAccent, (s, e) => EditCardText(), "Edit the fixed text printed on the cards"));
-            actions.Controls.Add(new Panel { Width = 1, Height = 24, BackColor = AccentEdge, Margin = new Padding(10, 6, 4, 0) });
-            actions.Controls.Add(MakeButton("Full Screen", ButtonKind.OnAccent, (s, e) => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"));
+            actions.Controls.Add(new Label
+            {
+                Text = "Print side", Font = Theme.Small, ForeColor = TextMuted, AutoSize = true,
+                BackColor = Color.Transparent, Margin = new Padding(0, 14, 6, 0)
+            });
+            actions.Controls.Add(_sideTabs);
+            actions.Controls.Add(new Panel { Width = 1, Height = 26, BackColor = Border, Margin = new Padding(8, 9, 6, 0) });
+            actions.Controls.Add(MakeButton("Print Preview", PillKind.Secondary, (s, e) => ShowPrintPreview(),
+                "Show exactly what will be sent to the printer"));
+            actions.Controls.Add(MakeButton("Print Selected", PillKind.Primary, (s, e) => PrintSelected(),
+                "Print the selected students, tray load by tray load (Ctrl+P)"));
 
-            header.Controls.Add(brand, 0, 0);
+            header.Controls.Add(titles, 0, 0);
             header.Controls.Add(actions, 1, 0);
             return header;
         }
 
-        /// <summary>Left side: search box + student list.</summary>
+        private static string Greeting()
+        {
+            int hour = DateTime.Now.Hour;
+            string part = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+            string user = Environment.UserName ?? "";
+            if (user.Length == 0) return part;
+            return part + ", " + char.ToUpperInvariant(user[0]) + user.Substring(1);
+        }
+
+        /// <summary>Three gradient tiles: students loaded, selected for printing, printed today.</summary>
+        private Control BuildStats()
+        {
+            var row = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, BackColor = Color.Transparent, Margin = new Padding(0)
+            };
+            for (int i = 0; i < 3; i++) row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333f));
+            row.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+
+            _statStudents = new StatCard("Total students", Theme.IcoPeople, Theme.VioletA, Theme.VioletB) { Caption = "No list loaded" };
+            _statSelected = new StatCard("Selected to print", Theme.IcoMultiSelect, Theme.CoralA, Theme.CoralB) { Caption = "Select rows in the list" };
+            _statPrinted = new StatCard("Printed today", Theme.IcoPrint, Theme.PinkA, Theme.PinkB);
+
+            _statStudents.Cursor = Cursors.Hand;
+            _statStudents.Click += (s, e) => ShowGallery();
+            _tip.SetToolTip(_statStudents, "Open the student gallery (Ctrl+G)");
+            _statSelected.Cursor = Cursors.Hand;
+            _statSelected.Click += (s, e) => ShowPrintPreview();
+            _tip.SetToolTip(_statSelected, "Preview what will be printed for the selected students");
+            _statPrinted.Cursor = Cursors.Hand;
+            _statPrinted.Click += (s, e) => ShowPrintHistory();
+            _tip.SetToolTip(_statPrinted, "Open the print history (Ctrl+H)");
+
+            row.Controls.Add(_statStudents, 0, 0);
+            row.Controls.Add(_statSelected, 1, 0);
+            row.Controls.Add(_statPrinted, 2, 0);
+            return row;
+        }
+
+        private Control BuildBody()
+        {
+            var body = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Color.Transparent, Margin = new Padding(0)
+            };
+            body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55f));
+            body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45f));
+            body.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+
+            var side = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = Color.Transparent, Margin = new Padding(0)
+            };
+            side.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            side.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            side.RowStyles.Add(new RowStyle(SizeType.Absolute, 262f));
+            side.Controls.Add(BuildPreviewCard(), 0, 0);
+            side.Controls.Add(BuildSetupCard(), 0, 1);
+
+            body.Controls.Add(BuildStudentPanel(), 0, 0);
+            body.Controls.Add(side, 1, 0);
+            return body;
+        }
+
+        /// <summary>Students card: search field + student list.</summary>
         private Control BuildStudentPanel()
         {
-            _lblCount = new Label { AutoSize = true, ForeColor = TextMuted, Font = CaptionFont, Margin = new Padding(0, 10, 4, 0) };
+            _lblCount = new Label { AutoSize = true, ForeColor = TextMuted, Font = Theme.Small, BackColor = Surface, Margin = new Padding(0, 13, 2, 0) };
 
-            _txtSearch = new TextBox { Dock = DockStyle.Fill, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(0, 0, 0, 10) };
+            var search = new SearchField(UiFont) { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 10) };
+            _txtSearch = search.Box;
             _txtSearch.HandleCreated += (s, e) => SetCueBanner(_txtSearch, "Search by ID, name or faculty…   (Ctrl+F)");
             _txtSearch.TextChanged += (s, e) => ApplyFilter();
             _txtSearch.KeyDown += (s, e) =>
@@ -225,22 +408,22 @@ namespace NPIC_CARD_APP
                 EnableHeadersVisualStyles = false,
                 ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None,
                 ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
-                ColumnHeadersHeight = 34
+                ColumnHeadersHeight = 36
             };
-            _grid.RowTemplate.Height = 32;
-            _grid.ColumnHeadersDefaultCellStyle.BackColor = SurfaceAlt;
+            _grid.RowTemplate.Height = 36;
+            _grid.ColumnHeadersDefaultCellStyle.BackColor = Surface;
             _grid.ColumnHeadersDefaultCellStyle.ForeColor = TextMuted;
-            _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = SurfaceAlt;
+            _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Surface;
             _grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = TextMuted;
-            _grid.ColumnHeadersDefaultCellStyle.Font = SemiFont;
-            _grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
+            _grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 8.25f);
+            _grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(8, 0, 8, 0);
             _grid.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.False;
             _grid.DefaultCellStyle.Font = new Font(CardFonts.UI, 9f);
             _grid.DefaultCellStyle.BackColor = Surface;
             _grid.DefaultCellStyle.ForeColor = TextMain;
             _grid.DefaultCellStyle.SelectionBackColor = AccentSoft;
             _grid.DefaultCellStyle.SelectionForeColor = Accent;
-            _grid.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
+            _grid.DefaultCellStyle.Padding = new Padding(8, 0, 8, 0);
             _grid.AlternatingRowsDefaultCellStyle.BackColor = SurfaceAlt;
             _grid.DataBindingComplete += (s, e) => ApplyColumnTitles();
             _grid.SelectionChanged += (s, e) => { UpdatePreview(); UpdateSlotHint(); UpdateCount(); };
@@ -258,76 +441,78 @@ namespace NPIC_CARD_APP
             _lblEmpty.BringToFront();
 
             var body = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = new Padding(0) };
-            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
+            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 50f));
             body.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-            body.Controls.Add(_txtSearch, 0, 0);
+            body.Controls.Add(search, 0, 0);
             body.Controls.Add(gridHost, 0, 1);
 
-            return MakeCard("Students", body, _lblCount,
-                MakeButton("SQL Server…", ButtonKind.Ghost, (s, e) => ConnectSqlServer(),
-                    "Open the SQL Server connection page and load students from a database (Ctrl+D)"),
-                MakeButton("Gallery", ButtonKind.Ghost, (s, e) => ShowGallery(),
-                    "Photos and details of every student; shows missing photos and print status (Ctrl+G)"),
-                MakeButton("Excel Template", ButtonKind.Ghost, (s, e) => SaveExcelTemplate(),
-                    "Save an empty Excel file with the right columns to fill in, then use Import Excel…"));
+            return MakeCard("Students", body, _lblCount);
         }
 
-        /// <summary>Right side: card previews, printer + tray settings, print actions.</summary>
-        private Control BuildRightPanel()
+        /// <summary>Front and back thumbnails side by side; the side that will print gets a violet outline.</summary>
+        private Control BuildPreviewCard()
         {
-            var right = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Margin = new Padding(0) };
-            right.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-            right.RowStyles.Add(new RowStyle(SizeType.Absolute, 268f));
-            right.RowStyles.Add(new RowStyle(SizeType.Absolute, 58f));
-
-            // ---- Previews ----
-            _picFront = MakePreviewBox();
-            _picBack = MakePreviewBox();
+            _picFront = new PreviewTile { Margin = new Padding(0, 0, 6, 0) };
+            _picBack = new PreviewTile { Margin = new Padding(6, 0, 0, 0), EmptyText = "Back side" };
             _picFront.DoubleClick += (s, e) => ShowFullScreen(PreviewSide.Front);
             _picBack.DoubleClick += (s, e) => ShowFullScreen(PreviewSide.Back);
-            _tip.SetToolTip(_picFront, "Double-click to enlarge");
-            _tip.SetToolTip(_picBack, "Double-click to enlarge");
+            _picFront.Click += (s, e) => _sideTabs.SelectedIndex = 0;
+            _picBack.Click += (s, e) => _sideTabs.SelectedIndex = 1;
+            _tip.SetToolTip(_picFront, "Click to print this side · double-click to enlarge");
+            _tip.SetToolTip(_picBack, "Click to print this side · double-click to enlarge");
 
-            var previews = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(0, 0, 0, 12) };
-            previews.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
-            previews.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
-            previews.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            var tiles = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = new Padding(0) };
+            tiles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            tiles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            tiles.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            tiles.RowStyles.Add(new RowStyle(SizeType.Absolute, 28f));
+            tiles.Controls.Add(_picFront, 0, 0);
+            tiles.Controls.Add(_picBack, 1, 0);
+            tiles.Controls.Add(TileCaption("Front", "ព័ត៌មាននិស្សិត"), 0, 1);
+            tiles.Controls.Add(TileCaption("Back", "ព័ត៌មានវិទ្យាស្ថាន"), 1, 1);
 
-            Control front = MakeCard("Front", _picFront,
-                KhmerCaption("ព័ត៌មាននិស្សិត"),
-                MakeButton("Enlarge", ButtonKind.Ghost, (s, e) => ShowFullScreen(PreviewSide.Front)));
-            Control back = MakeCard("Back", _picBack,
-                KhmerCaption("ព័ត៌មានវិទ្យាស្ថាន"),
-                MakeButton("Enlarge", ButtonKind.Ghost, (s, e) => ShowFullScreen(PreviewSide.Back)));
-            front.Margin = new Padding(0, 0, 6, 0);
-            back.Margin = new Padding(6, 0, 0, 0);
-            previews.Controls.Add(front, 0, 0);
-            previews.Controls.Add(back, 1, 0);
-
-            // ---- Settings ----
-            var settings = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(0, 0, 0, 12) };
-            settings.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45f));
-            settings.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55f));
-            settings.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-            Control printer = BuildPrinterCard();
-            Control tray = BuildTrayCard();
-            printer.Margin = new Padding(0, 0, 6, 0);
-            tray.Margin = new Padding(6, 0, 0, 0);
-            settings.Controls.Add(printer, 0, 0);
-            settings.Controls.Add(tray, 1, 0);
-
-            right.Controls.Add(previews, 0, 0);
-            right.Controls.Add(settings, 0, 1);
-            right.Controls.Add(BuildActionBar(), 0, 2);
-            return right;
+            return MakeCard("Card preview", tiles,
+                MakeButton("Enlarge", PillKind.Ghost, (s, e) => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"));
         }
 
-        private Control BuildPrinterCard()
+        private static Control TileCaption(string side, string khmer)
         {
-            _cboPrinter = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 6) };
+            var row = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(2, 0, 0, 0), Padding = new Padding(0) };
+            row.Controls.Add(new Label { Text = side, AutoSize = true, Font = Theme.NavBold, ForeColor = TextMain, Margin = new Padding(0, 6, 4, 0) });
+            row.Controls.Add(KhmerCaption(khmer));
+            return row;
+        }
+
+        /// <summary>Printer and tray settings share one card; pills switch between the two pages.</summary>
+        private Control BuildSetupCard()
+        {
+            Control printerPage = BuildPrinterPage();
+            Control trayPage = BuildTrayPage();
+            printerPage.Dock = DockStyle.Fill;
+            trayPage.Dock = DockStyle.Fill;
+            trayPage.Visible = false;
+
+            var pages = new Panel { Dock = DockStyle.Fill, BackColor = Surface, Margin = new Padding(0) };
+            pages.Controls.Add(printerPage);
+            pages.Controls.Add(trayPage);
+
+            var tabs = new PillTabs("Printer", "Tray") { Margin = new Padding(0, 4, 0, 0) };
+            tabs.SelectedIndexChanged += (s, e) =>
+            {
+                printerPage.Visible = tabs.SelectedIndex == 0;
+                trayPage.Visible = tabs.SelectedIndex == 1;
+            };
+            _tip.SetToolTip(tabs, "Printer = driver and checks · Tray = slot positions and card orientation");
+
+            return MakeCard("Print setup", pages, tabs);
+        }
+
+        private Control BuildPrinterPage()
+        {
+            _cboPrinter = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill, Margin = new Padding(0, 2, 8, 4) };
             _cboPrinter.SelectedIndexChanged += (s, e) => OnPrinterChanged();
 
-            _chkAllPrinters = new CheckBox { Text = "Show all", AutoSize = true, ForeColor = TextMuted, Margin = new Padding(0, 9, 4, 0) };
+            _chkAllPrinters = new CheckBox { Text = "Show all", AutoSize = true, ForeColor = TextMuted, Margin = new Padding(0, 6, 0, 0) };
             _tip.SetToolTip(_chkAllPrinters, "List every installed printer, not only card printers");
             _chkAllPrinters.CheckedChanged += (s, e) =>
             {
@@ -338,10 +523,17 @@ namespace NPIC_CARD_APP
                 UpdatePageInfo();
             };
 
+            var printerRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(0) };
+            printerRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            printerRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            printerRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            printerRow.Controls.Add(_cboPrinter, 0, 0);
+            printerRow.Controls.Add(_chkAllPrinters, 1, 0);
+
             _lblPage = new Label
             {
                 Dock = DockStyle.Fill, ForeColor = TextMuted, Font = CaptionFont, AutoEllipsis = true,
-                Margin = new Padding(1, 2, 0, 4)
+                Margin = new Padding(1, 4, 0, 4)
             };
 
             var buttons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = new Padding(0) };
@@ -349,29 +541,29 @@ namespace NPIC_CARD_APP
             buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
             buttons.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
             buttons.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
-            buttons.Controls.Add(FillButton(MakeButton("Driver Setup…", ButtonKind.Secondary, (s, e) => DriverSetup(), "Paper size, tray and quality in the Epson driver")), 0, 0);
-            buttons.Controls.Add(FillButton(MakeButton("Check Printer", ButtonKind.Secondary, (s, e) => CheckPrinter(), "Show the page setup and any problems found")), 1, 0);
-            buttons.Controls.Add(FillButton(MakeButton("Test Print", ButtonKind.Secondary, (s, e) => TestPrint(), "Print a calibration card to tune slot X / Y")), 0, 1);
-            buttons.Controls.Add(FillButton(MakeButton("Print Queue…", ButtonKind.Secondary, (s, e) => ShowPrintQueue(), "See or cancel jobs waiting in Windows")), 1, 1);
+            buttons.Controls.Add(FillButton(MakeButton("Driver Setup…", PillKind.Secondary, (s, e) => DriverSetup(), "Paper size, tray and quality in the Epson driver")), 0, 0);
+            buttons.Controls.Add(FillButton(MakeButton("Check Printer", PillKind.Secondary, (s, e) => CheckPrinter(), "Show the page setup and any problems found")), 1, 0);
+            buttons.Controls.Add(FillButton(MakeButton("Test Print", PillKind.Secondary, (s, e) => TestPrint(), "Print a calibration card to tune slot X / Y")), 0, 1);
+            buttons.Controls.Add(FillButton(MakeButton("Print Queue…", PillKind.Secondary, (s, e) => ShowPrintQueue(), "See or cancel jobs waiting in Windows")), 1, 1);
 
-            var body = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Margin = new Padding(0) };
+            var body = new TableLayoutPanel { ColumnCount = 1, RowCount = 3, Margin = new Padding(0), BackColor = Surface, Font = SetupFont };
             body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 32f));
+            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
             body.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 84f));
-            body.Controls.Add(_cboPrinter, 0, 0);
+            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 78f));
+            body.Controls.Add(printerRow, 0, 0);
             body.Controls.Add(_lblPage, 0, 1);
             body.Controls.Add(buttons, 0, 2);
-
-            return MakeCard("Printer", body, _chkAllPrinters);
+            return body;
         }
 
-        private Control BuildTrayCard()
+        private Control BuildTrayPage()
         {
             var rows = new FlowLayoutPanel
             {
-                Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false,
-                AutoScroll = true, Margin = new Padding(0)
+                FlowDirection = FlowDirection.TopDown, WrapContents = false,
+                AutoScroll = true, Margin = new Padding(0), BackColor = Surface,
+                Font = SetupFont   // Latin-only page: Segoe UI keeps the spin boxes and lists compact
             };
 
             _numS1X = MakeNumber(); _numS1Y = MakeNumber();
@@ -407,90 +599,45 @@ namespace NPIC_CARD_APP
 
             _chkRotateFront = new CheckBox { Text = "Front", AutoSize = true, Margin = new Padding(0, 6, 14, 3) };
             _chkRotateFront.CheckedChanged += (s, e) => { _settings.RotateFront180 = _chkRotateFront.Checked; };
-            _chkRotateBack = new CheckBox { Text = "Back", AutoSize = true, Margin = new Padding(0, 6, 3, 3) };
+            _chkRotateBack = new CheckBox { Text = "Back", AutoSize = true, Margin = new Padding(0, 6, 10, 3) };
             _chkRotateBack.CheckedChanged += (s, e) => { _settings.RotateBack180 = _chkRotateBack.Checked; };
             _tip.SetToolTip(_chkRotateFront, "Rotate the front side 180° when printing");
             _tip.SetToolTip(_chkRotateBack, "Rotate the back side 180° when printing");
-            rows.Controls.Add(Row(FieldLabel("Rotate 180°"), _chkRotateFront, _chkRotateBack));
-
-            return MakeCard("Tray layout", rows,
-                MakeButton("All Settings…", ButtonKind.Ghost, (s, e) => ShowAllSettings(),
-                    "Show every setting of the app and this PC: printer, tray, files, API, card text, fonts (Ctrl+,)"),
-                MakeButton("Save", ButtonKind.Ghost, (s, e) => SaveSettings(true), "Save slot positions and print options"));
-        }
-
-        /// <summary>Bottom bar: choose the side, then preview or print.</summary>
-        private Control BuildActionBar()
-        {
-            var bar = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Surface,
-                Padding = new Padding(14, 0, 12, 0), Margin = new Padding(0)
-            };
-            bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            bar.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-            AttachBorder(bar);
-
-            _rdoFront = MakeSegment("Front", true);
-            _rdoBack = MakeSegment("Back", false);
-            var side = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0), BackColor = Surface };
-            side.Controls.Add(new Label { Text = "Print side", AutoSize = true, Font = SemiFont, Margin = new Padding(0, 10, 10, 0) });
-            side.Controls.Add(_rdoFront);
-            side.Controls.Add(_rdoBack);
-
-            // RightToLeft flow: the first control added ends up right-most.
-            var actions = new FlowLayoutPanel
-            {
-                AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft,
-                Anchor = AnchorStyles.Right, Margin = new Padding(0), BackColor = Surface
-            };
-            actions.Controls.Add(MakeButton("Print Selected", ButtonKind.Primary, (s, e) => PrintSelected(), "Print the selected students, tray load by tray load (Ctrl+P)"));
-            actions.Controls.Add(MakeButton("Print Preview", ButtonKind.Secondary, (s, e) => ShowPrintPreview(), "Show exactly what will be sent to the printer"));
-            actions.Controls.Add(MakeButton("Print History", ButtonKind.Ghost, (s, e) => ShowPrintHistory(), "Cards already printed: who, which side, when (Ctrl+H)"));
-
-            bar.Controls.Add(side, 0, 0);
-            bar.Controls.Add(actions, 1, 0);
-            return bar;
+            rows.Controls.Add(Row(FieldLabel("Rotate 180°"), _chkRotateFront, _chkRotateBack,
+                MakeButton("Save", PillKind.Ghost, (s, e) => SaveSettings(true), "Save slot positions and print options")));
+            return rows;
         }
 
         private Control BuildStatusBar()
         {
-            var bar = new Panel { Dock = DockStyle.Bottom, Height = 28, BackColor = Surface, Padding = new Padding(14, 0, 14, 0) };
-            bar.Paint += (s, e) =>
+            var bar = new Panel
             {
-                using (var pen = new Pen(Border)) e.Graphics.DrawLine(pen, 0, 0, bar.Width, 0);
+                Dock = DockStyle.Fill, BackColor = Color.Transparent, Margin = new Padding(0),
+                Padding = new Padding(Theme.ShadowPad + 2, 0, Theme.ShadowPad, 0)
             };
-            _lblStatus = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = TextMuted, Text = "Ready.", AutoEllipsis = true };
-            _lblStatusDot = new Label { Dock = DockStyle.Left, Width = 16, Text = "●", ForeColor = Success, TextAlign = ContentAlignment.MiddleLeft, Font = CaptionFont };
+            _lblStatus = new Label
+            {
+                Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = TextMuted, Text = "Ready.",
+                AutoEllipsis = true, BackColor = Color.Transparent, Font = Theme.Small
+            };
+            _lblStatusDot = new Label
+            {
+                Dock = DockStyle.Left, Width = 16, Text = "●", ForeColor = Success, TextAlign = ContentAlignment.MiddleLeft,
+                Font = Theme.Small, BackColor = Color.Transparent
+            };
             bar.Controls.Add(_lblStatus);
             bar.Controls.Add(_lblStatusDot);
             return bar;
         }
 
         // ---------- Building blocks ----------
-        /// <summary>White surface with a 1 px border and a header row (title left, extras right).</summary>
+        /// <summary>Rounded white card with soft shadow, ring-bullet title and optional header extras on the right.</summary>
         private static Control MakeCard(string title, Control body, params Control[] headerExtras)
         {
-            var card = new Panel { Dock = DockStyle.Fill, BackColor = Surface, Padding = new Padding(1), Margin = new Padding(0) };
-            AttachBorder(card);
+            var card = new ShadowCard(new Padding(20, 6, 20, 14));
+            var head = new CardHeader(title, headerExtras);
 
-            var head = new Panel { Dock = DockStyle.Top, Height = 42, BackColor = Surface, Padding = new Padding(14, 0, 10, 0) };
-            var titleLabel = new Label
-            {
-                Text = title, Font = SectionFont, ForeColor = TextMain, Dock = DockStyle.Left, AutoSize = true,
-                Padding = new Padding(0, 12, 0, 0)
-            };
-            var extras = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.LeftToRight,
-                BackColor = Surface, Padding = new Padding(0, 5, 0, 0)
-            };
-            foreach (Control c in headerExtras) extras.Controls.Add(c);
-            head.Controls.Add(extras);
-            head.Controls.Add(titleLabel);
-
-            var bodyHost = new Panel { Dock = DockStyle.Fill, BackColor = Surface, Padding = new Padding(14, 0, 14, 12) };
+            var bodyHost = new Panel { Dock = DockStyle.Fill, BackColor = Surface, Padding = new Padding(0, 4, 0, 0) };
             body.Dock = DockStyle.Fill;
             bodyHost.Controls.Add(body);
 
@@ -499,123 +646,34 @@ namespace NPIC_CARD_APP
             return card;
         }
 
-        private static void AttachBorder(Control c)
-        {
-            c.Paint += (s, e) =>
-            {
-                using (var pen = new Pen(Border))
-                    e.Graphics.DrawRectangle(pen, 0, 0, c.Width - 1, c.Height - 1);
-            };
-            c.Resize += (s, e) => c.Invalidate();
-        }
-
-        private static Button MakeButton(string text, EventHandler onClick)
-        {
-            return MakeButton(text, ButtonKind.Secondary, onClick);
-        }
-
-        private Button MakeButton(string text, ButtonKind kind, EventHandler onClick, string tooltip)
+        private Button MakeButton(string text, PillKind kind, EventHandler onClick, string tooltip)
         {
             Button b = MakeButton(text, kind, onClick);
             _tip.SetToolTip(b, tooltip);
             return b;
         }
 
-        private static Button MakeButton(string text, ButtonKind kind, EventHandler onClick)
+        private static Button MakeButton(string text, PillKind kind, EventHandler onClick)
         {
-            var b = new Button
+            var b = new PillButton(kind)
             {
-                Text = text, AutoSize = true, MinimumSize = new Size(0, 34), Padding = new Padding(10, 0, 10, 0),
-                Margin = new Padding(6, 3, 0, 3), FlatStyle = FlatStyle.Flat, UseVisualStyleBackColor = false,
-                Cursor = Cursors.Hand, Font = SemiFont
+                Text = text, AutoSize = true, MinimumSize = new Size(0, 36), Padding = new Padding(12, 0, 12, 0),
+                Margin = new Padding(6, 3, 0, 3)
             };
             switch (kind)
             {
-                case ButtonKind.Primary:
-                    b.BackColor = Accent; b.ForeColor = Color.White;
-                    b.FlatAppearance.BorderSize = 0;
-                    b.FlatAppearance.MouseOverBackColor = AccentHover;
-                    b.FlatAppearance.MouseDownBackColor = AccentPressed;
-                    b.MinimumSize = new Size(132, 36);
+                case PillKind.Primary:
+                    b.MinimumSize = new Size(136, 38);
+                    b.Margin = new Padding(8, 2, 0, 2);
                     break;
-                case ButtonKind.Secondary:
-                    b.BackColor = Surface; b.ForeColor = TextMain;
-                    b.FlatAppearance.BorderColor = Border;
-                    b.FlatAppearance.MouseOverBackColor = SurfaceHover;
-                    b.FlatAppearance.MouseDownBackColor = AccentSoft;
-                    b.MinimumSize = new Size(0, 36);
-                    break;
-                case ButtonKind.Ghost:
-                    b.BackColor = Surface; b.ForeColor = Accent;
-                    b.FlatAppearance.BorderSize = 0;
-                    b.FlatAppearance.MouseOverBackColor = AccentSoft;
-                    b.FlatAppearance.MouseDownBackColor = AccentSoft;
-                    b.MinimumSize = new Size(0, 28);
-                    b.Padding = new Padding(6, 0, 6, 0);
-                    b.Margin = new Padding(2, 2, 0, 2);
-                    break;
-                case ButtonKind.OnAccent:
-                    b.BackColor = Accent; b.ForeColor = Color.White;
-                    b.FlatAppearance.BorderColor = AccentEdge;
-                    b.FlatAppearance.MouseOverBackColor = AccentOnDark;
-                    b.FlatAppearance.MouseDownBackColor = AccentPressed;
-                    b.Padding = new Padding(7, 0, 7, 0);   // the header holds many buttons: keep them compact
+                case PillKind.Ghost:
+                    b.MinimumSize = new Size(0, 30);
+                    b.Padding = new Padding(8, 0, 8, 0);
+                    b.Margin = new Padding(2, 4, 0, 2);
                     break;
             }
-            b.Click += onClick;
+            if (onClick != null) b.Click += onClick;
             return b;
-        }
-
-        /// <summary>Tool strip that sits in the navy header and looks like the OnAccent buttons next to it.</summary>
-        private static ToolStrip MakeToolStrip(params ToolStripItem[] items)
-        {
-            var strip = new ToolStrip
-            {
-                Dock = DockStyle.None, AutoSize = true, GripStyle = ToolStripGripStyle.Hidden,
-                BackColor = Accent, ForeColor = Color.White, Font = SemiFont, ShowItemToolTips = true,
-                Padding = new Padding(0), Margin = new Padding(6, 3, 0, 3),
-                Renderer = new HeaderStripRenderer(), CanOverflow = false
-            };
-            strip.Items.AddRange(items);
-            return strip;
-        }
-
-        private static ToolStripButton MakeToolButton(string text, EventHandler onClick, string tooltip)
-        {
-            var b = new ToolStripButton(text)
-            {
-                DisplayStyle = ToolStripItemDisplayStyle.Text, ForeColor = Color.White, Font = SemiFont,
-                AutoSize = true, Padding = new Padding(7, 5, 7, 5), Margin = new Padding(0), ToolTipText = tooltip
-            };
-            b.Click += onClick;
-            return b;
-        }
-
-        /// <summary>Flat navy look for header tool strips: same fill, hover, pressed and edge colours as OnAccent buttons.</summary>
-        private sealed class HeaderStripRenderer : ToolStripProfessionalRenderer
-        {
-            public HeaderStripRenderer() { RoundedEdges = false; }
-
-            protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
-            {
-                using (var brush = new SolidBrush(Accent)) e.Graphics.FillRectangle(brush, e.AffectedBounds);
-            }
-
-            protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e) { /* no border line */ }
-
-            protected override void OnRenderButtonBackground(ToolStripItemRenderEventArgs e)
-            {
-                var bounds = new Rectangle(Point.Empty, e.Item.Size);
-                Color fill = e.Item.Pressed ? AccentPressed : e.Item.Selected ? AccentOnDark : Accent;
-                using (var brush = new SolidBrush(fill)) e.Graphics.FillRectangle(brush, bounds);
-                using (var pen = new Pen(AccentEdge)) e.Graphics.DrawRectangle(pen, 0, 0, bounds.Width - 1, bounds.Height - 1);
-            }
-
-            protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
-            {
-                e.TextColor = Color.White;
-                base.OnRenderItemText(e);
-            }
         }
 
         private static Button FillButton(Button b)
@@ -623,30 +681,8 @@ namespace NPIC_CARD_APP
             b.AutoSize = false;
             b.MinimumSize = Size.Empty;
             b.Dock = DockStyle.Fill;
-            b.Margin = new Padding(0, 3, 6, 3);
+            b.Margin = new Padding(0, 3, 8, 3);
             return b;
-        }
-
-        /// <summary>Radio button drawn as one half of a segmented toggle.</summary>
-        private static RadioButton MakeSegment(string text, bool isChecked)
-        {
-            var r = new RadioButton
-            {
-                Text = text, Appearance = Appearance.Button, FlatStyle = FlatStyle.Flat, Checked = isChecked,
-                Size = new Size(80, 34), TextAlign = ContentAlignment.MiddleCenter, Margin = new Padding(0, 3, 0, 3),
-                Cursor = Cursors.Hand, Font = SemiFont, UseVisualStyleBackColor = false
-            };
-            r.FlatAppearance.BorderColor = Border;
-            r.FlatAppearance.CheckedBackColor = Accent;
-            EventHandler restyle = (s, e) =>
-            {
-                r.ForeColor = r.Checked ? Color.White : TextMain;
-                r.BackColor = r.Checked ? Accent : Surface;
-                r.FlatAppearance.MouseOverBackColor = r.Checked ? AccentHover : SurfaceHover;
-            };
-            r.CheckedChanged += restyle;
-            restyle(r, EventArgs.Empty);
-            return r;
         }
 
         private static Label FieldLabel(string text)
@@ -668,7 +704,7 @@ namespace NPIC_CARD_APP
             return new Label
             {
                 Text = text, AutoSize = true, ForeColor = TextMuted, Font = new Font(CardFonts.UI, 8.25f),
-                Margin = new Padding(0, 8, 8, 0)
+                Margin = new Padding(0, 6, 8, 0)
             };
         }
 
@@ -677,7 +713,7 @@ namespace NPIC_CARD_APP
             return new NumericUpDown
             {
                 DecimalPlaces = 1, Increment = 0.1M, Minimum = -50M, Maximum = 300M, Width = 72,
-                TextAlign = HorizontalAlignment.Right, Margin = new Padding(0, 4, 10, 3)
+                TextAlign = HorizontalAlignment.Right, Margin = new Padding(0, 4, 10, 3), BorderStyle = BorderStyle.FixedSingle
             };
         }
 
@@ -688,13 +724,31 @@ namespace NPIC_CARD_APP
             return row;
         }
 
-        private static PictureBox MakePreviewBox()
+        // ---------- Dashboard figures ----------
+        /// <summary>Violet outline on the preview tile of the side that will be printed.</summary>
+        private void UpdateSideHighlight()
         {
-            return new PictureBox
+            _picFront.Highlight = PrintFront;
+            _picBack.Highlight = !PrintFront;
+            UpdateSlotHint();
+        }
+
+        /// <summary>"Printed today" tile + Print History badge, read from the print log.</summary>
+        private void UpdatePrintedStat()
+        {
+            try
             {
-                Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = PreviewBack,
-                Padding = new Padding(14), Cursor = Cursors.Hand   // double-click → full screen
-            };
+                List<PrintRecord> all = PrintHistory.Load();
+                int today = all.Count(r => r.PrintedAt.Date == DateTime.Today);
+                _statPrinted.Value = today.ToString("N0");
+                _statPrinted.Caption = all.Count == 0 ? "Nothing printed yet" : all.Count.ToString("N0") + " card sides printed in total";
+                _navHistory.Badge = today > 0 ? today.ToString() : null;
+            }
+            catch (Exception)
+            {
+                _statPrinted.Value = "–";
+                _statPrinted.Caption = "Print history unavailable";
+            }
         }
 
         // ---------- Search / list helpers ----------
@@ -744,8 +798,8 @@ namespace NPIC_CARD_APP
         {
             if (_lblEmpty == null) return;
             _lblEmpty.Text = _students.Count == 0
-                ? "No students loaded yet.\n\nClick  Import API…,  Import Excel…  or  Import CSV…  in the top bar to begin.\n" +
-                  "No list yet? Click  Excel Template  above for a file to fill in."
+                ? "No students loaded yet.\n\nUse  From API…,  From Excel…,  From CSV…  or  SQL Server…  in the sidebar to begin.\n" +
+                  "No list yet? Click  Excel Template  in the sidebar for a file to fill in."
                 : "No students match “" + _txtSearch.Text.Trim() + "”.\n\nPress Esc to clear the search.";
             _lblEmpty.Visible = _view.Count == 0;
         }
@@ -758,6 +812,13 @@ namespace NPIC_CARD_APP
                 ? string.Format("{0} students", _students.Count)
                 : string.Format("{0} of {1} students", _view.Count, _students.Count);
             _lblCount.Text = selected > 1 ? total + "  ·  " + selected + " selected" : total;
+
+            _statStudents.Value = _students.Count.ToString("N0");
+            _statStudents.Caption = _students.Count == 0 ? "No list loaded"
+                : _view.Count != _students.Count ? _view.Count.ToString("N0") + " match the search"
+                : _source.Length > 0 ? "from " + _source : "in the list";
+            _statSelected.Value = selected.ToString("N0");
+            _navGallery.Badge = _students.Count > 0 ? _students.Count.ToString("N0") : null;
         }
 
         // ===================== Settings =====================
@@ -877,7 +938,10 @@ namespace NPIC_CARD_APP
             if (_settings.SlotMode == SlotMode.Auto && count >= 2)
                 text += perLoad == 2 ? ", 2 per load" : ", slot 1 only — slot 2 not usable";
             _lblSlotHint.Text = text;
-            _lblSlotHint.ForeColor = reason != null ? Color.DarkOrange : Color.DimGray;
+            _lblSlotHint.ForeColor = reason != null ? Warning : TextMuted;
+            _statSelected.Caption = count == 0
+                ? "Select rows in the list"
+                : string.Format("{0} tray load(s)  ·  {1} side", loads, PrintFront ? "front" : "back");
             _tip.SetToolTip(_lblSlotHint, reason ?? "");
         }
 
@@ -968,8 +1032,8 @@ namespace NPIC_CARD_APP
                 {
                     Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, BackColor = Surface
                 };
-                Button btnCancel = MakeButton("Cancel", ButtonKind.Secondary, null);
-                Button btnLoad = MakeButton("Load Students", ButtonKind.Primary, null);
+                Button btnCancel = MakeButton("Cancel", PillKind.Secondary, null);
+                Button btnLoad = MakeButton("Load Students", PillKind.Primary, null);
                 buttons.Controls.Add(btnCancel);
                 buttons.Controls.Add(btnLoad);
 
@@ -1037,13 +1101,14 @@ namespace NPIC_CARD_APP
                 if (dlg.ShowDialog(this) != DialogResult.OK || loaded == null) return;
             }
 
+            Uri uri;
+            string source = Uri.TryCreate(url, UriKind.Absolute, out uri) ? uri.Host : url;
+            _source = source ?? "";
             _students = loaded;
             ApplyFilter();
             _settings.LastCsvPath = "";   // so the next start doesn't reload an older file over this list
             SaveSettings(false);
 
-            Uri uri;
-            string source = Uri.TryCreate(url, UriKind.Absolute, out uri) ? uri.Host : url;
             SetStatus(_students.Count == 0
                 ? "Missing data: the API returned no students (" + source + ")"
                 : string.Format("Loaded {0} student(s) from {1}", _students.Count, source));
@@ -1067,6 +1132,7 @@ namespace NPIC_CARD_APP
         /// <summary>Replaces the student list with the students read from SQL Server.</summary>
         private void ShowSqlStudents(List<Student> loaded, string source)
         {
+            _source = string.IsNullOrEmpty(source) ? "SQL Server" : source;
             _students = loaded;
             ApplyFilter();
             _settings.LastCsvPath = "";   // so the next start doesn't reload an older file over this list
@@ -1123,6 +1189,7 @@ namespace NPIC_CARD_APP
         {
             try
             {
+                _source = Path.GetFileName(path);
                 _students = ExcelStudentLoader.IsExcelFile(path)
                     ? ExcelStudentLoader.Load(path)
                     : CsvStudentLoader.Load(path);
@@ -1179,7 +1246,7 @@ namespace NPIC_CARD_APP
             }
             if (string.IsNullOrEmpty(_settings.PhotoFolder) || !Directory.Exists(_settings.PhotoFolder))
             {
-                MessageBox.Show(this, "Choose the photo folder first (Photo Folder… in the top bar).", Text,
+                MessageBox.Show(this, "Choose the photo folder first (Photo Folder… in the sidebar).", Text,
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -1266,7 +1333,7 @@ namespace NPIC_CARD_APP
             }
         }
 
-        private static void ReplaceImage(PictureBox box, Image image)
+        private static void ReplaceImage(PreviewTile box, Image image)
         {
             Image old = box.Image;
             box.Image = image;
@@ -1464,7 +1531,7 @@ namespace NPIC_CARD_APP
             if (!EnsureCardPrinter()) return;
             SaveSettings(false);
 
-            bool front = _rdoFront.Checked;
+            bool front = PrintFront;
             var printer = new CardPrinter(_settings);
             string slotReason;
             int perLoad = printer.CardsPerLoad(list.Count, out slotReason);
@@ -1510,7 +1577,7 @@ namespace NPIC_CARD_APP
             var printer = new CardPrinter(_settings);
             if (!ConfirmPrinterReady(printer)) return;
 
-            bool front = _rdoFront.Checked;
+            bool front = PrintFront;
             string side = front ? "FRONT" : "BACK";
             string slotReason;
             int perLoad = printer.CardsPerLoad(list.Count, out slotReason);
@@ -1555,6 +1622,7 @@ namespace NPIC_CARD_APP
             SetStatus(historyError != null
                 ? string.Format("Missing history: {0} card(s) printed, but the print history could not be saved ({1}).", list.Count, historyError)
                 : string.Format("Done: {0} card(s), {1} side.", list.Count, side));
+            UpdatePrintedStat();
         }
 
         /// <summary>
@@ -1583,6 +1651,7 @@ namespace NPIC_CARD_APP
             {
                 form.ShowDialog(this);
             }
+            UpdatePrintedStat();   // records may have been deleted there
         }
 
         /// <summary>Read-only list of every setting (app + this PC), including tray values not saved yet.</summary>
