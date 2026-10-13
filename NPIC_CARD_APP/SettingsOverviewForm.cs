@@ -9,6 +9,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
+using NPIC_CARD_APP.Models;
 using NPIC_CARD_APP.Printing;
 using NPIC_CARD_APP.Rendering;
 using NPIC_CARD_APP.Services;
@@ -17,9 +18,11 @@ namespace NPIC_CARD_APP
 {
     /// <summary>
     /// Read-only overview of every setting of the app and of this PC (printer, tray layout, files, web API,
-    /// card text, fonts, assets). Rows that need attention are shown in orange.
+    /// SQL Server, card text, fonts, assets). Rows that need attention are shown in orange.
     /// Double-click a file / folder row to open it in Explorer.   Ctrl+F = search, Esc = close
-    /// The API token is never shown, only whether one is saved.
+    /// The API token and the SQL password are never shown, only whether one is saved.
+    /// SQL Server… opens the connection page; students loaded there are handed to the main window through
+    /// <see cref="SqlStudents"/>.
     /// Export… / Import… save the settings to a file and load them back (backup, or set up another PC);
     /// after an import <see cref="SettingsImported"/> tells the main window to reload its controls.
     /// </summary>
@@ -53,6 +56,12 @@ namespace NPIC_CARD_APP
         /// <summary>True after Import… replaced the settings: the main window must reload its controls.</summary>
         public bool SettingsImported { get; private set; }
 
+        /// <summary>Students loaded with SQL Server… (null when none were loaded); the main window shows them.</summary>
+        public List<Student> SqlStudents { get; private set; }
+
+        /// <summary>"server / database" the <see cref="SqlStudents"/> came from.</summary>
+        public string SqlSource { get; private set; }
+
         public SettingsOverviewForm(AppSettings settings)
         {
             _settings = settings;
@@ -83,13 +92,16 @@ namespace NPIC_CARD_APP
             Button btnImport = MakeButton("Import…", (s, e) => ImportSettings());
             toolbar.Controls.Add(btnExport);
             toolbar.Controls.Add(btnImport);
+            Button btnSql = MakeButton("SQL Server…", (s, e) => ConnectSqlServer());
+            toolbar.Controls.Add(btnSql);
             toolbar.Controls.Add(MakeButton("Copy All", (s, e) => CopyAll()));
             toolbar.Controls.Add(MakeButton("Open Settings Folder", (s, e) => OpenInExplorer(AppSettings.FilePath)));
             toolbar.Controls.Add(MakeButton("Close", (s, e) => Close()));
 
             var tip = new ToolTip();
             tip.SetToolTip(btnExport, "Save all settings to a file, to back them up or copy them to another PC.\n" +
-                                      "The API token is not included.");
+                                      "The API token and SQL password are not included.");
+            tip.SetToolTip(btnSql, "Change or test the SQL Server connection, or load students from the database (Ctrl+D in the main window).");
             tip.SetToolTip(btnImport, "Replace all settings with the ones in an exported file.\n" +
                                       "The current settings are backed up first.");
 
@@ -268,7 +280,8 @@ namespace NPIC_CARD_APP
                     return;
                 }
                 MessageBox.Show(this, "Settings exported to:\n" + dlg.FileName +
-                    "\n\nThe API token is not in the file; enter it again with Import API… on another PC.",
+                    "\n\nThe API token and SQL password are not in the file; enter them again with Import API… " +
+                    "and SQL Server… on another PC.",
                     Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
@@ -300,7 +313,7 @@ namespace NPIC_CARD_APP
 
             if (MessageBox.Show(this,
                     "Replace ALL current settings with the ones in this file?\n" + path + "\n\n" +
-                    "Printer, tray positions, folders, card text and API address will change.\n" +
+                    "Printer, tray positions, folders, card text, API address and SQL Server connection will change.\n" +
                     "Your current settings are backed up to:\n" + AppSettings.BackupFilePath + "\n\n" +
                     "Folders and files that do not exist on this PC will be shown in orange.",
                     Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
@@ -310,10 +323,12 @@ namespace NPIC_CARD_APP
             {
                 if (File.Exists(AppSettings.FilePath)) File.Copy(AppSettings.FilePath, AppSettings.BackupFilePath, true);
 
-                // An exported file has no API token: keep the one saved on this PC.
+                // An exported file has no API token or SQL password: keep the ones saved on this PC.
                 string token = _settings.ApiTokenProtected;
+                string sqlPassword = _settings.SqlPasswordProtected;
                 _settings.CopyFrom(imported);
                 if (string.IsNullOrEmpty(_settings.ApiTokenProtected)) _settings.ApiTokenProtected = token;
+                if (string.IsNullOrEmpty(_settings.SqlPasswordProtected)) _settings.SqlPasswordProtected = sqlPassword;
                 _settings.Save();
             }
             catch (Exception ex)
@@ -328,6 +343,37 @@ namespace NPIC_CARD_APP
             string counts = _lblSummary.Text.Split(new[] { Environment.NewLine }, StringSplitOptions.None)[0];
             _lblSummary.Text = counts + Environment.NewLine + "Imported from " + path +
                 "   (previous settings: " + AppSettings.BackupFilePath + ")";
+        }
+
+        /// <summary>Opens the SQL Server connection page. Loaded students go to the main window, which this closes for.</summary>
+        private void ConnectSqlServer()
+        {
+            List<Student> loaded = null;
+            string source = null;
+            using (var form = new SqlServerForm(_settings))
+            {
+                if (form.ShowDialog(this) == DialogResult.OK) { loaded = form.Students; source = form.SourceName; }
+            }
+
+            try
+            {
+                _settings.Save();   // keep the connection details even when only Test Connection was used
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Could not save the settings:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+
+            if (loaded != null)
+            {
+                SqlStudents = loaded;
+                SqlSource = source;
+                Close();   // show the loaded students in the main window
+                return;
+            }
+
+            _all = Collect(_settings, DeviceDpi);
+            ShowEntries();
         }
 
         private void OpenInExplorer(string path)
@@ -422,6 +468,33 @@ namespace NPIC_CARD_APP
             else if (!string.IsNullOrEmpty(s.ApiTokenProtected)) { token = "Saved by another Windows user or PC — enter it again"; tokenWarn = true; }
             else token = NotSet;
             add(api, "API token", token, tokenWarn, "The token itself is never shown.", null);
+
+            // ---- SQL Server ----
+            const string sql = "SQL Server";
+            bool hasServer = !string.IsNullOrEmpty(s.SqlServer);
+            add(sql, "Server", Or(s.SqlServer, NotSet), false, "Used by SQL Server… (Ctrl+D). Change it there.", null);
+            add(sql, "Database", Or(s.SqlDatabase, hasServer ? "(login's default database)" : NotSet), false, null, null);
+            add(sql, "Authentication", s.SqlWindowsAuth ? "Windows Authentication" : "SQL Server Authentication", false,
+                s.SqlWindowsAuth ? "Connects as the Windows user running the app (" + Environment.UserDomainName + "\\" + Environment.UserName + ")." : null,
+                null);
+            if (!s.SqlWindowsAuth)
+            {
+                bool hasUser = !string.IsNullOrEmpty(s.SqlUser);
+                add(sql, "Login", hasUser ? s.SqlUser : NotSet, hasServer && !hasUser,
+                    hasServer && !hasUser ? "Enter the login name in SQL Server…" : null, null);
+                string password;
+                bool passwordWarn = false;
+                if (!string.IsNullOrEmpty(s.SqlPassword)) password = "Saved (encrypted for this Windows user)";
+                else if (!string.IsNullOrEmpty(s.SqlPasswordProtected)) { password = "Saved by another Windows user or PC — enter it again"; passwordWarn = true; }
+                else password = "Not saved — enter it in SQL Server… each time";
+                add(sql, "Password", password, passwordWarn, "The password itself is never shown.", null);
+            }
+            add(sql, "Encrypt connection", YesNo(s.SqlEncrypt), false, null, null);
+            add(sql, "Trust server certificate", YesNo(s.SqlTrustServerCertificate), false,
+                "Yes = accept the server's self-signed certificate (usual for a school server).", null);
+            string query = (s.SqlQuery ?? "").Trim();
+            add(sql, "Table or query", query.Length == 0 ? NotSet : query, false,
+                "A table name (dbo.Students) or one SELECT query. The app only reads the database.", null);
 
             // ---- Card text (same names as the Card Text… window) ----
             CardText cardText = s.CardText ?? new CardText();

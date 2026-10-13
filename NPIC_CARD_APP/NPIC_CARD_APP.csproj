@@ -36,6 +36,7 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Data" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.Management" />
@@ -80,6 +81,9 @@
     <Compile Include="BackgroundRemovalForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="SqlServerForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Models\Student.cs" />
     <Compile Include="Services\ApiStudentLoader.cs" />
     <Compile Include="Services\AppSettings.cs" />
@@ -88,6 +92,7 @@
     <Compile Include="Services\ExcelStudentLoader.cs" />
     <Compile Include="Services\ExcelTemplateWriter.cs" />
     <Compile Include="Services\PrintHistory.cs" />
+    <Compile Include="Services\SqlStudentLoader.cs" />
     <Compile Include="Rendering\AssetStore.cs" />
     <Compile Include="Rendering\BackgroundRemover.cs" />
     <Compile Include="Rendering\CardFonts.cs" />

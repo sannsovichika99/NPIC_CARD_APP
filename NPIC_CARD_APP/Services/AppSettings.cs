@@ -53,27 +53,55 @@ namespace NPIC_CARD_APP.Services
         [XmlIgnore]
         public string ApiToken
         {
-            get
-            {
-                if (string.IsNullOrEmpty(ApiTokenProtected)) return "";
-                try
-                {
-                    byte[] plain = ProtectedData.Unprotect(Convert.FromBase64String(ApiTokenProtected), TokenEntropy, DataProtectionScope.CurrentUser);
-                    return Encoding.UTF8.GetString(plain);
-                }
-                catch (Exception ex) when (ex is CryptographicException || ex is FormatException)
-                {
-                    return "";   // saved by another Windows user / PC: ask for the token again
-                }
-            }
-            set
-            {
-                ApiTokenProtected = string.IsNullOrEmpty(value) ? "" : Convert.ToBase64String(
-                    ProtectedData.Protect(Encoding.UTF8.GetBytes(value), TokenEntropy, DataProtectionScope.CurrentUser));
-            }
+            get { return Unprotect(ApiTokenProtected, TokenEntropy); }
+            set { ApiTokenProtected = Protect(value, TokenEntropy); }
         }
 
         private static readonly byte[] TokenEntropy = Encoding.UTF8.GetBytes("NPIC_CARD_APP.ApiToken");
+
+        // ---- SQL Server connection (Connect SQL Server… page) ----
+        /// <summary>Server name, e.g. "localhost\SQLEXPRESS" or "192.168.1.10,1433".</summary>
+        public string SqlServer { get; set; }
+        public string SqlDatabase { get; set; }
+        /// <summary>True = Windows Authentication, false = SQL Server login (<see cref="SqlUser"/> + password).</summary>
+        public bool SqlWindowsAuth { get; set; }
+        public string SqlUser { get; set; }
+        public bool SqlEncrypt { get; set; }
+        public bool SqlTrustServerCertificate { get; set; }
+        /// <summary>Table name (e.g. dbo.Students) or a SELECT query that returns the students.</summary>
+        public string SqlQuery { get; set; }
+
+        /// <summary>SQL login password, encrypted with Windows DPAPI like the API token. Use <see cref="SqlPassword"/>.</summary>
+        public string SqlPasswordProtected { get; set; }
+
+        [XmlIgnore]
+        public string SqlPassword
+        {
+            get { return Unprotect(SqlPasswordProtected, SqlPasswordEntropy); }
+            set { SqlPasswordProtected = Protect(value, SqlPasswordEntropy); }
+        }
+
+        private static readonly byte[] SqlPasswordEntropy = Encoding.UTF8.GetBytes("NPIC_CARD_APP.SqlPassword");
+
+        private static string Protect(string value, byte[] entropy)
+        {
+            return string.IsNullOrEmpty(value) ? "" : Convert.ToBase64String(
+                ProtectedData.Protect(Encoding.UTF8.GetBytes(value), entropy, DataProtectionScope.CurrentUser));
+        }
+
+        private static string Unprotect(string stored, byte[] entropy)
+        {
+            if (string.IsNullOrEmpty(stored)) return "";
+            try
+            {
+                byte[] plain = ProtectedData.Unprotect(Convert.FromBase64String(stored), entropy, DataProtectionScope.CurrentUser);
+                return Encoding.UTF8.GetString(plain);
+            }
+            catch (Exception ex) when (ex is CryptographicException || ex is FormatException)
+            {
+                return "";   // saved by another Windows user / PC: ask again
+            }
+        }
 
         // Card position on the page, in millimetres (calibrate with Test Print)
         public float Slot1X { get; set; }
@@ -135,6 +163,14 @@ namespace NPIC_CARD_APP.Services
             LastCsvPath = "";
             ApiUrl = "";
             ApiTokenProtected = "";
+            SqlServer = "";
+            SqlDatabase = "";
+            SqlWindowsAuth = true;
+            SqlUser = "";
+            SqlPasswordProtected = "";
+            SqlEncrypt = false;
+            SqlTrustServerCertificate = true;
+            SqlQuery = "";
             Slot1X = 0f;
             Slot1Y = 0f;
             Slot2X = 0f;
@@ -201,13 +237,14 @@ namespace NPIC_CARD_APP.Services
         }
 
         /// <summary>
-        /// Writes the settings to any file (Export Settings…). The API token is left out: it is encrypted for
-        /// this Windows user only, so it would be useless on another PC and should not travel with the file.
+        /// Writes the settings to any file (Export Settings…). The API token and SQL password are left out: they are
+        /// encrypted for this Windows user only, so they would be useless on another PC and should not travel with the file.
         /// </summary>
         public void ExportTo(string path)
         {
             var copy = (AppSettings)MemberwiseClone();
             copy.ApiTokenProtected = "";
+            copy.SqlPasswordProtected = "";
             WriteTo(path, copy);
         }
 

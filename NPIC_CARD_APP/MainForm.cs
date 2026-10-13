@@ -264,6 +264,8 @@ namespace NPIC_CARD_APP
             body.Controls.Add(gridHost, 0, 1);
 
             return MakeCard("Students", body, _lblCount,
+                MakeButton("SQL Server…", ButtonKind.Ghost, (s, e) => ConnectSqlServer(),
+                    "Open the SQL Server connection page and load students from a database (Ctrl+D)"),
                 MakeButton("Gallery", ButtonKind.Ghost, (s, e) => ShowGallery(),
                     "Photos and details of every student; shows missing photos and print status (Ctrl+G)"),
                 MakeButton("Excel Template", ButtonKind.Ghost, (s, e) => SaveExcelTemplate(),
@@ -1047,6 +1049,33 @@ namespace NPIC_CARD_APP
                 : string.Format("Loaded {0} student(s) from {1}", _students.Count, source));
         }
 
+        /// <summary>Opens the SQL Server connection page; on Load Students the list is replaced by the database's students.</summary>
+        private void ConnectSqlServer()
+        {
+            List<Student> loaded;
+            string source;
+            using (var form = new SqlServerForm(_settings))
+            {
+                bool ok = form.ShowDialog(this) == DialogResult.OK;
+                loaded = ok ? form.Students : null;
+                source = form.SourceName;
+            }
+            SaveSettings(false);   // keep the connection details even when only Test Connection was used
+            if (loaded != null) ShowSqlStudents(loaded, source);
+        }
+
+        /// <summary>Replaces the student list with the students read from SQL Server.</summary>
+        private void ShowSqlStudents(List<Student> loaded, string source)
+        {
+            _students = loaded;
+            ApplyFilter();
+            _settings.LastCsvPath = "";   // so the next start doesn't reload an older file over this list
+            SaveSettings(false);
+            SetStatus(_students.Count == 0
+                ? "Missing data: the SQL query returned no students (" + source + ")"
+                : string.Format("Loaded {0} student(s) from SQL Server {1}", _students.Count, source));
+        }
+
         private void SaveExcelTemplate()
         {
             string path;
@@ -1262,6 +1291,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.O: ImportCsv(); return true;
                 case Keys.Control | Keys.E: ImportExcel(); return true;
                 case Keys.Control | Keys.I: ImportApi(); return true;
+                case Keys.Control | Keys.D: ConnectSqlServer(); return true;
                 case Keys.Control | Keys.P: PrintSelected(); return true;
                 case Keys.Control | Keys.B: RemovePhotoBackground(); return true;
                 case Keys.Control | Keys.H: ShowPrintHistory(); return true;
@@ -1559,20 +1589,30 @@ namespace NPIC_CARD_APP
         private void ShowAllSettings()
         {
             ReadUiToSettings();
+            bool imported;
+            List<Student> sqlStudents;
+            string sqlSource;
             using (var form = new SettingsOverviewForm(_settings))
             {
                 form.ShowDialog(this);
-                if (!form.SettingsImported) return;
+                imported = form.SettingsImported;
+                sqlStudents = form.SqlStudents;
+                sqlSource = form.SqlSource;
             }
 
-            // Import… replaced _settings: refresh every control, or closing the app would save the old tray values back.
-            LoadPrinters();          // falls back to an installed card printer if the imported one is not on this PC
-            ApplySettingsToUi();
-            SaveSettings(false);
-            UpdatePageInfo();
-            UpdatePreview();
-            UpdateSlotHint();
-            SetStatus("Settings imported.");
+            if (imported)
+            {
+                // Import… replaced _settings: refresh every control, or closing the app would save the old tray values back.
+                LoadPrinters();          // falls back to an installed card printer if the imported one is not on this PC
+                ApplySettingsToUi();
+                SaveSettings(false);
+                UpdatePageInfo();
+                UpdatePreview();
+                UpdateSlotHint();
+                SetStatus("Settings imported.");
+            }
+
+            if (sqlStudents != null) ShowSqlStudents(sqlStudents, sqlSource);   // loaded with SQL Server… in the overview
         }
 
         /// <summary>Photo + details gallery of the loaded students; the student chosen there is selected here.</summary>
