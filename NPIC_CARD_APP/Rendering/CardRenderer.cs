@@ -107,7 +107,7 @@ namespace NPIC_CARD_APP.Rendering
 
                 // Director, stamp, signature
                 DrawText(g, t.DirectorTitle, CardFonts.Muol, DirectorTitlePt, FontStyle.Regular, Blue, 55f, 37.3f, 24.8f, 3.8f, TextFormatFlags.HorizontalCenter);
-                DrawAsset(g, AssetStore.Get("stamp.png", true, true), 56.7f, 40.1f, 11.2f, 11.2f, 1f, false);
+                DrawAsset(g, AssetStore.Get("stamp.png", true, true), 56.7f, 39.1f, 12.2f, 12.2f, 1f, false);
                 DrawAsset(g, AssetStore.GetFile(settings.SignaturePath, true, true), 61.5f, 43.4f + SignatureOffsetYMm, 13f, 5.6f, 1f, false);
                 DrawText(g, t.DirectorName, CardFonts.Muol, DirectorNamePt, FontStyle.Regular, Navy, 60.9f, 48.4f + SignatureOffsetYMm, 20f, 3.6f, TextFormatFlags.HorizontalCenter);
             }
@@ -133,7 +133,7 @@ namespace NPIC_CARD_APP.Rendering
                 // Titles (box widths match the template; text shrinks to fit)
                 DrawText(g, "ព្រះរាជាណាចក្រកម្ពុជា", CardFonts.Muol, KingdomPt, FontStyle.Regular, Blue,
                     26.2f, 2.4f, 33.2f, 5.4f, TextFormatFlags.HorizontalCenter);
-                DrawText(g, "ជាតិ សាសនា ព្រះមហាក្សត្រ", CardFonts.Muol, MottoPt, FontStyle.Regular, Blue,
+                DrawText(g, "ជាតិ សាសនា ព្រះមហាក្សត្រ", CardFonts.Muol, KingdomPt, FontStyle.Regular, Blue,
                     26.6f, 7.1f, 32.1f, 4.8f, TextFormatFlags.HorizontalCenter);
                 DrawOrnament(g, t.OrnamentText, 42.8f, 13.3f, 9.8f);
                 DrawText(g, "ប័ណ្ណសម្គាល់ខ្លួននិស្សិត", CardFonts.Muol, CardTitlePt, FontStyle.Regular, Red,
