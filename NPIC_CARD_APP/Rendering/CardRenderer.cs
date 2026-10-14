@@ -86,7 +86,8 @@ namespace NPIC_CARD_APP.Rendering
                     s.NameKh, (s.NameEn ?? "").ToUpperInvariant(), KhmerText.Gender(s.Gender),
                     KhmerText.Date(s.DateOfBirth), s.Faculty, s.Level
                 };
-                float[] rowTop = { 2.3f, 6.6f, 10.9f, 15.1f, 19.4f, 24.1f };
+                float[] rowTop = { 2f, 6.5f, 11f, 15.5f, 20f, 24.5f };   // even 4.5 mm spacing
+                //float[] rowTop = { 2.3f, 6.6f, 10.9f, 15.1f, 19.4f, 24.1f };
                 const float rowH = 4.2f, labelX = 26.2f, colonX = 41.0f, valueX = 42.4f;
 
                 for (int i = 0; i < labels.Length; i++)
