@@ -10,7 +10,8 @@ namespace NPIC_CARD_APP.Rendering
 {
     /// <summary>
     /// Every font used on the card, in one place.
-    ///   Khmer OS Muol        → ព្រះរាជាណាចក្រកម្ពុជា, ជាតិ សាសនា ព្រះមហាក្សត្រ, ប័ណ្ណសម្គាល់ខ្លួននិស្សិត, នាយកវិទ្យាស្ថាន, director name
+    ///   Khmer OS Muol Light  → ព្រះរាជាណាចក្រកម្ពុជា, ជាតិ សាសនា ព្រះមហាក្សត្រ
+    ///   Khmer OS Muol        → ប័ណ្ណសម្គាល់ខ្លួននិស្សិត, នាយកវិទ្យាស្ថាន, director name
     ///   Tacteing             → ornament under the motto
     ///   Times New Roman Bold → STUDENT IDENTIFICATION CARD
     ///   Times New Roman      → every Latin letter/digit (name in Latin, NPIC24836, email, website)
@@ -20,6 +21,7 @@ namespace NPIC_CARD_APP.Rendering
     public static class CardFonts
     {
         public const string KhmerOSMuol = "Khmer OS Muol";
+        public const string KhmerOSMuolLight = "Khmer OS Muol Light";
         public const string Tacteing = "Tacteing";
         public const string TimesNewRoman = "Times New Roman";
         public const string KhmerOSSiemreap = "Khmer OS Siemreap";
@@ -27,13 +29,14 @@ namespace NPIC_CARD_APP.Rendering
 
         public static readonly string[] Required =
         {
-            KhmerOSMuol, Tacteing, TimesNewRoman, KhmerOSSiemreap, Siemreap
+            KhmerOSMuol, KhmerOSMuolLight, Tacteing, TimesNewRoman, KhmerOSSiemreap, Siemreap
         };
 
         private static HashSet<string> _installed;
 
         // ----- Roles (with fallbacks so the app still runs if a font is missing) -----
-        public static string Muol { get { return Resolve(KhmerOSMuol, "Khmer OS Muol Light", "Khmer UI"); } }
+        public static string Muol { get { return Resolve(KhmerOSMuol, KhmerOSMuolLight, "Khmer UI"); } }
+        public static string MuolLight { get { return Resolve(KhmerOSMuolLight, KhmerOSMuol, "Khmer UI"); } }
         public static string Serif { get { return Resolve(TimesNewRoman, "Liberation Serif"); } }
         public static string KhmerSiemreap { get { return Resolve(KhmerOSSiemreap, "Khmer UI"); } }
         public static string SiemreapGoogle { get { return Resolve(Siemreap, KhmerOSSiemreap, "Khmer UI"); } }

@@ -36,8 +36,8 @@ namespace NPIC_CARD_APP.Rendering
         private static readonly Color WatermarkText = Color.FromArgb(249, 243, 228);
 
         // ---- Font sizes (pt). Khmer and Latin text on the same line ALWAYS share one size. ----
-        private const float KingdomPt = 10f;     // ព្រះរាជាណាចក្រកម្ពុជា          (Khmer OS Muol)
-        private const float MottoPt = 9.5f;      // ជាតិ សាសនា ព្រះមហាក្សត្រ       (Khmer OS Muol)
+        private const float KingdomPt = 12f;     // ព្រះរាជាណាចក្រកម្ពុជា          (Khmer OS Muol Light)
+        private const float MottoPt = 11.5f;      // ជាតិ សាសនា ព្រះមហាក្សត្រ       (Khmer OS Muol Light)
         private const float OrnamentPt = 16f;    // ornament                        (Tacteing)
         private const float CardTitlePt = 17f;   // ប័ណ្ណសម្គាល់ខ្លួននិស្សិត       (Khmer OS Muol)
         private const float CardTitleEnPt = 9.5f;// STUDENT IDENTIFICATION CARD     (Times New Roman Bold)
@@ -131,9 +131,9 @@ namespace NPIC_CARD_APP.Rendering
                 DrawAsset(g, AssetStore.Get("npic_png.png", true, true), 68.3f, 7.9f, 11.6f, 17.4f, 1f, false);
 
                 // Titles (box widths match the template; text shrinks to fit)
-                DrawText(g, "ព្រះរាជាណាចក្រកម្ពុជា", CardFonts.Muol, KingdomPt, FontStyle.Regular, Blue,
+                DrawText(g, "ព្រះរាជាណាចក្រកម្ពុជា", CardFonts.MuolLight, KingdomPt, FontStyle.Regular, Blue,
                     26.2f, 2.4f, 33.2f, 5.4f, TextFormatFlags.HorizontalCenter);
-                DrawText(g, "ជាតិ សាសនា ព្រះមហាក្សត្រ", CardFonts.Muol, KingdomPt, FontStyle.Regular, Blue,
+                DrawText(g, "ជាតិ សាសនា ព្រះមហាក្សត្រ", CardFonts.MuolLight, MottoPt, FontStyle.Regular, Blue,
                     26.6f, 7.1f, 32.1f, 4.8f, TextFormatFlags.HorizontalCenter);
                 DrawOrnament(g, t.OrnamentText, 42.8f, 13.3f, 9.8f);
                 DrawText(g, "ប័ណ្ណសម្គាល់ខ្លួននិស្សិត", CardFonts.Muol, CardTitlePt, FontStyle.Regular, Red,
