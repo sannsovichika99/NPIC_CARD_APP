@@ -16,8 +16,10 @@ namespace NPIC_CARD_APP
     ///   Esc / F11 / double-click  close
     ///   Space / Tab               Both → Front → Back
     ///   F / B / A                 Front / Back / All (both)
+    ///   G                         mm grid lines on / off (screen only, never printed)
     ///   ← → / PageUp PageDown / mouse wheel   previous / next student
     ///   Home / End                first / last student
+    /// The same side / grid / close actions are on the toolbar buttons at the top of the screen.
     /// </summary>
     public class CardPreviewForm : Form
     {
@@ -26,10 +28,33 @@ namespace NPIC_CARD_APP
         private const int Edge = 48;
         private const int Gap = 40;
         private const int FooterHeight = 44;
+        private const int ToolbarTop = 16;
+        private const int ToolbarHeight = 36;
+        private const int ToolbarGap = 8;
+
+        private static readonly Color ButtonBack = Color.FromArgb(52, 52, 60);
+        private static readonly Color ButtonHover = Color.FromArgb(72, 72, 84);
+        private static readonly Color ButtonOn = Color.FromArgb(108, 99, 245);       // Theme.Accent
+        private static readonly Color ButtonOnHover = Color.FromArgb(124, 115, 250);
+        private static readonly Color ButtonDisabledText = Color.FromArgb(110, 110, 118);
+
+        private enum ToolAction { Front, Back, Both, Grid, Close }
+
+        private sealed class ToolButton
+        {
+            public ToolAction Action;
+            public string Text;
+            public Rectangle Bounds;
+        }
+
+        private readonly List<ToolButton> _buttons = new List<ToolButton>();
+        private ToolButton _hover;
+        private bool _showGrid;
 
         private readonly IList<Student> _students;
         private readonly AppSettings _settings;
         private readonly Font _footerFont;
+        private readonly Font _buttonFont;
         private int _index;
         private PreviewSide _side;
         private Bitmap _front, _back;
@@ -38,13 +63,25 @@ namespace NPIC_CARD_APP
         /// <summary>Student shown when the form closed (MainForm selects that row).</summary>
         public int CurrentIndex { get { return _index; } }
 
-        public CardPreviewForm(IList<Student> students, int startIndex, AppSettings settings, PreviewSide side)
+        /// <summary>Whether the mm grid was on when the form closed (MainForm keeps the choice).</summary>
+        public bool ShowGrid { get { return _showGrid; } }
+
+        public CardPreviewForm(IList<Student> students, int startIndex, AppSettings settings, PreviewSide side,
+                               bool showGrid = false)
         {
+            _showGrid = showGrid;
             _students = students ?? new List<Student>();
             _settings = settings;
             _index = _students.Count == 0 ? 0 : Math.Max(0, Math.Min(startIndex, _students.Count - 1));
             _side = _students.Count == 0 ? PreviewSide.Back : side;
             _footerFont = new Font(CardFonts.UI, 11f);
+            _buttonFont = new Font("Segoe UI Semibold", 10f);
+
+            AddButton(ToolAction.Front, "Front   F");
+            AddButton(ToolAction.Back, "Back   B");
+            AddButton(ToolAction.Both, "Front + Back   A");
+            AddButton(ToolAction.Grid, "Grid lines   G");
+            AddButton(ToolAction.Close, "✕  Close   Esc");
 
             Text = "Card Preview";
             FormBorderStyle = FormBorderStyle.None;
@@ -112,6 +149,12 @@ namespace NPIC_CARD_APP
             Invalidate();
         }
 
+        private void SetGrid(bool show)
+        {
+            _showGrid = show;
+            Invalidate();
+        }
+
         private void CycleSide()
         {
             SetSide(_side == PreviewSide.Both ? PreviewSide.Front
@@ -133,6 +176,7 @@ namespace NPIC_CARD_APP
                 case Keys.F: SetSide(PreviewSide.Front); return true;
                 case Keys.B: SetSide(PreviewSide.Back); return true;
                 case Keys.A: SetSide(PreviewSide.Both); return true;
+                case Keys.G: SetGrid(!_showGrid); return true;
                 case Keys.Right:
                 case Keys.Down:
                 case Keys.PageDown:
@@ -156,7 +200,121 @@ namespace NPIC_CARD_APP
         protected override void OnDoubleClick(EventArgs e)
         {
             base.OnDoubleClick(e);
-            Close();
+            if (HitTest(PointToClient(Cursor.Position)) == null) Close();   // fast clicks on a button are not a "close"
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            ToolButton hit = HitTest(e.Location);
+            if (hit == _hover) return;
+            _hover = hit;
+            Cursor = hit != null ? Cursors.Hand : Cursors.Default;
+            Invalidate(new Rectangle(0, 0, ClientSize.Width, ToolbarTop + ToolbarHeight + 4));
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            if (_hover == null) return;
+            _hover = null;
+            Cursor = Cursors.Default;
+            Invalidate();
+        }
+
+        protected override void OnMouseClick(MouseEventArgs e)
+        {
+            base.OnMouseClick(e);
+            if (e.Button != MouseButtons.Left) return;
+            ToolButton hit = HitTest(e.Location);
+            if (hit == null) return;
+            switch (hit.Action)
+            {
+                case ToolAction.Front: SetSide(PreviewSide.Front); break;
+                case ToolAction.Back: SetSide(PreviewSide.Back); break;
+                case ToolAction.Both: SetSide(PreviewSide.Both); break;
+                case ToolAction.Grid: SetGrid(!_showGrid); break;
+                case ToolAction.Close: Close(); break;
+            }
+        }
+
+        // ===================== Toolbar =====================
+        private void AddButton(ToolAction action, string text)
+        {
+            _buttons.Add(new ToolButton { Action = action, Text = text });
+        }
+
+        /// <summary>Side and grid buttons centred at the top of the screen; Close on the right edge.</summary>
+        private void LayoutButtons()
+        {
+            int total = 0, count = 0;
+            foreach (ToolButton b in _buttons)
+            {
+                int w = TextRenderer.MeasureText(b.Text, _buttonFont).Width + 32;
+                b.Bounds = new Rectangle(0, ToolbarTop, w, ToolbarHeight);
+                if (b.Action != ToolAction.Close) { total += w; count++; }
+            }
+            total += ToolbarGap * Math.Max(0, count - 1);
+
+            int x = (ClientSize.Width - total) / 2;
+            foreach (ToolButton b in _buttons)
+            {
+                int w = b.Bounds.Width;
+                if (b.Action == ToolAction.Close)
+                {
+                    b.Bounds = new Rectangle(ClientSize.Width - Edge / 2 - w, ToolbarTop, w, ToolbarHeight);
+                    continue;
+                }
+                b.Bounds = new Rectangle(x, ToolbarTop, w, ToolbarHeight);
+                x += w + ToolbarGap;
+            }
+        }
+
+        protected override void OnClientSizeChanged(EventArgs e)
+        {
+            base.OnClientSizeChanged(e);
+            LayoutButtons();
+        }
+
+        private ToolButton HitTest(Point p)
+        {
+            foreach (ToolButton b in _buttons)
+                if (b.Bounds.Contains(p) && IsAvailable(b)) return b;
+            return null;
+        }
+
+        /// <summary>Front and Front + Back need a student; the back exists without one.</summary>
+        private bool IsAvailable(ToolButton b)
+        {
+            return _students.Count > 0 || (b.Action != ToolAction.Front && b.Action != ToolAction.Both);
+        }
+
+        private bool IsOn(ToolButton b)
+        {
+            switch (b.Action)
+            {
+                case ToolAction.Front: return _side == PreviewSide.Front;
+                case ToolAction.Back: return _side == PreviewSide.Back;
+                case ToolAction.Both: return _side == PreviewSide.Both;
+                case ToolAction.Grid: return _showGrid;
+                default: return false;
+            }
+        }
+
+        private void DrawToolbar(Graphics g)
+        {
+            foreach (ToolButton b in _buttons)
+            {
+                bool available = IsAvailable(b), on = IsOn(b), hover = b == _hover;
+                Color back = on ? (hover ? ButtonOnHover : ButtonOn) : (hover ? ButtonHover : ButtonBack);
+                Color text = !available ? ButtonDisabledText : on ? Color.White : FooterText;
+
+                using (GraphicsPath path = RoundedRect(b.Bounds, ToolbarHeight / 2f))
+                using (var brush = new SolidBrush(back))
+                    g.FillPath(brush, path);
+                TextRenderer.DrawText(g, b.Text, _buttonFont, b.Bounds, text,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+            }
         }
 
         // ===================== Drawing =====================
@@ -172,13 +330,14 @@ namespace NPIC_CARD_APP
             if (_side != PreviewSide.Back && _front != null) cards.Add(_front);
             if (_side != PreviewSide.Front && _back != null) cards.Add(_back);
 
-            var area = new Rectangle(Edge, Edge, ClientSize.Width - 2 * Edge,
-                                     ClientSize.Height - 2 * Edge - FooterHeight);
+            int top = ToolbarTop + ToolbarHeight + Edge / 2;   // below the toolbar buttons
+            var area = new Rectangle(Edge, top, ClientSize.Width - 2 * Edge,
+                                     ClientSize.Height - top - Edge - FooterHeight);
 
             if (cards.Count > 0 && area.Width > 0 && area.Height > 0)
             {
                 foreach (KeyValuePair<Bitmap, RectangleF> item in LayoutCards(cards, area))
-                    DrawCard(g, item.Key, item.Value);
+                    DrawCard(g, item.Key, item.Value, _showGrid);
             }
             else if (_error != null)
             {
@@ -186,6 +345,7 @@ namespace NPIC_CARD_APP
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak);
             }
 
+            DrawToolbar(g);
             DrawFooter(g);
         }
 
@@ -217,8 +377,8 @@ namespace NPIC_CARD_APP
             return result;
         }
 
-        /// <summary>Card with real CR80 rounded corners (3.18 mm) and a soft shadow.</summary>
-        private static void DrawCard(Graphics g, Bitmap card, RectangleF rect)
+        /// <summary>Card with real CR80 rounded corners (3.18 mm), a soft shadow and optionally the mm grid.</summary>
+        private static void DrawCard(Graphics g, Bitmap card, RectangleF rect, bool showGrid)
         {
             float radius = rect.Width * 3.18f / CardRenderer.CardWidthMm;
 
@@ -236,6 +396,7 @@ namespace NPIC_CARD_APP
             {
                 g.SetClip(path);
                 g.DrawImage(card, rect);
+                if (showGrid) CardGridOverlay.Draw(g, rect);
                 g.ResetClip();
                 using (var pen = new Pen(Color.FromArgb(70, 255, 255, 255), 1f))
                     g.DrawPath(pen, path);
@@ -256,7 +417,7 @@ namespace NPIC_CARD_APP
             }
 
             string side = _side == PreviewSide.Both ? "Front + Back" : _side == PreviewSide.Front ? "Front" : "Back";
-            string help = side + "    |    Space: switch side    ← →: student    Esc: close";
+            string help = side + (_showGrid ? " · grid" : "") + "    |    Space: switch side    G: grid    ← →: student    Esc: close";
 
             var rect = new Rectangle(Edge, ClientSize.Height - Edge / 2 - FooterHeight, ClientSize.Width - 2 * Edge, FooterHeight);
             TextRenderer.DrawText(g, info, _footerFont, rect, Color.White,
@@ -284,6 +445,7 @@ namespace NPIC_CARD_APP
                 if (_front != null) _front.Dispose();
                 if (_back != null) _back.Dispose();
                 _footerFont.Dispose();
+                _buttonFont.Dispose();
             }
             base.Dispose(disposing);
         }

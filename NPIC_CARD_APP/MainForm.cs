@@ -56,6 +56,8 @@ namespace NPIC_CARD_APP
         private TextBox _txtSearch;
         private Label _lblCount, _lblEmpty;
         private PreviewTile _picFront, _picBack;
+        private PillButton _btnGrid;
+        private bool _showGrid;                               // mm grid over the front / back previews (screen only)
         private ComboBox _cboPrinter;
         private CheckBox _chkAllPrinters;
         private NumericUpDown _numS1X, _numS1Y, _numS2X, _numS2Y;
@@ -481,8 +483,21 @@ namespace NPIC_CARD_APP
             tiles.Controls.Add(TileCaption("Front", "ព័ត៌មាននិស្សិត"), 0, 1);
             tiles.Controls.Add(TileCaption("Back", "ព័ត៌មានវិទ្យាស្ថាន"), 1, 1);
 
-            return MakeCard("Card preview", tiles,
+            _btnGrid = (PillButton)MakeButton("Grid", PillKind.Ghost, (s, e) => SetPreviewGrid(!_showGrid),
+                "Show / hide a millimetre grid on the front and back previews (not printed)");
+
+            return MakeCard("Card preview", tiles, _btnGrid,
                 MakeButton("Enlarge", PillKind.Ghost, (s, e) => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"));
+        }
+
+        /// <summary>Turns the mm grid on or off for both preview tiles (and the full-screen preview).</summary>
+        private void SetPreviewGrid(bool show)
+        {
+            _showGrid = show;
+            _picFront.ShowGrid = show;
+            _picBack.ShowGrid = show;
+            _btnGrid.Checked = show;
+            _btnGrid.Text = show ? "Grid ✓" : "Grid";
         }
 
         private static Control TileCaption(string side, string khmer)
@@ -1412,9 +1427,10 @@ namespace NPIC_CARD_APP
         private void ShowFullScreen(PreviewSide side)
         {
             int index = _grid.CurrentRow != null ? _grid.CurrentRow.Index : 0;
-            using (var form = new CardPreviewForm(_view, index, _settings, side))
+            using (var form = new CardPreviewForm(_view, index, _settings, side, _showGrid))
             {
                 form.ShowDialog(this);
+                SetPreviewGrid(form.ShowGrid);   // keep whatever was chosen in full screen
                 if (_view.Count > 0 && form.CurrentIndex != index)
                     SelectRow(form.CurrentIndex);
             }

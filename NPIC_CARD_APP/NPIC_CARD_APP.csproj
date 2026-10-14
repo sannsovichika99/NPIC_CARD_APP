@@ -97,6 +97,7 @@
     <Compile Include="Rendering\AssetStore.cs" />
     <Compile Include="Rendering\BackgroundRemover.cs" />
     <Compile Include="Rendering\CardFonts.cs" />
+    <Compile Include="Rendering\CardGridOverlay.cs" />
     <Compile Include="Rendering\CardRenderer.cs" />
     <Compile Include="Rendering\KhmerText.cs" />
     <Compile Include="Rendering\PositionGrid.cs" />

@@ -453,8 +453,11 @@ namespace NPIC_CARD_APP
     /// <summary>Rounded flat button: Primary = violet gradient, Secondary = white outlined, Ghost = accent text only.</summary>
     internal sealed class PillButton : Button
     {
-        private bool _hover, _down;
+        private bool _hover, _down, _checked;
         public PillKind Kind { get; private set; }
+
+        /// <summary>Toggle look: a checked Ghost / Secondary pill stays filled with the soft accent and outlined.</summary>
+        public bool Checked { get { return _checked; } set { if (_checked == value) return; _checked = value; Invalidate(); } }
 
         public PillButton(PillKind kind)
         {
@@ -504,10 +507,12 @@ namespace NPIC_CARD_APP
                 }
                 else
                 {
-                    if (_hover || _down)
-                        using (var b = new SolidBrush(_down ? Color.FromArgb(226, 224, 252) : Theme.AccentSoft)) g.FillPath(b, p);
+                    if (_hover || _down || _checked)
+                        using (var b = new SolidBrush(_down || (_checked && _hover) ? Color.FromArgb(226, 224, 252) : Theme.AccentSoft)) g.FillPath(b, p);
                     text = Theme.Accent;
                 }
+                if (_checked && Enabled && Kind != PillKind.Primary)
+                    using (var pen = new Pen(Theme.AccentLight)) g.DrawPath(pen, p);
             }
 
             if (Focused && ShowFocusCues && Enabled)
@@ -570,8 +575,11 @@ namespace NPIC_CARD_APP
     internal sealed class PreviewTile : Control
     {
         private Image _image;
-        private bool _highlight;
+        private bool _highlight, _showGrid;
         public string EmptyText { get; set; }
+
+        /// <summary>Millimetre layout grid over the card (screen only, never printed).</summary>
+        public bool ShowGrid { get { return _showGrid; } set { if (_showGrid == value) return; _showGrid = value; Invalidate(); } }
 
         public PreviewTile()
         {
@@ -622,6 +630,7 @@ namespace NPIC_CARD_APP
                 Region old = g.Clip;
                 g.SetClip(clip, CombineMode.Intersect);
                 g.DrawImage(_image, dest);
+                if (_showGrid) NPIC_CARD_APP.Rendering.CardGridOverlay.Draw(g, dest);
                 g.Clip = old;
             }
         }
