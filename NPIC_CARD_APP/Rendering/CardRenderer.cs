@@ -127,7 +127,7 @@ namespace NPIC_CARD_APP.Rendering
                 DrawWatermarkText(g);
 
                 // Logos
-                DrawAsset(g, AssetStore.Get("ministry_of_labour_logo.png", true, true), 4.4f, 8.5f, 17.4f, 17.4f, 1f, false);
+                DrawAsset(g, AssetStore.Get("ministry_of_labour_logo.png", true, true), 4.4f, 8.5f, 16.4f, 16.4f, 1f, false);
                 DrawAsset(g, AssetStore.Get("npic_png.png", true, true), 68.3f, 8.5f, 11.6f, 17.4f, 1f, false);
 
                 // Titles (box widths match the template; text shrinks to fit)
