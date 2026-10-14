@@ -67,6 +67,7 @@ namespace NPIC_CARD_APP
         private Label _lblPage, _lblStatus, _lblStatusDot;
         private StatCard _statStudents, _statSelected, _statPrinted;
         private TableLayoutPanel _dashboard;
+        private bool _refreshOnActivate;   // photo folder opened in Explorer: re-read photos when the user comes back
         private NavItem _navGallery, _navHistory;
 
         /// <summary>True when Print Selected / Print Preview send the front side.</summary>
@@ -115,6 +116,12 @@ namespace NPIC_CARD_APP
                 _dashboard.RowStyles[0].Height = header;
                 _dashboard.RowStyles[1].Height = stats;
             }
+        }
+
+        protected override void OnActivated(EventArgs e)
+        {
+            base.OnActivated(e);
+            if (_refreshOnActivate) UpdatePreview();   // photos may have been added / renamed in Explorer
         }
 
         protected override void OnLoad(EventArgs e)
@@ -196,6 +203,9 @@ namespace NPIC_CARD_APP
 
                 Section("CARD"),
                 Nav("Photo Folder…", Theme.IcoFolder, ChoosePhotoFolder, "Folder with photos named {StudentId}.jpg / .png"),
+                Nav("Open Photo Folder", Theme.IcoOpenFolder, OpenPhotoFolder,
+                    "Open the photo folder in Windows Explorer to add, rename or delete photos " +
+                    "(the selected student's photo is highlighted)"),
                 Nav("Remove Background…", Theme.IcoBrush, RemovePhotoBackground,
                     "Crop the selected student's photo and remove the wall / screen behind it (Ctrl+B)"),
                 Nav("Signature…", Theme.IcoEdit, ChooseSignature, "Director signature image (white background is removed)"),
@@ -1217,6 +1227,37 @@ namespace NPIC_CARD_APP
                 SaveSettings(false);
                 UpdatePreview();
                 SetStatus("Photo folder: " + dlg.SelectedPath);
+            }
+        }
+
+        /// <summary>
+        /// Opens the photo folder in Windows Explorer to add, rename or delete images there.
+        /// The selected student's photo is highlighted; with no folder set yet, asks for one first.
+        /// </summary>
+        private void OpenPhotoFolder()
+        {
+            if (string.IsNullOrEmpty(_settings.PhotoFolder) || !Directory.Exists(_settings.PhotoFolder))
+            {
+                if (MessageBox.Show(this, "No photo folder is set yet (or it no longer exists).\n\nChoose one now?",
+                        Text, MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
+                ChoosePhotoFolder();
+                if (string.IsNullOrEmpty(_settings.PhotoFolder) || !Directory.Exists(_settings.PhotoFolder)) return;
+            }
+
+            Student s = CurrentStudent();
+            string photo = s == null ? null : CardRenderer.FindPhoto(_settings.PhotoFolder, s.StudentId);
+            try
+            {
+                if (photo != null && File.Exists(photo))
+                    System.Diagnostics.Process.Start("explorer.exe", "/select,\"" + photo + "\"");
+                else
+                    System.Diagnostics.Process.Start("explorer.exe", "\"" + _settings.PhotoFolder + "\"");
+                _refreshOnActivate = true;
+                SetStatus("Opened photo folder: " + _settings.PhotoFolder);
+            }
+            catch (Exception ex)
+            {
+                ShowError(ex);
             }
         }
 

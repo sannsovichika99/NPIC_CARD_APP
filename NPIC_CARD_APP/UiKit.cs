@@ -71,6 +71,7 @@ namespace NPIC_CARD_APP
         }
 
         // ---- Glyphs (same code points in Fluent Icons and MDL2 Assets) ----
+        public const string IcoOpenFolder = "";
         public const string IcoHome = "", IcoPeople = "", IcoHistory = "", IcoPrint = "",
             IcoGlobe = "", IcoDocument = "", IcoOpenFile = "", IcoDatabase = "",
             IcoDownload = "", IcoFolder = "", IcoBrush = "", IcoEdit = "", IcoFont = "",
