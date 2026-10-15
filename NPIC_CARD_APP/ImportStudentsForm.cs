@@ -7,10 +7,10 @@ using NPIC_CARD_APP.Rendering;
 namespace NPIC_CARD_APP
 {
     /// <summary>Where the student list is loaded from, as chosen on the <see cref="ImportStudentsForm"/>.</summary>
-    public enum ImportSource { None, Api, Excel, Csv, SqlServer, ExcelTemplate }
+    public enum ImportSource { None, Api, Excel, Csv, SqlServer, ExcelTemplate, GoogleSheet }
 
     /// <summary>
-    /// "Import Students" page: every way to load the student list in one place (API, Excel, CSV, SQL Server)
+    /// "Import Students" page: every way to load the student list in one place (API, Excel, CSV, Google Sheets, SQL Server)
     /// plus the empty Excel template. Picking a source closes the page and sets <see cref="Choice"/>;
     /// the main window then runs that import, so loading itself is unchanged.
     /// </summary>
@@ -30,8 +30,8 @@ namespace NPIC_CARD_APP
             Glyph = Theme.IcoDownload;
             KeyPreview = true;
             Rectangle work = Screen.FromPoint(Cursor.Position).WorkingArea;
-            Size = new Size(Math.Min(760, work.Width), Math.Min(520, work.Height));
-            MinimumSize = new Size(Math.Min(600, work.Width), Math.Min(460, work.Height));
+            Size = new Size(Math.Min(760, work.Width), Math.Min(640, work.Height));
+            MinimumSize = new Size(Math.Min(600, work.Width), Math.Min(560, work.Height));
 
             // ---- Current list ----
             var info = new Label
@@ -44,16 +44,15 @@ namespace NPIC_CARD_APP
                         count, string.IsNullOrEmpty(source) ? "" : " from " + source)
             };
 
-            // ---- Source cards (2 x 2) ----
+            // ---- Source cards (2 x 3, Google Sheets across the bottom row) ----
             var grid = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, BackColor = Theme.Surface,
+                Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 3, BackColor = Theme.Surface,
                 Padding = new Padding(16, 4, 16, 12)
             };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
-            grid.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
-            grid.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
+            for (int i = 0; i < 3; i++) grid.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33f));
 
             _first = Card(ImportSource.Excel, "From Excel…", Theme.IcoList, "Ctrl+E",
                 "Load students from an Excel workbook (.xlsx, .xlsm or .xls). Use the Excel Template to get the right columns.");
@@ -64,6 +63,10 @@ namespace NPIC_CARD_APP
                 "Download the students from the school's web API (JSON or CSV), with an optional access token."), 0, 1);
             grid.Controls.Add(Card(ImportSource.SqlServer, "SQL Server…", Theme.IcoDatabase, "Ctrl+D",
                 "Read the students straight from a SQL Server table or query. The app only reads the database."), 1, 1);
+            ImportOptionCard google = Card(ImportSource.GoogleSheet, "From Google Sheets…", Theme.IcoCloud, "Ctrl+Shift+G",
+                "Paste the link of a Google Sheet shared as “Anyone with the link”. Row 1 holds the same columns as the Excel template.");
+            grid.Controls.Add(google, 0, 2);
+            grid.SetColumnSpan(google, 2);
 
             // ---- Footer: template on the left of Close ----
             var footer = ModalUi.Footer();
@@ -96,6 +99,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.O: Pick(ImportSource.Csv); return true;
                 case Keys.Control | Keys.I: Pick(ImportSource.Api); return true;
                 case Keys.Control | Keys.D: Pick(ImportSource.SqlServer); return true;
+                case Keys.Control | Keys.Shift | Keys.G: Pick(ImportSource.GoogleSheet); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }

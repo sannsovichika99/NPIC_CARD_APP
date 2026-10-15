@@ -471,6 +471,10 @@ namespace NPIC_CARD_APP
             else token = NotSet;
             add(api, "API token", token, tokenWarn, "The token itself is never shown.", null);
 
+            // ---- Google Sheets ----
+            add("Google Sheets", "Sheet link", Or(s.GoogleSheetUrl, NotSet), false,
+                "Used by From Google Sheets… (Ctrl+Shift+G). Change it there.", null);
+
             // ---- SQL Server ----
             const string sql = "SQL Server";
             bool hasServer = !string.IsNullOrEmpty(s.SqlServer);

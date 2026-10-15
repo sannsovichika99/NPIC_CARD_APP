@@ -62,6 +62,9 @@ namespace NPIC_CARD_APP.Services
 
         private static readonly byte[] TokenEntropy = Encoding.UTF8.GetBytes("NPIC_CARD_APP.ApiToken");
 
+        /// <summary>Google Sheet link for From Google Sheets… (remembered between runs).</summary>
+        public string GoogleSheetUrl { get; set; }
+
         // ---- SQL Server connection (Connect SQL Server… page) ----
         /// <summary>Server name, e.g. "localhost\SQLEXPRESS" or "192.168.1.10,1433".</summary>
         public string SqlServer { get; set; }
@@ -169,6 +172,7 @@ namespace NPIC_CARD_APP.Services
             LastCsvPath = "";
             ApiUrl = "";
             ApiTokenProtected = "";
+            GoogleSheetUrl = "";
             SqlServer = "";
             SqlDatabase = "";
             SqlWindowsAuth = true;

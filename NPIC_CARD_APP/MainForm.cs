@@ -201,7 +201,9 @@ namespace NPIC_CARD_APP
                 Spacer(14),
                 dashboard,
                 Nav("Import Students…", Theme.IcoDownload, ShowImportPage,
-                    "Load the student list from Excel, CSV, the web API or SQL Server, or save an Excel template (Ctrl+L)"),
+                    "Load the student list from Excel, CSV, Google Sheets, the web API or SQL Server, or save an Excel template (Ctrl+L)"),
+                Nav("Google Sheets", Theme.IcoCloud, ImportGoogleSheet,
+                    "Connect a shared Google Sheet, preview its students and import them (Ctrl+Shift+G)"),
                 _navGallery,
                 _navHistory,
                 Nav("Print Queue", Theme.IcoPrint, ShowPrintQueue, "See or cancel jobs waiting in Windows"),
@@ -1084,6 +1086,7 @@ namespace NPIC_CARD_APP
                 case ImportSource.Csv: ImportCsv(); break;
                 case ImportSource.Api: ImportApi(); break;
                 case ImportSource.SqlServer: ConnectSqlServer(); break;
+                case ImportSource.GoogleSheet: ImportGoogleSheet(); break;
                 case ImportSource.ExcelTemplate: SaveExcelTemplate(); break;
             }
         }
@@ -1254,6 +1257,30 @@ namespace NPIC_CARD_APP
             SetStatus(_students.Count == 0
                 ? "Missing data: the API returned no students (" + source + ")"
                 : string.Format("Loaded {0} student(s) from {1}", _students.Count, source));
+        }
+
+        /// <summary>Opens the Google Sheets page; on Import the list is replaced by the sheet's students.</summary>
+        private void ImportGoogleSheet()
+        {
+            List<Student> loaded;
+            using (var form = new GoogleSheetForm(_settings))
+            {
+                loaded = form.ShowDialog(this) == DialogResult.OK ? form.Students : null;
+            }
+            if (loaded == null)
+            {
+                SaveSettings(false);   // keep the sheet link even when the page was closed without importing
+                return;
+            }
+
+            _source = "Google Sheets";
+            _students = loaded;
+            ApplyFilter();
+            _settings.LastCsvPath = "";   // so the next start doesn't reload an older file over this list
+            SaveSettings(false);
+            SetStatus(_students.Count == 0
+                ? "Missing data: the Google Sheet has no students"
+                : string.Format("Loaded {0} student(s) from Google Sheets", _students.Count));
         }
 
         /// <summary>Opens the SQL Server connection page; on Load Students the list is replaced by the database's students.</summary>
@@ -1517,6 +1544,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.E: ImportExcel(); return true;
                 case Keys.Control | Keys.I: ImportApi(); return true;
                 case Keys.Control | Keys.D: ConnectSqlServer(); return true;
+                case Keys.Control | Keys.Shift | Keys.G: ImportGoogleSheet(); return true;
                 case Keys.Control | Keys.P: PrintSelected(); return true;
                 case Keys.Control | Keys.B: RemovePhotoBackground(); return true;
                 case Keys.Control | Keys.H: ShowPrintHistory(); return true;
