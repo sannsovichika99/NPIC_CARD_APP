@@ -81,7 +81,7 @@ namespace NPIC_CARD_APP
         private Dictionary<string, DateTime> _lastPrinted =                  // StudentId → last time a side was printed
             new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
 
-        /// <summary>True when Print Selected / Print Preview send the front side.</summary>
+        /// <summary>True when Print Selected sends the front side.</summary>
         private bool PrintFront { get { return _sideTabs.SelectedIndex == 0; } }
 
         public MainForm()
@@ -307,7 +307,7 @@ namespace NPIC_CARD_APP
             });
 
             _sideTabs = new PillTabs("Front", "Back") { Margin = new Padding(0, 6, 4, 0) };
-            _tip.SetToolTip(_sideTabs, "Side of the card that Print Selected and Print Preview send to the printer");
+            _tip.SetToolTip(_sideTabs, "Side of the card that Print Selected sends to the printer");
             _sideTabs.SelectedIndexChanged += (s, e) => UpdateSideHighlight();
 
             var actions = new FlowLayoutPanel
@@ -322,8 +322,6 @@ namespace NPIC_CARD_APP
             });
             actions.Controls.Add(_sideTabs);
             actions.Controls.Add(new Panel { Width = 1, Height = 26, BackColor = Border, Margin = new Padding(8, 9, 6, 0) });
-            actions.Controls.Add(MakeButton("Print Preview", PillKind.Secondary, (s, e) => ShowPrintPreview(),
-                "Show exactly what will be sent to the printer"));
             actions.Controls.Add(MakeButton("Print Selected", PillKind.Primary, (s, e) => PrintSelected(),
                 "Print the selected students, tray load by tray load (Ctrl+P)"));
 
@@ -358,9 +356,6 @@ namespace NPIC_CARD_APP
             _statStudents.Cursor = Cursors.Hand;
             _statStudents.Click += (s, e) => ShowGallery();
             _tip.SetToolTip(_statStudents, "Open the student gallery (Ctrl+G)");
-            _statSelected.Cursor = Cursors.Hand;
-            _statSelected.Click += (s, e) => ShowPrintPreview();
-            _tip.SetToolTip(_statSelected, "Preview what will be printed for the selected students");
             _statPrinted.Cursor = Cursors.Hand;
             _statPrinted.Click += (s, e) => ShowPrintHistory();
             _tip.SetToolTip(_statPrinted, "Open the print history (Ctrl+H)");
@@ -1670,50 +1665,6 @@ namespace NPIC_CARD_APP
                     "Lines cut off on the RIGHT → decrease X.   On the LEFT → increase X.\n" +
                     "Lines cut off at the BOTTOM → decrease Y.   At the TOP → increase Y.",
                     "Test Print", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            catch (Exception ex)
-            {
-                ShowError(ex);
-            }
-        }
-
-        /// <summary>Shows exactly what 'Print Selected' will send: one page per tray load, same side and slots.</summary>
-        private void ShowPrintPreview()
-        {
-            List<Student> list = SelectedStudents();
-            if (list.Count == 0)
-            {
-                MessageBox.Show(this, "Select at least one student in the list.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-            if (!EnsureCardPrinter()) return;
-            SaveSettings(false);
-
-            bool front = PrintFront;
-            var printer = new CardPrinter(_settings);
-            string slotReason;
-            int perLoad = printer.CardsPerLoad(list.Count, out slotReason);
-            int loads = (list.Count + perLoad - 1) / perLoad;
-            if (slotReason != null) SetStatus("Auto slots: slot 1 only. " + slotReason);
-
-            try
-            {
-                using (PrintDocument doc = printer.CreateDocument("NPIC Card Preview", loads, (g, page, index) =>
-                {
-                    Student a = list[index * perLoad];
-                    Student b = (perLoad == 2 && index * perLoad + 1 < list.Count) ? list[index * perLoad + 1] : null;
-                    using (Bitmap img1 = RenderSide(a, front))
-                    using (Bitmap img2 = b != null ? RenderSide(b, front) : null)
-                    {
-                        printer.DrawLoad(g, img1, img2);
-                    }
-                }))
-                using (var form = new CardPrintPreviewForm(doc, loads,
-                           string.Format("{0} card(s), {1}", list.Count, front ? "FRONT" : "BACK"),
-                           () => printer.LastJobInfo))
-                {
-                    form.ShowDialog(this);
-                }
             }
             catch (Exception ex)
             {

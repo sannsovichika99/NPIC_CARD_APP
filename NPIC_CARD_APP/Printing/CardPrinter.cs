@@ -102,7 +102,7 @@ namespace NPIC_CARD_APP.Printing
 
         /// <summary>
         /// Builds a print job with the saved driver settings, millimetre units and the physical page corner as origin.
-        /// drawPage(g, pageSizeMm, pageIndex) is called once per page. Used for printing AND for Print Preview.
+        /// drawPage(g, pageSizeMm, pageIndex) is called once per page. Used for printing.
         /// The caller disposes the document.
         /// </summary>
         public PrintDocument CreateDocument(string documentName, int pageCount, Action<Graphics, SizeF, int> drawPage)
