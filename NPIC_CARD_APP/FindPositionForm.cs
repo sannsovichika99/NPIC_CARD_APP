@@ -13,7 +13,7 @@ namespace NPIC_CARD_APP
     /// and the slot X / Y are worked out (square − distance from the card edge) and applied.
     /// OK writes the measured slots into the settings; Cancel leaves them unchanged.
     /// </summary>
-    public class FindPositionForm : Form
+    public class FindPositionForm : ModalForm
     {
         // On-screen example: a card at X 23, Y 36 → square X 30 / Y 40, 7 mm from the left edge, 4 mm from the top.
         private const float ExampleX = 23f, ExampleY = 36f;
@@ -36,6 +36,8 @@ namespace NPIC_CARD_APP
             _printCard = printCard;
 
             Text = "Find Position";
+            Subtitle = "Print a position card, read it, and the app works out the slot";
+            Glyph = Theme.IcoLocation;
             StartPosition = FormStartPosition.CenterParent;
             Size = new Size(1060, 700);
             MinimumSize = new Size(900, 640);
@@ -73,9 +75,9 @@ namespace NPIC_CARD_APP
                        "tray when the printer light turns on. Every card comes out covered in labelled squares.",
                 Location = new Point(10, 22), Size = new Size(390, 50)
             };
-            var btnPrint = new Button { Text = "Print Position Card", Location = new Point(10, 76), Size = new Size(160, 30) };
+            var btnPrint = new PillButton(PillKind.Secondary) { Text = "Print Position Card", Location = new Point(10, 74), Size = new Size(170, 32) };
             btnPrint.Click += (s, e) => PrintCard();
-            _lblPrinted = new Label { Location = new Point(10, 110), Size = new Size(390, 52), ForeColor = Color.DimGray };
+            _lblPrinted = new Label { Location = new Point(10, 110), Size = new Size(390, 52), ForeColor = Theme.TextSoft };
             print.Controls.AddRange(new Control[] { printText, btnPrint, _lblPrinted });
             flow.Controls.Add(print);
 
@@ -89,12 +91,10 @@ namespace NPIC_CARD_APP
             flow.Controls.Add(_slots[1].Group);
             side.Controls.Add(flow);
 
-            var buttons = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Bottom, Height = 46, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(8, 6, 8, 6)
-            };
-            var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Size = new Size(90, 30) };
-            var apply = new Button { Text = "Apply to Slots", Size = new Size(120, 30) };
+            var buttons = ModalUi.Footer();
+            Button cancel = ModalUi.Button("Cancel", PillKind.Secondary);
+            cancel.DialogResult = DialogResult.Cancel;
+            Button apply = ModalUi.Button("Apply to Slots", PillKind.Primary);
             apply.Click += (s, e) => ApplyAndClose();
             buttons.Controls.Add(cancel);
             buttons.Controls.Add(apply);
@@ -130,7 +130,7 @@ namespace NPIC_CARD_APP
         {
             string info = _printCard(this);
             if (info == null) return;
-            _lblPrinted.ForeColor = Color.DarkGreen;
+            _lblPrinted.ForeColor = Theme.Success;
             _lblPrinted.Text = "Sent — " + info.Replace("\n", "  |  ") + "\n" +
                                "Card blank? 'Driver Setup...' → Source = Disc/ID Card Tray, Paper Type = PVC ID Card.";
         }
@@ -227,7 +227,7 @@ namespace NPIC_CARD_APP
                     changed
                         ? string.Format(CultureInfo.InvariantCulture, "now X {0:0.0}, Y {1:0.0} mm — will change", _currentX, _currentY)
                         : "same as the saved position");
-                _result.ForeColor = changed ? Accent : Color.DimGray;
+                _result.ForeColor = changed ? Accent : Theme.TextSoft;
                 _result.Font = changed ? BoldFont : RegularFont;
             }
 

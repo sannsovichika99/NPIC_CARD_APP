@@ -26,16 +26,16 @@ namespace NPIC_CARD_APP
     /// Export… / Import… save the settings to a file and load them back (backup, or set up another PC);
     /// after an import <see cref="SettingsImported"/> tells the main window to reload its controls.
     /// </summary>
-    public class SettingsOverviewForm : Form
+    public class SettingsOverviewForm : ModalForm
     {
-        private static readonly Color Accent     = Color.FromArgb(46, 49, 146);
-        private static readonly Color AccentSoft = Color.FromArgb(232, 233, 248);
-        private static readonly Color Surface    = Color.White;
-        private static readonly Color SurfaceAlt = Color.FromArgb(249, 250, 252);
-        private static readonly Color GridLine   = Color.FromArgb(236, 237, 242);
-        private static readonly Color TextMain   = Color.FromArgb(28, 30, 40);
-        private static readonly Color TextMuted  = Color.FromArgb(102, 106, 122);
-        private static readonly Color Warning    = Color.FromArgb(180, 98, 0);
+        private static readonly Color Accent     = Theme.Accent;
+        private static readonly Color AccentSoft = Theme.AccentSoft;
+        private static readonly Color Surface    = Theme.Surface;
+        private static readonly Color SurfaceAlt = Theme.SurfaceAlt;
+        private static readonly Color GridLine   = Theme.GridLine;
+        private static readonly Color TextMain   = Theme.TextMain;
+        private static readonly Color TextMuted  = Theme.TextSoft;
+        private static readonly Color Warning    = Theme.Warning;
 
         private const string NotSet = "(not set)";
 
@@ -66,6 +66,8 @@ namespace NPIC_CARD_APP
         {
             _settings = settings;
             Text = "All Settings";
+            Subtitle = "Every setting of the app and of this PC";
+            Glyph = Theme.IcoSettings;
             StartPosition = FormStartPosition.CenterParent;
             Rectangle work = Screen.FromPoint(Cursor.Position).WorkingArea;
             Size = new Size(Math.Min(980, work.Width), Math.Min(720, work.Height));
@@ -79,14 +81,11 @@ namespace NPIC_CARD_APP
             _all = Collect(settings, DeviceDpi);
 
             // ---- Toolbar ----
-            _txtSearch = new TextBox { Width = 260, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(3, 9, 12, 3) };
+            _txtSearch = new TextBox { Width = 260, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(0, 5, 12, 0) };
             _txtSearch.HandleCreated += (s, e) => SetCueBanner(_txtSearch, "Search settings… (Ctrl+F)");
             _txtSearch.TextChanged += (s, e) => ShowEntries();
 
-            var toolbar = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top, Height = 44, Padding = new Padding(8, 2, 8, 0), WrapContents = false, BackColor = SurfaceAlt
-            };
+            var toolbar = ModalUi.Toolbar();
             toolbar.Controls.Add(_txtSearch);
             Button btnExport = MakeButton("Export…", (s, e) => ExportSettings());
             Button btnImport = MakeButton("Import…", (s, e) => ImportSettings());
@@ -96,7 +95,6 @@ namespace NPIC_CARD_APP
             toolbar.Controls.Add(btnSql);
             toolbar.Controls.Add(MakeButton("Copy All", (s, e) => CopyAll()));
             toolbar.Controls.Add(MakeButton("Open Settings Folder", (s, e) => OpenInExplorer(AppSettings.FilePath)));
-            toolbar.Controls.Add(MakeButton("Close", (s, e) => Close()));
 
             var tip = new ToolTip();
             tip.SetToolTip(btnExport, "Save all settings to a file, to back them up or copy them to another PC.\n" +
@@ -161,9 +159,9 @@ namespace NPIC_CARD_APP
 
             _lblSummary = new Label
             {
-                Dock = DockStyle.Bottom, Height = 44, Padding = new Padding(10, 4, 10, 4),
-                BackColor = Color.FromArgb(240, 240, 240), ForeColor = TextMuted
+                Dock = DockStyle.Bottom, Height = 56, Padding = new Padding(10, 6, 10, 4)
             };
+            ModalUi.StyleStatus(_lblSummary);
 
             Controls.Add(gridHost);
             Controls.Add(toolbar);
@@ -255,7 +253,7 @@ namespace NPIC_CARD_APP
             }
             catch (ExternalException ex)
             {
-                MessageBox.Show(this, "Could not copy to the clipboard:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                AppDialog.Show(this, "Could not copy to the clipboard:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
@@ -276,10 +274,10 @@ namespace NPIC_CARD_APP
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show(this, "Could not export the settings:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    AppDialog.Show(this, "Could not export the settings:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
-                MessageBox.Show(this, "Settings exported to:\n" + dlg.FileName +
+                AppDialog.Show(this, "Settings exported to:\n" + dlg.FileName +
                     "\n\nThe API token and SQL password are not in the file; enter them again with Import API… " +
                     "and SQL Server… on another PC.",
                     Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -307,11 +305,11 @@ namespace NPIC_CARD_APP
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Could not read the settings file:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                AppDialog.Show(this, "Could not read the settings file:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
-            if (MessageBox.Show(this,
+            if (AppDialog.Show(this,
                     "Replace ALL current settings with the ones in this file?\n" + path + "\n\n" +
                     "Printer, tray positions, folders, card text, API address and SQL Server connection will change.\n" +
                     "Your current settings are backed up to:\n" + AppSettings.BackupFilePath + "\n\n" +
@@ -333,7 +331,7 @@ namespace NPIC_CARD_APP
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Could not import the settings:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                AppDialog.Show(this, "Could not import the settings:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
@@ -361,7 +359,7 @@ namespace NPIC_CARD_APP
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Could not save the settings:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                AppDialog.Show(this, "Could not save the settings:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
             if (loaded != null)
@@ -386,12 +384,12 @@ namespace NPIC_CARD_APP
                 {
                     string dir = Path.GetDirectoryName(path);
                     if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir)) Process.Start("explorer.exe", "\"" + dir + "\"");
-                    else MessageBox.Show(this, "Not found:\n" + path, Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    else AppDialog.Show(this, "Not found:\n" + path, Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Could not open the folder:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                AppDialog.Show(this, "Could not open the folder:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -571,9 +569,7 @@ namespace NPIC_CARD_APP
 
         private static Button MakeButton(string text, EventHandler onClick)
         {
-            var b = new Button { Text = text, AutoSize = true, Height = 30, Margin = new Padding(3, 6, 3, 3) };
-            b.Click += onClick;
-            return b;
+            return ModalUi.ToolButton(text, onClick);
         }
 
         private const int EM_SETCUEBANNER = 0x1501;

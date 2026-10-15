@@ -1284,7 +1284,7 @@ namespace NPIC_CARD_APP
             }
             catch (IOException ex)
             {
-                MessageBox.Show(this, "Could not save the template:\n\n" + ex.Message +
+                AppDialog.Show(this, "Could not save the template:\n\n" + ex.Message +
                     "\n\nIf the file is open in Excel, close it and try again.",
                     Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -1296,7 +1296,7 @@ namespace NPIC_CARD_APP
             }
 
             SetStatus("Excel template saved: " + path);
-            if (MessageBox.Show(this,
+            if (AppDialog.Show(this,
                     "Template saved.\n\nFill in the Students sheet (one student per row), save it, then click Import Excel…\n\nOpen it now?",
                     Text, MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
             {
@@ -1349,7 +1349,7 @@ namespace NPIC_CARD_APP
         {
             if (string.IsNullOrEmpty(_settings.PhotoFolder) || !Directory.Exists(_settings.PhotoFolder))
             {
-                if (MessageBox.Show(this, "No photo folder is set yet (or it no longer exists).\n\nChoose one now?",
+                if (AppDialog.Show(this, "No photo folder is set yet (or it no longer exists).\n\nChoose one now?",
                         Text, MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
                 ChoosePhotoFolder();
                 if (string.IsNullOrEmpty(_settings.PhotoFolder) || !Directory.Exists(_settings.PhotoFolder)) return;
@@ -1393,19 +1393,19 @@ namespace NPIC_CARD_APP
             Student s = CurrentStudent();
             if (s == null)
             {
-                MessageBox.Show(this, "Select a student in the list first.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                AppDialog.Show(this, "Select a student in the list first.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             if (string.IsNullOrEmpty(_settings.PhotoFolder) || !Directory.Exists(_settings.PhotoFolder))
             {
-                MessageBox.Show(this, "Choose the photo folder first (Photo Folder… in the sidebar).", Text,
+                AppDialog.Show(this, "Choose the photo folder first (Photo Folder… in the sidebar).", Text,
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             if (CardRenderer.FindPhoto(_settings.PhotoFolder, s.StudentId) == null &&
                 BackgroundRemovalForm.FindOriginal(_settings.PhotoFolder, s.StudentId) == null)
             {
-                MessageBox.Show(this, "No photo found for " + Describe(s) + ".\n\nExpected " + s.StudentId +
+                AppDialog.Show(this, "No photo found for " + Describe(s) + ".\n\nExpected " + s.StudentId +
                     ".jpg / .png in:\n" + _settings.PhotoFolder, Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -1549,13 +1549,13 @@ namespace NPIC_CARD_APP
         {
             if (string.IsNullOrEmpty(_settings.PrinterName))
             {
-                MessageBox.Show(this, "No card printer selected.\n\nInstall the Epson L8050 driver, then choose it in the Printer list.",
+                AppDialog.Show(this, "No card printer selected.\n\nInstall the Epson L8050 driver, then choose it in the Printer list.",
                     Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return false;
             }
             if (_settings.IsCardPrinter(_settings.PrinterName)) return true;
 
-            return MessageBox.Show(this,
+            return AppDialog.Show(this,
                 "\"" + _settings.PrinterName + "\" is not a card printer.\n\nPrint to it anyway?",
                 Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
         }
@@ -1602,7 +1602,7 @@ namespace NPIC_CARD_APP
 
             if (problems.Count == 0) return true;
 
-            return MessageBox.Show(this,
+            return AppDialog.Show(this,
                 "The card may not print:\n\n• " + string.Join("\n\n• ", problems) + "\n\nPrint anyway?",
                 Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
         }
@@ -1612,7 +1612,7 @@ namespace NPIC_CARD_APP
         {
             if (string.IsNullOrEmpty(_settings.PrinterName))
             {
-                MessageBox.Show(this, "No card printer selected.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                AppDialog.Show(this, "No card printer selected.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -1637,7 +1637,7 @@ namespace NPIC_CARD_APP
 
             string report = "Printer: " + _settings.PrinterName + "\n" + page.Replace("  |  ", "\n") + "\n" + slots + "\n\n" +
                 (problems.Count == 0 ? "No problems found." : "Problems:\n• " + string.Join("\n\n• ", problems));
-            MessageBox.Show(this, report, "Check Printer", MessageBoxButtons.OK,
+            AppDialog.Show(this, report, "Check Printer", MessageBoxButtons.OK,
                 problems.Count == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }
 
@@ -1659,7 +1659,7 @@ namespace NPIC_CARD_APP
                     printer.Print(c1, c2, "NPIC Card Calibration");
                 }
 
-                MessageBox.Show(this,
+                AppDialog.Show(this,
                     "Calibration job sent. Insert the tray when the printer light turns on.\n\n" +
                     "Red line = card edge, each black line = 1 mm.\n" +
                     "Lines cut off on the RIGHT → decrease X.   On the LEFT → increase X.\n" +
@@ -1677,7 +1677,7 @@ namespace NPIC_CARD_APP
             List<Student> list = SelectedStudents();
             if (list.Count == 0)
             {
-                MessageBox.Show(this, "Select at least one student in the list.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                AppDialog.Show(this, "Select at least one student in the list.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             if (!EnsureCardPrinter()) return;
@@ -1706,7 +1706,7 @@ namespace NPIC_CARD_APP
                     (b != null ? "Slot 2: " + Describe(b) + "\n" : "") +
                     "\nClick OK to send the job, then insert the tray when the printer light turns on.";
 
-                DialogResult answer = MessageBox.Show(this, message,
+                DialogResult answer = AppDialog.Show(this, message,
                     string.Format("Tray load {0} of {1}", load, totalLoads),
                     MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
                 if (answer != DialogResult.OK) { SetStatus("Printing cancelled."); return; }
@@ -1828,7 +1828,7 @@ namespace NPIC_CARD_APP
         {
             if (string.IsNullOrEmpty(_settings.PrinterName))
             {
-                MessageBox.Show(this, "No card printer selected.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                AppDialog.Show(this, "No card printer selected.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             using (var form = new PrintQueueForm(_settings.PrinterName))
@@ -1917,7 +1917,7 @@ namespace NPIC_CARD_APP
             Student s = CurrentStudent();
             if (s == null)
             {
-                MessageBox.Show(this, "Select the student whose card you printed, then tap the card again.",
+                AppDialog.Show(this, "Select the student whose card you printed, then tap the card again.",
                     Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -1928,7 +1928,7 @@ namespace NPIC_CARD_APP
             if (uid == null)
             {
                 ShowRfidResult("“" + typed + "” is not an RFID card number.", Danger);
-                MessageBox.Show(this, "“" + typed + "” is not an RFID card number.\n\n" +
+                AppDialog.Show(this, "“" + typed + "” is not an RFID card number.\n\n" +
                     "Tap the card on the reader again, or type its number (letters A–F / digits, at least 4 characters).",
                     Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 _txtRfid.Focus();
@@ -1938,7 +1938,7 @@ namespace NPIC_CARD_APP
 
             if (string.IsNullOrWhiteSpace(_settings.SqlServer))
             {
-                if (MessageBox.Show(this, "No SQL Server is set up yet, so the RFID card cannot be saved.\n\n" +
+                if (AppDialog.Show(this, "No SQL Server is set up yet, so the RFID card cannot be saved.\n\n" +
                         "Open the SQL Server page now? (Test Connection is enough — you don't need to load students.)",
                         Text, MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
                     ConnectSqlServer();
@@ -1947,7 +1947,7 @@ namespace NPIC_CARD_APP
 
             DateTime printedAt;
             bool printed = _lastPrinted.TryGetValue((s.StudentId ?? "").Trim(), out printedAt);
-            if (!printed && MessageBox.Show(this,
+            if (!printed && AppDialog.Show(this,
                     Describe(s) + " has no printed card in the print history.\n\nSave RFID card " + uid + " for this student anyway?",
                     Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
                 return;
@@ -1960,7 +1960,7 @@ namespace NPIC_CARD_APP
 
                 if (result.Status == RfidSaveStatus.NeedsReplace)
                 {
-                    if (MessageBox.Show(this,
+                    if (AppDialog.Show(this,
                             Describe(s) + " already has RFID card " + result.PreviousUid + ".\n\n" +
                             "Replace it with " + uid + "? (e.g. the card was reprinted)",
                             Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
@@ -1975,7 +1975,7 @@ namespace NPIC_CARD_APP
                 {
                     ShowRfidResult("Not saved — card " + uid + " belongs to student " + result.OtherStudentId + ".", Danger);
                     SetStatus("Error: RFID card " + uid + " is already saved for student " + result.OtherStudentId + ".");
-                    MessageBox.Show(this, "RFID card " + uid + " is already saved for student " + result.OtherStudentId + ".\n\n" +
+                    AppDialog.Show(this, "RFID card " + uid + " is already saved for student " + result.OtherStudentId + ".\n\n" +
                         "Nothing was changed. Check you tapped the right card for " + Describe(s) + ".",
                         Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     _txtRfid.SelectAll();
@@ -2023,7 +2023,7 @@ namespace NPIC_CARD_APP
             text.Append("\n\n(Press Ctrl+C to copy this message.)");
 
             SetStatus("Error: " + ex.Message.Split('\n')[0]);
-            MessageBox.Show(owner ?? this, text.ToString(), Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            AppDialog.Show(owner ?? this, text.ToString(), Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 }

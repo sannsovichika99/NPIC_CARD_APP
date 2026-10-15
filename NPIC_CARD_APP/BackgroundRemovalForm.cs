@@ -12,7 +12,7 @@ namespace NPIC_CARD_APP
     /// photo shape by default), a live result, a tolerance slider and the colour to put behind the subject. Save writes {StudentId}.png and keeps the untouched photo in an
     /// "_original" sub-folder: editing again always starts from it, and Restore Original puts it back.
     /// </summary>
-    public class BackgroundRemovalForm : Form
+    public class BackgroundRemovalForm : ModalForm
     {
         private const int PreviewSide = 640;            // live preview works on a downscaled copy (fast)
         private const string BackupFolderName = "_original";
@@ -51,12 +51,14 @@ namespace NPIC_CARD_APP
             _small = BackgroundRemover.Downscale(_full, PreviewSide);
             _checker = new TextureBrush(BackgroundRemover.Checkerboard());
 
-            Text = "Edit Photo — " + studentId;
+            Text = "Edit Photo";
+            Subtitle = "Crop and clean the background of student " + studentId;
+            Glyph = Theme.IcoPhoto;
             StartPosition = FormStartPosition.CenterParent;
             Size = new Size(860, 600);
             MinimumSize = new Size(640, 460);
             Font = new Font(CardFonts.UI, 9f);
-            BackColor = Color.White;
+            BackColor = Theme.Surface;
             ShowInTaskbar = false;
             MinimizeBox = false;
             KeyPreview = true;
@@ -85,7 +87,7 @@ namespace NPIC_CARD_APP
                 Minimum = 5, Maximum = 160, TickFrequency = 15, SmallChange = 2, LargeChange = 10, Value = 48,
                 Width = 260, Margin = new Padding(0, 0, 6, 0)
             };
-            _lblTolerance = new Label { AutoSize = true, Margin = new Padding(0, 8, 24, 0), ForeColor = Color.DimGray };
+            _lblTolerance = new Label { AutoSize = true, Margin = new Padding(0, 8, 24, 0), ForeColor = Theme.TextSoft };
             _trkTolerance.ValueChanged += (s, e) => { UpdateToleranceLabel(); _debounce.Stop(); _debounce.Start(); };
 
             _rdoWhite = MakeChoice("White", true);
@@ -98,7 +100,9 @@ namespace NPIC_CARD_APP
             _tip.SetToolTip(_chkCardShape, string.Format("Keep the frame at {0} x {1} mm, the size of the photo box on the card",
                 CardRenderer.PhotoWidthMm, CardRenderer.PhotoHeightMm));
             _chkCardShape.CheckedChanged += (s, e) => _cropView.AspectRatio = _chkCardShape.Checked ? CardShape : 0f;
-            var btnResetCrop = new Button { Text = "Reset Crop", AutoSize = true, MinimumSize = new Size(0, 28), Margin = new Padding(0, 2, 24, 0) };
+            PillButton btnResetCrop = ModalUi.ToolButton("Reset Crop", null);
+            btnResetCrop.MinimumSize = new Size(0, 30);
+            btnResetCrop.Margin = new Padding(0, 1, 24, 0);
             btnResetCrop.Click += (s, e) => _cropView.ResetCrop();
 
             var options = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, WrapContents = true, Padding = new Padding(12, 10, 12, 0) };
@@ -116,25 +120,20 @@ namespace NPIC_CARD_APP
 
             var hint = new Label
             {
-                Dock = DockStyle.Bottom, Height = 52, Padding = new Padding(14, 4, 14, 0), ForeColor = Color.DimGray,
+                Dock = DockStyle.Bottom, Height = 52, Padding = new Padding(14, 4, 14, 0), ForeColor = Theme.TextSoft,
                 Text = "Drag inside the frame to move it, drag a corner to resize, drag outside to draw a new one (arrow keys nudge). " +
                        "Raise the tolerance if background is left over; lower it if parts of the face, hair or clothes disappear."
             };
 
             // ---- Buttons ----
-            var btnSave = new Button { Text = "Save Photo", AutoSize = true, MinimumSize = new Size(110, 32), Margin = new Padding(6, 0, 0, 0) };
-            var btnCancel = new Button { Text = "Cancel", AutoSize = true, MinimumSize = new Size(90, 32), DialogResult = DialogResult.Cancel, Margin = new Padding(6, 0, 0, 0) };
+            Button btnSave = ModalUi.Button("Save Photo", PillKind.Primary);
+            Button btnCancel = ModalUi.Button("Cancel", PillKind.Secondary);
+            btnCancel.DialogResult = DialogResult.Cancel;
             btnSave.Click += (s, e) => Save();
-            var btnRestore = new Button
-            {
-                Text = "Restore Original", AutoSize = true, MinimumSize = new Size(0, 32), Margin = new Padding(0),
-                Visible = FindOriginal(photoFolder, studentId) != null
-            };
+            Button btnRestore = ModalUi.Button("Restore Original", PillKind.Ghost);
+            btnRestore.Visible = FindOriginal(photoFolder, studentId) != null;
             btnRestore.Click += (s, e) => Restore();
-            var buttons = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Padding = new Padding(12, 8, 12, 12)
-            };
+            var buttons = ModalUi.Footer();
             buttons.Controls.Add(btnCancel);
             buttons.Controls.Add(btnSave);
             buttons.Controls.Add(btnRestore);
@@ -159,7 +158,7 @@ namespace NPIC_CARD_APP
             return new PictureBox
             {
                 Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, Margin = new Padding(4),
-                BackColor = Color.FromArgb(232, 234, 240)
+                BackColor = Theme.Tile
             };
         }
 
@@ -225,7 +224,7 @@ namespace NPIC_CARD_APP
             catch (Exception ex)
             {
                 Cursor = Cursors.Default;
-                MessageBox.Show(this, "Could not process the photo:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                AppDialog.Show(this, "Could not process the photo:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
             Cursor = Cursors.Default;
@@ -267,7 +266,7 @@ namespace NPIC_CARD_APP
             {
                 Cursor = Cursors.Default;
                 try { if (File.Exists(temp)) File.Delete(temp); } catch (IOException) { }
-                MessageBox.Show(this, "Could not save the photo:\n\n" + ex.Message +
+                AppDialog.Show(this, "Could not save the photo:\n\n" + ex.Message +
                     "\n\nIf the photo is open in another program, close it and try again.",
                     Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -287,7 +286,7 @@ namespace NPIC_CARD_APP
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Could not restore the original photo:\n\n" + ex.Message, Text,
+                AppDialog.Show(this, "Could not restore the original photo:\n\n" + ex.Message, Text,
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }

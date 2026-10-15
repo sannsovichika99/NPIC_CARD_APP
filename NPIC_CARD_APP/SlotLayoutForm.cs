@@ -16,7 +16,7 @@ namespace NPIC_CARD_APP
     /// Drag a card, type X/Y in mm, or nudge with the arrow keys (Shift = 1 mm, otherwise 0.1 mm).
     /// OK writes the positions (and slot mode) back to the settings; Cancel leaves them unchanged.
     /// </summary>
-    public class SlotLayoutForm : Form
+    public class SlotLayoutForm : ModalForm
     {
         private const float Snap = 0.1f;
 
@@ -52,6 +52,8 @@ namespace NPIC_CARD_APP
             _x[1] = settings.Slot2X; _y[1] = settings.Slot2Y;
 
             Text = "Slot Position";
+            Subtitle = "Drag a card or type X / Y to place each slot on the tray";
+            Glyph = Theme.IcoMove;
             StartPosition = FormStartPosition.CenterParent;
             Size = new Size(1000, 720);
             MinimumSize = new Size(820, 560);
@@ -90,17 +92,17 @@ namespace NPIC_CARD_APP
                 _numY[i].Location = new Point(70, 53);
                 group.Controls.Add(_numY[i]);
 
-                var select = new Button { Text = "Select", Location = new Point(160, 22), Width = 70, Height = 26 };
+                var select = new PillButton(PillKind.Secondary) { Text = "Select", Location = new Point(160, 21), Width = 72, Height = 28 };
                 select.Click += (s, e) => Select(slot);
                 group.Controls.Add(select);
-                var reset = new Button { Text = "Reset", Location = new Point(160, 52), Width = 70, Height = 26 };
+                var reset = new PillButton(PillKind.Ghost) { Text = "Reset", Location = new Point(160, 52), Width = 72, Height = 28 };
                 reset.Click += (s, e) => ResetSlot(slot);
                 group.Controls.Add(reset);
 
                 var hint = new Label
                 {
                     Text = i == 0 ? "Left slot on the tray" : "Right slot on the tray",
-                    AutoSize = true, ForeColor = Color.DimGray, Location = new Point(10, 88)
+                    AutoSize = true, ForeColor = Theme.TextSoft, Location = new Point(10, 88)
                 };
                 group.Controls.Add(hint);
                 flow.Controls.Add(group);
@@ -114,7 +116,7 @@ namespace NPIC_CARD_APP
             nudge.Controls.Add(MakeNudge("▼", 90, 90, -1f, 0f));
             nudge.Controls.Add(new Label
             {
-                Text = "Step 0.1 mm\n(Shift = 1 mm)", AutoSize = true, ForeColor = Color.DimGray, Location = new Point(170, 30)
+                Text = "Step 0.1 mm\n(Shift = 1 mm)", AutoSize = true, ForeColor = Theme.TextSoft, Location = new Point(170, 30)
             });
             flow.Controls.Add(nudge);
 
@@ -138,27 +140,28 @@ namespace NPIC_CARD_APP
             options.Controls.Add(new Label
             {
                 Text = _sample == null ? "Sample card (no student selected)" : "Sample: " + _sample.StudentId,
-                AutoSize = true, ForeColor = Color.DimGray, Location = new Point(12, 88)
+                AutoSize = true, ForeColor = Theme.TextSoft, Location = new Point(12, 88)
             });
             flow.Controls.Add(options);
 
-            var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 40, FlowDirection = FlowDirection.RightToLeft };
-            var ok = new Button { Text = "OK", Width = 80, Height = 30, DialogResult = DialogResult.OK };
+            var buttons = ModalUi.Footer();
+            Button ok = ModalUi.Button("OK", PillKind.Primary);
+            ok.DialogResult = DialogResult.OK;
             ok.Click += (s, e) => Apply();
-            var cancel = new Button { Text = "Cancel", Width = 80, Height = 30, DialogResult = DialogResult.Cancel };
+            Button cancel = ModalUi.Button("Cancel", PillKind.Secondary);
+            cancel.DialogResult = DialogResult.Cancel;
             buttons.Controls.Add(cancel);
             buttons.Controls.Add(ok);
             AcceptButton = ok;
             CancelButton = cancel;
 
             side.Controls.Add(flow);
-            side.Controls.Add(buttons);
 
             _lblStatus = new Label
             {
-                Dock = DockStyle.Bottom, Height = 40, Padding = new Padding(10, 6, 10, 0),
-                BackColor = Color.FromArgb(246, 246, 247)
+                Dock = DockStyle.Bottom, Height = 40, Padding = new Padding(10, 6, 10, 0)
             };
+            ModalUi.StyleStatus(_lblStatus);
 
             _canvas = new DoubleBufferedPanel { Dock = DockStyle.Fill, BackColor = CanvasBack };
             _canvas.Paint += CanvasPaint;
@@ -171,11 +174,12 @@ namespace NPIC_CARD_APP
             Controls.Add(_canvas);
             Controls.Add(_lblStatus);
             Controls.Add(side);
+            Controls.Add(buttons);   // last = docked first: full-width footer under the canvas and the side panel
         }
 
         private Button MakeNudge(string text, int x, int y, float dx, float dy)
         {
-            var b = new Button { Text = text, Location = new Point(x, y), Size = new Size(34, 30) };
+            var b = new PillButton(PillKind.Secondary) { Text = text, Location = new Point(x, y), Size = new Size(34, 30) };
             b.Click += (s, e) =>
             {
                 float step = (ModifierKeys & Keys.Shift) != 0 ? 1f : Snap;
@@ -309,7 +313,7 @@ namespace NPIC_CARD_APP
                 if (Overlaps()) { text += "  Slot 2 overlaps slot 1."; warn = true; }
             }
             _lblStatus.Text = text;
-            _lblStatus.ForeColor = warn ? Color.DarkRed : Color.DimGray;
+            _lblStatus.ForeColor = warn ? Theme.Danger : Theme.TextSoft;
         }
 
         // ===================== Canvas =====================

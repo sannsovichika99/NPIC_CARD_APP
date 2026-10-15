@@ -78,6 +78,10 @@ namespace NPIC_CARD_APP
             IcoFullScreen = "", IcoSettings = "", IcoSearch = "", IcoMultiSelect = "",
             IcoPhoto = "", IcoList = "";
 
+        // Popup header / message icons
+        public const string IcoInfo = "", IcoWarning = "", IcoError = "", IcoQuestion = "",
+            IcoLocation = "", IcoMove = "";
+
         public static GraphicsPath RoundRect(RectangleF r, float radius)
         {
             var path = new GraphicsPath();

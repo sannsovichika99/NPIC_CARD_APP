@@ -68,7 +68,7 @@ namespace NPIC_CARD_APP.Rendering
             string[] missing = Missing();
             if (missing.Length == 0) return;
 
-            MessageBox.Show(owner,
+            AppDialog.Show(owner,
                 "These fonts are not installed, so the card will not match the design:\n\n  • " +
                 string.Join("\n  • ", missing) +
                 "\n\nInstall them (right-click the .ttf → Install for all users), then restart the app.",

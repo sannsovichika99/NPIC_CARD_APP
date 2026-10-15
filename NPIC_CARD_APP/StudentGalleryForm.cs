@@ -23,20 +23,19 @@ namespace NPIC_CARD_APP
     /// Thumbnails load in the background, so long lists open immediately.
     ///   Enter / double-click = select the student in the main list, F5 = reload photos, Ctrl+F = search, Esc = close
     /// </summary>
-    public class StudentGalleryForm : Form
+    public class StudentGalleryForm : ModalForm
     {
-        private static readonly Color Accent     = Color.FromArgb(46, 49, 146);
-        private static readonly Color AccentSoft = Color.FromArgb(232, 233, 248);
-        private static readonly Color AppBack    = Color.FromArgb(243, 244, 247);
-        private static readonly Color Surface    = Color.White;
-        private static readonly Color SurfaceAlt = Color.FromArgb(249, 250, 252);
-        private static readonly Color Border     = Color.FromArgb(222, 224, 231);
-        private static readonly Color TextMain   = Color.FromArgb(28, 30, 40);
-        private static readonly Color TextMuted  = Color.FromArgb(102, 106, 122);
-        private static readonly Color Placeholder = Color.FromArgb(232, 234, 240);
-        private static readonly Color Warning    = Color.FromArgb(180, 98, 0);
-        private static readonly Color Success    = Color.FromArgb(21, 128, 61);
-        private static readonly Color Danger     = Color.FromArgb(185, 28, 28);
+        private static readonly Color Accent     = Theme.Accent;
+        private static readonly Color AccentSoft = Theme.AccentSoft;
+        private static readonly Color AppBack    = Theme.AppBack;
+        private static readonly Color Surface    = Theme.Surface;
+        private static readonly Color Border     = Theme.Border;
+        private static readonly Color TextMain   = Theme.TextMain;
+        private static readonly Color TextMuted  = Theme.TextSoft;
+        private static readonly Color Placeholder = Theme.Tile;
+        private static readonly Color Warning    = Theme.Warning;
+        private static readonly Color Success    = Theme.Success;
+        private static readonly Color Danger     = Theme.Danger;
 
         // Thumbnail in the card's photo ratio (18.7 x 22 mm).
         private const int ThumbW = 84, ThumbH = 99;
@@ -89,6 +88,8 @@ namespace NPIC_CARD_APP
             _photoFolder = settings.PhotoFolder ?? "";
 
             Text = "Student Gallery";
+            Subtitle = "Photos and print status of every student";
+            Glyph = Theme.IcoPeople;
             StartPosition = FormStartPosition.CenterParent;
             Rectangle work = Screen.FromPoint(Cursor.Position).WorkingArea;
             Size = new Size(Math.Min(1180, work.Width), Math.Min(760, work.Height));
@@ -99,7 +100,7 @@ namespace NPIC_CARD_APP
             ShowInTaskbar = false;
 
             // ---- Top bar: search + filter ----
-            _txtSearch = new TextBox { Width = 260, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(3, 8, 14, 3) };
+            _txtSearch = new TextBox { Width = 260, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(0, 5, 14, 0) };
             _txtSearch.HandleCreated += (s, e) => SetCueBanner(_txtSearch, "Search ID, name or faculty…  (Ctrl+F)");
             _txtSearch.TextChanged += (s, e) => ShowStudents(CurrentId());
             _txtSearch.KeyDown += (s, e) =>
@@ -108,20 +109,16 @@ namespace NPIC_CARD_APP
                 else if (e.KeyCode == Keys.Enter) { ChooseCurrent(); e.SuppressKeyPress = true; }
             };
 
-            _cboFilter = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 170, Margin = new Padding(3, 7, 14, 3) };
+            _cboFilter = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 170, Margin = new Padding(3, 4, 14, 0) };
             _cboFilter.Items.AddRange(new object[] { "All students", "Missing photo", "Not printed yet", "Partly printed", "Fully printed" });
             _cboFilter.SelectedIndex = 0;
             _cboFilter.SelectedIndexChanged += (s, e) => ShowStudents(CurrentId());
 
-            var top = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top, Height = 44, Padding = new Padding(10, 2, 10, 0), WrapContents = false, BackColor = Surface
-            };
+            var top = ModalUi.Toolbar();
             top.Controls.Add(_txtSearch);
-            top.Controls.Add(new Label { Text = "Show", AutoSize = true, ForeColor = TextMuted, Margin = new Padding(0, 11, 0, 0) });
+            top.Controls.Add(new Label { Text = "Show", AutoSize = true, ForeColor = TextMuted, Margin = new Padding(0, 8, 0, 0) });
             top.Controls.Add(_cboFilter);
             top.Controls.Add(MakeButton("Reload Photos (F5)", (s, e) => Reload()));
-            top.Controls.Add(MakeButton("Close", (s, e) => Close()));
 
             // ---- Tiles ----
             _list = new GalleryList
@@ -168,11 +165,9 @@ namespace NPIC_CARD_APP
             _fields.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             _fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
-            _btnSelect = MakeButton("Select in List", (s, e) => ChooseCurrent());
-            _btnSelect.BackColor = Accent;
-            _btnSelect.ForeColor = Color.White;
-            _btnSelect.FlatStyle = FlatStyle.Flat;
-            _btnSelect.FlatAppearance.BorderSize = 0;
+            _btnSelect = ModalUi.Button("Select in List", PillKind.Primary, (s, e) => ChooseCurrent());
+            _btnSelect.MinimumSize = new Size(0, 32);
+            _btnSelect.Margin = new Padding(0, 0, 6, 6);
             _btnOpenPhoto = MakeButton("Open Photo", (s, e) => OpenPhoto());
             _btnShowFile = MakeButton("Show in Folder", (s, e) => ShowPhotoInFolder());
             var detailButtons = new FlowLayoutPanel
@@ -196,8 +191,9 @@ namespace NPIC_CARD_APP
             _lblSummary = new Label
             {
                 Dock = DockStyle.Bottom, Height = 28, Padding = new Padding(12, 0, 12, 0), TextAlign = ContentAlignment.MiddleLeft,
-                BackColor = Surface, ForeColor = TextMuted, AutoEllipsis = true
+                AutoEllipsis = true
             };
+            ModalUi.StyleStatus(_lblSummary);
 
             Controls.Add(listHost);
             Controls.Add(details);
@@ -669,7 +665,7 @@ namespace NPIC_CARD_APP
 
         private void ShowError(string what, Exception ex)
         {
-            MessageBox.Show(this, what + ":\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            AppDialog.Show(this, what + ":\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
         // ===================== Helpers =====================
@@ -680,8 +676,8 @@ namespace NPIC_CARD_APP
 
         private static Button MakeButton(string text, EventHandler onClick)
         {
-            var b = new Button { Text = text, AutoSize = true, Height = 30, Margin = new Padding(3, 5, 3, 3), UseVisualStyleBackColor = true };
-            b.Click += onClick;
+            PillButton b = ModalUi.ToolButton(text, onClick);
+            b.Margin = new Padding(0, 0, 6, 6);
             return b;
         }
 

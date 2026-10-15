@@ -18,18 +18,18 @@ namespace NPIC_CARD_APP
     ///   needs the back, and who was printed more than once.
     /// Double-click a row to select that student in the main list.   F5 = reload, Ctrl+F = search, Del = delete, Esc = close
     /// </summary>
-    public class PrintHistoryForm : Form
+    public class PrintHistoryForm : ModalForm
     {
-        private static readonly Color Accent     = Color.FromArgb(46, 49, 146);
-        private static readonly Color AccentSoft = Color.FromArgb(232, 233, 248);
-        private static readonly Color Surface    = Color.White;
-        private static readonly Color SurfaceAlt = Color.FromArgb(249, 250, 252);
-        private static readonly Color GridLine   = Color.FromArgb(236, 237, 242);
-        private static readonly Color TextMain   = Color.FromArgb(28, 30, 40);
-        private static readonly Color TextMuted  = Color.FromArgb(102, 106, 122);
-        private static readonly Color Warning    = Color.FromArgb(180, 98, 0);
-        private static readonly Color Success    = Color.FromArgb(21, 128, 61);
-        private static readonly Color Danger     = Color.FromArgb(185, 28, 28);
+        private static readonly Color Accent     = Theme.Accent;
+        private static readonly Color AccentSoft = Theme.AccentSoft;
+        private static readonly Color Surface    = Theme.Surface;
+        private static readonly Color SurfaceAlt = Theme.SurfaceAlt;
+        private static readonly Color GridLine   = Theme.GridLine;
+        private static readonly Color TextMain   = Theme.TextMain;
+        private static readonly Color TextMuted  = Theme.TextSoft;
+        private static readonly Color Warning    = Theme.Warning;
+        private static readonly Color Success    = Theme.Success;
+        private static readonly Color Danger     = Theme.Danger;
 
         private const string DateTimeFormat = "yyyy-MM-dd HH:mm";
 
@@ -51,6 +51,8 @@ namespace NPIC_CARD_APP
             _showStudent = showStudent;
 
             Text = "Print History";
+            Subtitle = "Every card side sent to the printer";
+            Glyph = Theme.IcoHistory;
             StartPosition = FormStartPosition.CenterParent;
             Rectangle work = Screen.FromPoint(Cursor.Position).WorkingArea;
             Size = new Size(Math.Min(1100, work.Width), Math.Min(640, work.Height));
@@ -80,7 +82,7 @@ namespace NPIC_CARD_APP
 
             var filters = new FlowLayoutPanel
             {
-                Dock = DockStyle.Top, Height = 40, Padding = new Padding(8, 2, 8, 0), WrapContents = false, BackColor = SurfaceAlt
+                Dock = DockStyle.Top, Height = 44, Padding = new Padding(13, 2, 13, 0), WrapContents = false, BackColor = SurfaceAlt
             };
             filters.Controls.Add(_txtSearch);
             filters.Controls.Add(Caption("From"));
@@ -93,10 +95,7 @@ namespace NPIC_CARD_APP
             filters.Controls.Add(_cboView);
 
             // ---- Commands ----
-            var toolbar = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top, Height = 42, Padding = new Padding(6, 4, 6, 0), WrapContents = false, BackColor = Surface
-            };
+            var toolbar = ModalUi.Toolbar();
             toolbar.Controls.Add(MakeButton("Reload (F5)", (s, e) => LoadRecords()));
             _btnExport = MakeButton("Export CSV…", (s, e) => ExportCsv());
             _btnDelete = MakeButton("Delete Selected", (s, e) => DeleteSelected());
@@ -105,7 +104,6 @@ namespace NPIC_CARD_APP
             toolbar.Controls.Add(_btnDelete);
             toolbar.Controls.Add(_btnClear);
             toolbar.Controls.Add(MakeButton("Open Folder", (s, e) => OpenFolder()));
-            toolbar.Controls.Add(MakeButton("Close", (s, e) => Close()));
 
             // ---- List ----
             _grid = new DataGridView
@@ -144,9 +142,9 @@ namespace NPIC_CARD_APP
 
             _lblSummary = new Label
             {
-                Dock = DockStyle.Bottom, Height = 44, Padding = new Padding(10, 4, 10, 4),
-                BackColor = Color.FromArgb(240, 240, 240), ForeColor = TextMuted
+                Dock = DockStyle.Bottom, Height = 56, Padding = new Padding(10, 6, 10, 4)
             };
+            ModalUi.StyleStatus(_lblSummary);
 
             Controls.Add(gridHost);
             Controls.Add(toolbar);
@@ -194,7 +192,7 @@ namespace NPIC_CARD_APP
             catch (Exception ex)
             {
                 _all = new List<PrintRecord>();
-                MessageBox.Show(this, "Could not read the print history:\n\n" + ex.Message, Text,
+                AppDialog.Show(this, "Could not read the print history:\n\n" + ex.Message, Text,
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             ShowRecords();
@@ -335,7 +333,7 @@ namespace NPIC_CARD_APP
                 Close();
                 return;
             }
-            MessageBox.Show(this,
+            AppDialog.Show(this,
                 record.StudentId + " is not in the student list that is loaded now.\n\n" +
                 "Import the list that contains this student, then try again.",
                 Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -351,7 +349,7 @@ namespace NPIC_CARD_APP
                 ? "Delete this entry from the print history?\n\n" + selected[0].StudentId + "  " +
                   selected[0].Side + "  " + selected[0].PrintedAt.ToString(DateTimeFormat)
                 : "Delete " + selected.Count + " entries from the print history?";
-            if (MessageBox.Show(this, question, Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question,
+            if (AppDialog.Show(this, question, Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question,
                     MessageBoxDefaultButton.Button2) != DialogResult.Yes)
                 return;
 
@@ -362,7 +360,7 @@ namespace NPIC_CARD_APP
         private void ClearAll()
         {
             if (_all.Count == 0) return;
-            if (MessageBox.Show(this,
+            if (AppDialog.Show(this,
                     "Delete ALL " + _all.Count + " entries from the print history?\n\n" +
                     "Use Export CSV… first if you want to keep a copy. This cannot be undone.",
                     Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
@@ -379,7 +377,7 @@ namespace NPIC_CARD_APP
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Could not save the print history:\n\n" + ex.Message, Text,
+                AppDialog.Show(this, "Could not save the print history:\n\n" + ex.Message, Text,
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             ShowRecords();
@@ -412,11 +410,11 @@ namespace NPIC_CARD_APP
             }
             catch (IOException ex)
             {
-                MessageBox.Show(this, "Could not save the file:\n\n" + ex.Message +
+                AppDialog.Show(this, "Could not save the file:\n\n" + ex.Message +
                     "\n\nIf the file is open in Excel, close it and try again.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-            MessageBox.Show(this, "Exported " + _grid.Rows.Count + " row(s) to:\n" + path, Text,
+            AppDialog.Show(this, "Exported " + _grid.Rows.Count + " row(s) to:\n" + path, Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
@@ -434,7 +432,7 @@ namespace NPIC_CARD_APP
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Could not open the folder:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                AppDialog.Show(this, "Could not open the folder:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -469,9 +467,7 @@ namespace NPIC_CARD_APP
 
         private static Button MakeButton(string text, EventHandler onClick)
         {
-            var b = new Button { Text = text, AutoSize = true, Height = 30, Margin = new Padding(3) };
-            b.Click += onClick;
-            return b;
+            return ModalUi.ToolButton(text, onClick);
         }
 
         private const int EM_SETCUEBANNER = 0x1501;

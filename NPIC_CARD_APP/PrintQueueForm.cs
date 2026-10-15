@@ -15,7 +15,7 @@ namespace NPIC_CARD_APP
     /// cancel stuck ones. Refreshes itself every 2 seconds.
     ///   F5 = refresh, Del = cancel selected job(s), Esc = close
     /// </summary>
-    public class PrintQueueForm : Form
+    public class PrintQueueForm : ModalForm
     {
         private readonly string _printerName;
         private readonly ListView _list;
@@ -28,7 +28,9 @@ namespace NPIC_CARD_APP
         {
             _printerName = printerName;
 
-            Text = "Print Queue — " + printerName;
+            Text = "Print Queue";
+            Subtitle = printerName;
+            Glyph = Theme.IcoPrint;
             StartPosition = FormStartPosition.CenterParent;
             Size = new Size(820, 420);
             MinimumSize = new Size(560, 300);
@@ -36,22 +38,18 @@ namespace NPIC_CARD_APP
             KeyPreview = true;
             ShowInTaskbar = false;
 
-            var toolbar = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top, Height = 40, Padding = new Padding(6, 5, 6, 0), WrapContents = false
-            };
+            var toolbar = ModalUi.Toolbar();
             toolbar.Controls.Add(MakeButton("Refresh (F5)", (s, e) => RefreshJobs()));
             _btnCancel = MakeButton("Cancel Selected", (s, e) => CancelJobs(SelectedJobIds()));
             _btnCancelAll = MakeButton("Cancel All", (s, e) => CancelJobs(AllJobIds()));
             toolbar.Controls.Add(_btnCancel);
             toolbar.Controls.Add(_btnCancelAll);
             toolbar.Controls.Add(MakeButton("Open Windows Queue", (s, e) => OpenWindowsQueue()));
-            toolbar.Controls.Add(MakeButton("Close", (s, e) => Close()));
 
             _list = new ListView
             {
                 Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, MultiSelect = true,
-                HideSelection = false, GridLines = true
+                HideSelection = false, GridLines = true, BorderStyle = BorderStyle.None
             };
             _list.Columns.Add("Job", 50);
             _list.Columns.Add("Document", 240);
@@ -64,9 +62,9 @@ namespace NPIC_CARD_APP
 
             _lblInfo = new Label
             {
-                Dock = DockStyle.Bottom, Height = 44, Padding = new Padding(8, 4, 8, 4),
-                BackColor = Color.FromArgb(240, 240, 240), ForeColor = Color.DimGray, Text = "Reading queue…"
+                Dock = DockStyle.Bottom, Height = 56, Padding = new Padding(8, 6, 8, 4), Text = "Reading queue…"
             };
+            ModalUi.StyleStatus(_lblInfo);
 
             Controls.Add(_list);
             Controls.Add(toolbar);
@@ -167,7 +165,7 @@ namespace NPIC_CARD_APP
             }
             else
             {
-                _lblInfo.ForeColor = Color.DimGray;
+                _lblInfo.ForeColor = Theme.TextSoft;
                 _lblInfo.Text = "Printer ready.  " + summary + "\nAuto-refresh every 2 s.  Updated " + DateTime.Now.ToString("T") + ".";
             }
             UpdateButtons();
@@ -179,7 +177,7 @@ namespace NPIC_CARD_APP
             string question = jobIds.Count == 1
                 ? "Cancel job " + jobIds[0] + "?"
                 : "Cancel " + jobIds.Count + " jobs?";
-            if (MessageBox.Show(this, question + "\n\nIf a card is printing right now, it will stop part-way.",
+            if (AppDialog.Show(this, question + "\n\nIf a card is printing right now, it will stop part-way.",
                     Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
                 return;
 
@@ -197,7 +195,7 @@ namespace NPIC_CARD_APP
 
             if (failed.Count > 0)
             {
-                MessageBox.Show(this,
+                AppDialog.Show(this,
                     "Some jobs could not be cancelled:\n\n" + string.Join("\n", failed) +
                     "\n\nJobs from another user need administrator rights — use 'Open Windows Queue' instead.",
                     Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -213,7 +211,7 @@ namespace NPIC_CARD_APP
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Could not open the Windows print queue:\n\n" + ex.Message,
+                AppDialog.Show(this, "Could not open the Windows print queue:\n\n" + ex.Message,
                     Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -244,9 +242,7 @@ namespace NPIC_CARD_APP
 
         private static Button MakeButton(string text, EventHandler onClick)
         {
-            var b = new Button { Text = text, AutoSize = true, Height = 28, Margin = new Padding(3) };
-            b.Click += onClick;
-            return b;
+            return ModalUi.ToolButton(text, onClick);
         }
     }
 }

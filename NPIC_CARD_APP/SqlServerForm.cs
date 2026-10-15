@@ -16,20 +16,13 @@ namespace NPIC_CARD_APP
     ///   Test Connection = open the connection only.   Load Students = run the query and return <see cref="Students"/>.
     /// The connection details are saved in <see cref="AppSettings"/> (the password DPAPI-encrypted, only when ticked).
     /// </summary>
-    public class SqlServerForm : Form
+    public class SqlServerForm : ModalForm
     {
-        private static readonly Color Accent        = Color.FromArgb(46, 49, 146);
-        private static readonly Color AccentHover   = Color.FromArgb(64, 68, 176);
-        private static readonly Color AccentPressed = Color.FromArgb(34, 36, 112);
-        private static readonly Color AccentSoft    = Color.FromArgb(232, 233, 248);
-        private static readonly Color Surface       = Color.White;
-        private static readonly Color SurfaceAlt    = Color.FromArgb(249, 250, 252);
-        private static readonly Color SurfaceHover  = Color.FromArgb(242, 243, 248);
-        private static readonly Color Border        = Color.FromArgb(222, 224, 231);
-        private static readonly Color TextMain      = Color.FromArgb(28, 30, 40);
-        private static readonly Color TextMuted     = Color.FromArgb(102, 106, 122);
-        private static readonly Color Success       = Color.FromArgb(21, 128, 61);
-        private static readonly Color Danger        = Color.FromArgb(185, 28, 28);
+        private static readonly Color Surface       = Theme.Surface;
+        private static readonly Color TextMain      = Theme.TextMain;
+        private static readonly Color TextMuted     = Theme.TextSoft;
+        private static readonly Color Success       = Theme.Success;
+        private static readonly Color Danger        = Theme.Danger;
 
         private readonly AppSettings _settings;
 
@@ -54,6 +47,8 @@ namespace NPIC_CARD_APP
             _settings = settings;
 
             Text = "Connect SQL Server";
+            Subtitle = "Load the student list straight from the school's SQL Server database";
+            Glyph = Theme.IcoDatabase;
             StartPosition = FormStartPosition.CenterParent;
             Rectangle work = Screen.FromPoint(Cursor.Position).WorkingArea;
             Size = new Size(Math.Min(680, work.Width), Math.Min(640, work.Height));
@@ -63,19 +58,6 @@ namespace NPIC_CARD_APP
             Font = new Font(CardFonts.UI, 9f);
             BackColor = Surface;
             ForeColor = TextMain;
-
-            // ---- Title band ----
-            var title = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = Accent, Padding = new Padding(20, 10, 20, 8) };
-            title.Controls.Add(new Label
-            {
-                Dock = DockStyle.Fill, ForeColor = Color.FromArgb(196, 199, 238), Font = new Font(CardFonts.UI, 8.25f),
-                Text = "Load the student list straight from the school's SQL Server database."
-            });
-            title.Controls.Add(new Label
-            {
-                Dock = DockStyle.Top, Height = 26, ForeColor = Color.White, Font = new Font(CardFonts.UI, 12f, FontStyle.Bold),
-                Text = "SQL Server connection"
-            });
 
             // ---- Fields ----
             _txtServer = MakeText(settings.SqlServer, "localhost\\SQLEXPRESS  or  192.168.1.10,1433");
@@ -133,23 +115,16 @@ namespace NPIC_CARD_APP
             _form = layout;
 
             // ---- Buttons ----
-            var buttons = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, Height = 56,
-                Padding = new Padding(14, 10, 14, 0), BackColor = SurfaceAlt, WrapContents = false
-            };
+            var buttons = ModalUi.Footer();
             _btnCancel = MakeButton("Close", false);
             _btnLoad = MakeButton("Load Students", true);
             _btnTest = MakeButton("Test Connection", false);
             buttons.Controls.Add(_btnCancel);
             buttons.Controls.Add(_btnLoad);
             buttons.Controls.Add(_btnTest);
-            var line = new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Border };
 
             Controls.Add(layout);
-            Controls.Add(line);
             Controls.Add(buttons);
-            Controls.Add(title);
 
             AcceptButton = _btnLoad;
             CancelButton = _btnCancel;
@@ -311,27 +286,7 @@ namespace NPIC_CARD_APP
 
         private static Button MakeButton(string text, bool primary)
         {
-            var b = new Button
-            {
-                Text = text, AutoSize = true, MinimumSize = new Size(primary ? 132 : 96, 36), Padding = new Padding(10, 0, 10, 0),
-                Margin = new Padding(8, 0, 0, 0), FlatStyle = FlatStyle.Flat, UseVisualStyleBackColor = false,
-                Cursor = Cursors.Hand, Font = new Font(CardFonts.UI, 9f, FontStyle.Bold)
-            };
-            if (primary)
-            {
-                b.BackColor = Accent; b.ForeColor = Color.White;
-                b.FlatAppearance.BorderSize = 0;
-                b.FlatAppearance.MouseOverBackColor = AccentHover;
-                b.FlatAppearance.MouseDownBackColor = AccentPressed;
-            }
-            else
-            {
-                b.BackColor = Surface; b.ForeColor = TextMain;
-                b.FlatAppearance.BorderColor = Border;
-                b.FlatAppearance.MouseOverBackColor = SurfaceHover;
-                b.FlatAppearance.MouseDownBackColor = AccentSoft;
-            }
-            return b;
+            return ModalUi.Button(text, primary ? PillKind.Primary : PillKind.Secondary);
         }
 
         private const int EM_SETCUEBANNER = 0x1501;
