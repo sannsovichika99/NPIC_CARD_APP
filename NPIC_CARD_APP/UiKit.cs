@@ -4,34 +4,68 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Windows.Forms;
 using NPIC_CARD_APP.Rendering;
+using NPIC_CARD_APP.Services;
 
 namespace NPIC_CARD_APP
 {
     /// <summary>
     /// Dashboard look shared by the main window: soft lavender accent, white rounded cards with
     /// a faint coloured shadow, gradient stat tiles and line icons (Segoe Fluent Icons / MDL2 Assets).
+    /// Light or dark is chosen once at start-up from <see cref="AppSettings.DarkMode"/>: every form copies these
+    /// tokens into its own static fields, so switching theme restarts the app.
     /// </summary>
     internal static class Theme
     {
-        // ---- Colour tokens ----
-        public static readonly Color Accent        = Color.FromArgb(108, 99, 245);
-        public static readonly Color AccentLight   = Color.FromArgb(150, 132, 250);
-        public static readonly Color AccentHover   = Color.FromArgb(124, 115, 250);
-        public static readonly Color AccentPressed = Color.FromArgb(86, 78, 220);
-        public static readonly Color AccentSoft    = Color.FromArgb(239, 238, 254);
-        public static readonly Color AppBack       = Color.FromArgb(245, 246, 250);
-        public static readonly Color Surface       = Color.White;
-        public static readonly Color SurfaceAlt    = Color.FromArgb(250, 250, 253);
-        public static readonly Color SurfaceHover  = Color.FromArgb(246, 246, 251);
-        public static readonly Color Tile          = Color.FromArgb(244, 244, 250);
-        public static readonly Color Border        = Color.FromArgb(228, 229, 238);
-        public static readonly Color GridLine      = Color.FromArgb(240, 240, 246);
-        public static readonly Color TextMain      = Color.FromArgb(43, 45, 66);
-        public static readonly Color TextSoft      = Color.FromArgb(104, 107, 130);
-        public static readonly Color TextMuted     = Color.FromArgb(150, 153, 176);
-        public static readonly Color Warning       = Color.FromArgb(196, 110, 0);
-        public static readonly Color Danger        = Color.FromArgb(214, 48, 72);
-        public static readonly Color Success       = Color.FromArgb(34, 160, 100);
+        /// <summary>True when the dark palette is in use. Must stay the first field: the colours below read it.</summary>
+        public static readonly bool Dark = LoadDarkSetting();
+
+        private static bool LoadDarkSetting()
+        {
+            try { return AppSettings.Load().DarkMode; }
+            catch (Exception) { return false; }
+        }
+
+        private static Color Pick(int lr, int lg, int lb, int dr, int dg, int db)
+        {
+            return Dark ? Color.FromArgb(dr, dg, db) : Color.FromArgb(lr, lg, lb);
+        }
+
+        // ---- Colour tokens (light value, dark value) ----
+        // In dark mode Accent is lighter so it stays readable as text / icons on dark surfaces (≈ 6:1);
+        // filled buttons use the Button* tokens below, which keep the brand violet under white text in both themes.
+        public static readonly Color Accent        = Pick(108, 99, 245,   150, 141, 255);
+        public static readonly Color AccentLight   = Pick(150, 132, 250,  176, 164, 255);
+        public static readonly Color AccentHover   = Pick(124, 115, 250,  165, 156, 255);
+        public static readonly Color AccentPressed = Pick(86, 78, 220,    124, 115, 240);
+        public static readonly Color AccentSoft    = Pick(239, 238, 254,  49, 45, 92);
+        public static readonly Color AccentSoftDown = Pick(226, 224, 252, 62, 57, 118);   // pressed soft-accent fill
+        public static readonly Color AccentOutline = Pick(200, 198, 248,  98, 90, 180);   // hover outline of outlined pills
+        public static readonly Color AppBack       = Pick(245, 246, 250,  17, 18, 27);
+        public static readonly Color Surface       = Pick(255, 255, 255,  28, 29, 42);
+        public static readonly Color SurfaceAlt    = Pick(250, 250, 253,  33, 34, 49);
+        public static readonly Color SurfaceHover  = Pick(246, 246, 251,  40, 41, 58);
+        public static readonly Color Tile          = Pick(244, 244, 250,  37, 38, 54);
+        public static readonly Color Border        = Pick(228, 229, 238,  55, 57, 78);
+        public static readonly Color GridLine      = Pick(240, 240, 246,  42, 43, 60);
+        public static readonly Color TextMain      = Pick(43, 45, 66,     232, 233, 245);
+        public static readonly Color TextSoft      = Pick(104, 107, 130,  170, 173, 196);
+        public static readonly Color TextMuted     = Pick(150, 153, 176,  128, 131, 158);
+        public static readonly Color Warning       = Pick(196, 110, 0,    240, 165, 70);
+        public static readonly Color WarningSoft   = Pick(255, 243, 226,  72, 52, 24);
+        public static readonly Color Danger        = Pick(214, 48, 72,    255, 112, 128);
+        public static readonly Color DangerSoft    = Pick(253, 233, 236,  74, 34, 44);
+        public static readonly Color DangerSoftDown = Pick(250, 212, 219, 96, 40, 54);
+        public static readonly Color Success       = Pick(34, 160, 100,   72, 199, 132);
+
+        // Filled (primary) buttons and selections with white text: the brand violet in both themes.
+        public static readonly Color ButtonA       = Color.FromArgb(108, 99, 245);
+        public static readonly Color ButtonB       = Color.FromArgb(150, 132, 250);
+        public static readonly Color ButtonHover   = Color.FromArgb(124, 115, 250);
+        public static readonly Color ButtonPressed = Color.FromArgb(86, 78, 220);
+
+        /// <summary>Veil drawn over the main window while a popup is open.</summary>
+        public static readonly Color Backdrop = Pick(26, 24, 58, 0, 0, 0);
+        public static readonly double BackdropOpacity = Dark ? 0.5 : 0.32;
 
         // Gradient pairs of the three stat tiles (violet, coral, pink).
         public static readonly Color VioletA = Color.FromArgb(120, 124, 246), VioletB = Color.FromArgb(184, 156, 250);
@@ -76,7 +110,8 @@ namespace NPIC_CARD_APP
             IcoGlobe = "", IcoDocument = "", IcoOpenFile = "", IcoDatabase = "",
             IcoDownload = "", IcoFolder = "", IcoBrush = "", IcoEdit = "", IcoFont = "",
             IcoFullScreen = "", IcoSettings = "", IcoSearch = "", IcoMultiSelect = "",
-            IcoPhoto = "", IcoList = "";
+            IcoPhoto = "", IcoList = "",
+            IcoMoon = "", IcoSun = "";   // QuietHours (moon) / Brightness (sun)
 
         // Popup header / message icons
         public const string IcoInfo = "", IcoWarning = "", IcoError = "", IcoQuestion = "",
@@ -154,6 +189,102 @@ namespace NPIC_CARD_APP
         }
     }
 
+    /// <summary>
+    /// Dark mode for the standard Windows controls (text boxes, combo boxes, lists, group boxes, scroll bars and the
+    /// window frame), which otherwise keep the light system colours. Only colours still at their system default are
+    /// replaced, so anything a form already colours from <see cref="Theme"/> is left alone. Controls added later are
+    /// styled as they arrive. Does nothing in light mode.
+    /// </summary>
+    internal static class DarkControls
+    {
+        private const int LVM_GETHEADER = 0x101F;
+
+        public static void Apply(Control root)
+        {
+            if (!Theme.Dark || root == null) return;
+            Style(root);
+        }
+
+        private static void Style(Control c)
+        {
+            StyleColors(c);
+            c.HandleCreated -= OnHandleCreated;   // -= first: Apply may run again on the same tree
+            c.HandleCreated += OnHandleCreated;
+            if (c.IsHandleCreated) StyleHandle(c);
+            if (c is PropertyGrid) return;        // coloured through its own View* / Help* properties
+            c.ControlAdded -= OnControlAdded;
+            c.ControlAdded += OnControlAdded;
+            foreach (Control child in c.Controls) Style(child);
+        }
+
+        private static void OnControlAdded(object sender, ControlEventArgs e) { Style(e.Control); }
+        private static void OnHandleCreated(object sender, EventArgs e) { StyleHandle((Control)sender); }
+
+        private static void StyleColors(Control c)
+        {
+            bool input = c is TextBoxBase || c is ListBox || c is ListView || c is ComboBox || c is UpDownBase || c is TreeView;
+            if (IsSystem(c.BackColor, KnownColor.Window) || IsSystem(c.BackColor, KnownColor.Control))
+                c.BackColor = input ? Theme.SurfaceAlt : Theme.EffectiveBack(c.Parent);
+            if (IsSystem(c.ForeColor, KnownColor.WindowText) || IsSystem(c.ForeColor, KnownColor.ControlText))
+                c.ForeColor = Theme.TextMain;
+            else if (IsSystem(c.ForeColor, KnownColor.GrayText))
+                c.ForeColor = Theme.TextMuted;
+
+            // Visual-style rendering ignores BackColor / ForeColor on these; the flat look honours them.
+            // (Combo boxes keep their native look and get Windows' dark style in StyleHandle instead.)
+            var group = c as GroupBox;
+            if (group != null && group.FlatStyle == FlatStyle.Standard) group.FlatStyle = FlatStyle.Flat;
+            var button = c as Button;
+            if (button != null && !(button is PillButton) && button.FlatStyle == FlatStyle.Standard)
+            {
+                button.FlatStyle = FlatStyle.Flat;
+                button.UseVisualStyleBackColor = false;
+                button.BackColor = Theme.SurfaceAlt;
+                button.FlatAppearance.BorderColor = Theme.Border;
+                button.FlatAppearance.MouseOverBackColor = Theme.SurfaceHover;
+                button.FlatAppearance.MouseDownBackColor = Theme.AccentSoft;
+            }
+
+            var grid = c as DataGridView;
+            if (grid != null)
+            {
+                if (IsSystem(grid.BackgroundColor, KnownColor.AppWorkspace)) grid.BackgroundColor = Theme.Surface;
+                if (IsSystem(grid.DefaultCellStyle.BackColor, KnownColor.Window)) grid.DefaultCellStyle.BackColor = Theme.Surface;
+                if (IsSystem(grid.DefaultCellStyle.ForeColor, KnownColor.ControlText)) grid.DefaultCellStyle.ForeColor = Theme.TextMain;
+                if (IsSystem(grid.GridColor, KnownColor.ControlDark)) grid.GridColor = Theme.GridLine;
+            }
+        }
+
+        /// <summary>Dark title bar for windows; dark combo boxes; dark scroll bars (and list headers) for scrolling controls.</summary>
+        private static void StyleHandle(Control c)
+        {
+            if (c is Form) { Native.SetDarkFrame(c.Handle); return; }
+
+            // Windows' own dark combo box (as in the dark file dialogs): dark field, light text, light chevron.
+            // (Date pickers stay light: Windows has no dark style for their text field.)
+            if (c is ComboBox) { Native.SetControlTheme(c.Handle, "DarkMode_CFD"); return; }
+
+            var list = c as ListView;
+            if (list != null)
+            {
+                Native.SetControlTheme(list.Handle, "DarkMode_Explorer");
+                IntPtr header = Native.SendMessage(list.Handle, LVM_GETHEADER, IntPtr.Zero, IntPtr.Zero);
+                if (header != IntPtr.Zero) Native.SetControlTheme(header, "DarkMode_ItemsView");
+                return;
+            }
+
+            var scrollable = c as ScrollableControl;
+            if (c is TextBoxBase || c is ListBox || c is TreeView || c is ScrollBar || (scrollable != null && scrollable.AutoScroll))
+                Native.SetControlTheme(c.Handle, "DarkMode_Explorer");
+        }
+
+        private static bool IsSystem(Color color, KnownColor known)
+        {
+            // Compare by name, not by value: a control painted Color.White on purpose (photos, paper) is no system colour.
+            return color.IsSystemColor && color.ToKnownColor() == known;
+        }
+    }
+
     /// <summary>Background of the content area: flat app colour plus two faint decorative shapes (like the sample).</summary>
     internal sealed class DecorPanel : Panel
     {
@@ -212,8 +343,13 @@ namespace NPIC_CARD_APP
             RectangleF card = CardBounds;
             Theme.DrawShadow(g, card, Radius, Theme.Accent, Theme.ShadowPad - 2, 7, 3f);
             using (GraphicsPath p = Theme.RoundRect(card, Radius))
-            using (var b = new SolidBrush(Theme.Surface))
-                g.FillPath(b, p);
+            {
+                using (var b = new SolidBrush(Theme.Surface))
+                    g.FillPath(b, p);
+                if (Theme.Dark)   // a shadow barely shows on a dark background: outline the card instead
+                    using (var pen = new Pen(Theme.GridLine))
+                        g.DrawPath(pen, p);
+            }
         }
     }
 
@@ -498,21 +634,21 @@ namespace NPIC_CARD_APP
                 }
                 else if (Kind == PillKind.Primary)
                 {
-                    Color a = _down ? Theme.AccentPressed : _hover ? Theme.AccentHover : Theme.Accent;
-                    Color b2 = _down ? Theme.AccentPressed : Theme.AccentLight;
+                    Color a = _down ? Theme.ButtonPressed : _hover ? Theme.ButtonHover : Theme.ButtonA;
+                    Color b2 = _down ? Theme.ButtonPressed : Theme.ButtonB;
                     using (var b = new LinearGradientBrush(r, a, b2, 0f)) g.FillPath(b, p);
                     text = Color.White;
                 }
                 else if (Kind == PillKind.Secondary)
                 {
                     using (var b = new SolidBrush(_down ? Theme.AccentSoft : _hover ? Theme.SurfaceHover : Theme.Surface)) g.FillPath(b, p);
-                    using (var pen = new Pen(_hover ? Color.FromArgb(200, 198, 248) : Theme.Border)) g.DrawPath(pen, p);
+                    using (var pen = new Pen(_hover ? Theme.AccentOutline : Theme.Border)) g.DrawPath(pen, p);
                     text = Theme.TextMain;
                 }
                 else
                 {
                     if (_hover || _down || _checked)
-                        using (var b = new SolidBrush(_down || (_checked && _hover) ? Color.FromArgb(226, 224, 252) : Theme.AccentSoft)) g.FillPath(b, p);
+                        using (var b = new SolidBrush(_down || (_checked && _hover) ? Theme.AccentSoftDown : Theme.AccentSoft)) g.FillPath(b, p);
                     text = Theme.Accent;
                 }
                 if (_checked && Enabled && Kind != PillKind.Primary)

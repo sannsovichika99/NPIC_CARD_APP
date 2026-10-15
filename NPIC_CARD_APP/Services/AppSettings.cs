@@ -36,6 +36,9 @@ namespace NPIC_CARD_APP.Services
         /// <summary>A printer whose name contains one of these words (separated by ;) is a card printer.</summary>
         public string CardPrinterKeywords { get; set; }
         public bool ShowAllPrinters { get; set; }    // false = list card printers only
+
+        /// <summary>Dark colour theme for the app windows (never the printed cards). Read once at start-up.</summary>
+        public bool DarkMode { get; set; }
         public string DevModeBase64 { get; set; }   // Epson driver settings (Paper Source / Paper Type)
         public string PhotoFolder { get; set; }
         public string SignaturePath { get; set; }   // optional PNG/JPG of the director's signature

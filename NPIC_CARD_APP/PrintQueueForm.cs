@@ -120,7 +120,7 @@ namespace NPIC_CARD_APP
 
                 if (error != null)
                 {
-                    _lblInfo.ForeColor = Color.Firebrick;
+                    _lblInfo.ForeColor = Theme.Danger;
                     _lblInfo.Text = "Could not read the print queue from Windows: " + error;
                     return;
                 }
@@ -147,9 +147,9 @@ namespace NPIC_CARD_APP
                 if (job.RawStatus.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0 ||
                     job.RawStatus.IndexOf("Offline", StringComparison.OrdinalIgnoreCase) >= 0 ||
                     job.RawStatus.IndexOf("Blocked", StringComparison.OrdinalIgnoreCase) >= 0)
-                    item.ForeColor = Color.Firebrick;
+                    item.ForeColor = Theme.Danger;
                 else if (job.RawStatus.IndexOf("Printing", StringComparison.OrdinalIgnoreCase) >= 0)
-                    item.ForeColor = Color.SeaGreen;
+                    item.ForeColor = Theme.Success;
                 item.Selected = selected.Contains(job.JobId);
                 _list.Items.Add(item);
             }
@@ -160,7 +160,7 @@ namespace NPIC_CARD_APP
                 : jobs.Count + " job(s) in the queue. The printer prints them in order; cancel old or stuck jobs before printing new cards.";
             if (problems.Count > 0)
             {
-                _lblInfo.ForeColor = Color.Firebrick;
+                _lblInfo.ForeColor = Theme.Danger;
                 _lblInfo.Text = string.Join("  ", problems) + "\n" + summary;
             }
             else

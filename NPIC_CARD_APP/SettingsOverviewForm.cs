@@ -432,6 +432,10 @@ namespace NPIC_CARD_APP
             add(tray, "Rotate front 180°", YesNo(s.RotateFront180), false, null, null);
             add(tray, "Rotate back 180°", YesNo(s.RotateBack180), false, null, null);
 
+            // ---- Appearance ----
+            add("Appearance", "Colour theme", s.DarkMode ? "Dark" : "Light", false,
+                "Switch with Dark Mode / Light Mode in the sidebar (restarts the app). Printed cards are not affected.", null);
+
             // ---- Files & folders ----
             const string files = "Files & folders";
             bool hasPhotos = !string.IsNullOrEmpty(s.PhotoFolder);

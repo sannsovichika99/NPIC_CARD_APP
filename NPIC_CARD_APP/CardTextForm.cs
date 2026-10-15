@@ -49,7 +49,7 @@ namespace NPIC_CARD_APP
                 HelpBackColor = Theme.SurfaceAlt,
                 HelpForeColor = Theme.TextSoft,
                 HelpBorderColor = Theme.Border,
-                SelectedItemWithFocusBackColor = Theme.Accent,
+                SelectedItemWithFocusBackColor = Theme.ButtonA,
                 SelectedItemWithFocusForeColor = Color.White,
                 DisabledItemForeColor = Theme.TextMuted
             };

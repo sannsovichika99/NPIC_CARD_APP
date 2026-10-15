@@ -99,6 +99,7 @@ namespace NPIC_CARD_APP
             ForeColor = TextMain;
 
             BuildUi();
+            DarkControls.Apply(this);   // dark mode only; before the handles exist, so restyling recreates nothing
             LoadPrinters();
             ApplySettingsToUi();
 
@@ -223,6 +224,10 @@ namespace NPIC_CARD_APP
                 Nav("Card Text…", Theme.IcoFont, EditCardText, "Edit the fixed text printed on the cards"),
 
                 Section("APP"),
+                Theme.Dark
+                    ? Nav("Light Mode", Theme.IcoSun, ToggleDarkMode, "Switch back to the light colours (restarts the app)")
+                    : Nav("Dark Mode", Theme.IcoMoon, ToggleDarkMode,
+                        "Switch to dark colours, easier on the eyes in a dim room (restarts the app)"),
                 Nav("Full Screen", Theme.IcoFullScreen, () => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"),
                 Nav("All Settings…", Theme.IcoSettings, ShowAllSettings,
                     "Show every setting of the app and this PC: printer, tray, files, API, card text, fonts (Ctrl+,)"),
@@ -1754,6 +1759,33 @@ namespace NPIC_CARD_APP
         }
 
         /// <summary>Read-only list of every setting (app + this PC), including tray values not saved yet.</summary>
+        /// <summary>
+        /// Saves the other colour theme and restarts the app: every window reads the theme colours once at start-up.
+        /// </summary>
+        private void ToggleDarkMode()
+        {
+            bool dark = !Theme.Dark;
+            string text = (dark ? "Switch to dark mode?" : "Switch to light mode?") +
+                "\n\nThe app restarts to apply it. Your settings are saved and a student list opened from a file " +
+                "comes back by itself; students imported from the API or SQL Server must be loaded again.\n\n" +
+                "Printed cards are not affected.";
+            if (AppDialog.Show(this, text, Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+            ReadUiToSettings();
+            _settings.DarkMode = dark;
+            try
+            {
+                _settings.Save();
+            }
+            catch (Exception ex)
+            {
+                _settings.DarkMode = !dark;
+                ShowError(ex);
+                return;
+            }
+            Application.Restart();
+        }
+
         private void ShowAllSettings()
         {
             ReadUiToSettings();

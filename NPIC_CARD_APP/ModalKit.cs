@@ -270,6 +270,7 @@ namespace NPIC_CARD_APP
         {
             base.OnHandleCreated(e);
             Native.SetCorners(Handle, true);
+            DarkControls.Apply(this);   // before the child handles exist, so restyling recreates nothing
             // Re-run WM_NCCALCSIZE so the top frame becomes client area (the header).
             Native.SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0,
                 Native.SWP_FRAMECHANGED | Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOZORDER |
@@ -557,11 +558,11 @@ namespace NPIC_CARD_APP
             {
                 case MessageBoxIcon.Error:
                     Glyph = Theme.IcoError;
-                    SetGlyphColors(Theme.Danger, Color.FromArgb(253, 233, 236));
+                    SetGlyphColors(Theme.Danger, Theme.DangerSoft);
                     break;
                 case MessageBoxIcon.Warning:
                     Glyph = Theme.IcoWarning;
-                    SetGlyphColors(Theme.Warning, Color.FromArgb(255, 243, 226));
+                    SetGlyphColors(Theme.Warning, Theme.WarningSoft);
                     break;
                 case MessageBoxIcon.Question:
                     Glyph = Theme.IcoQuestion;
@@ -678,8 +679,8 @@ namespace NPIC_CARD_APP
             if (_hover || _down)
             {
                 Color back = close
-                    ? (_down ? Color.FromArgb(250, 212, 219) : Color.FromArgb(253, 233, 236))
-                    : (_down ? Color.FromArgb(226, 224, 252) : Theme.AccentSoft);
+                    ? (_down ? Theme.DangerSoftDown : Theme.DangerSoft)
+                    : (_down ? Theme.AccentSoftDown : Theme.AccentSoft);
                 using (GraphicsPath p = Theme.RoundRect(new RectangleF(1, 1, Width - 2.5f, Height - 2.5f), 9))
                 using (var b = new SolidBrush(back))
                     g.FillPath(b, p);
@@ -717,8 +718,8 @@ namespace NPIC_CARD_APP
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.Manual;
-            BackColor = Color.FromArgb(26, 24, 58);
-            Opacity = 0.32;
+            BackColor = Theme.Backdrop;
+            Opacity = Theme.BackdropOpacity;
             Bounds = Native.VisibleBounds(owner);
             _round = owner.WindowState == FormWindowState.Normal;
             Text = "";
@@ -762,6 +763,7 @@ namespace NPIC_CARD_APP
                           SWP_FRAMECHANGED = 0x0020, SWP_NOOWNERZORDER = 0x0200;
 
         private const int DWMWA_EXTENDED_FRAME_BOUNDS = 9, DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
         private const int DWMWCP_DONOTROUND = 1, DWMWCP_ROUND = 2;
 
         [StructLayout(LayoutKind.Sequential)]
@@ -798,6 +800,33 @@ namespace NPIC_CARD_APP
 
         [DllImport("dwmapi.dll")]
         private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out RECT value, int size);
+
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+        private static extern int SetWindowTheme(IntPtr hwnd, string subAppName, string subIdList);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+        /// <summary>Dark title bar and frame (Windows 10 1809+ / 11); ignored on older Windows.</summary>
+        public static void SetDarkFrame(IntPtr hwnd)
+        {
+            try
+            {
+                int on = 1;
+                if (DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref on, sizeof(int)) != 0)
+                    DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, ref on, sizeof(int));
+            }
+            catch (DllNotFoundException) { }
+            catch (EntryPointNotFoundException) { }
+        }
+
+        /// <summary>Visual-style class of a control, e.g. "DarkMode_Explorer" for dark scroll bars; ignored where unknown.</summary>
+        public static void SetControlTheme(IntPtr hwnd, string subAppName)
+        {
+            try { SetWindowTheme(hwnd, subAppName, null); }
+            catch (DllNotFoundException) { }
+            catch (EntryPointNotFoundException) { }
+        }
 
         /// <summary>Windows 11 corner style; ignored on older Windows.</summary>
         public static void SetCorners(IntPtr hwnd, bool round)

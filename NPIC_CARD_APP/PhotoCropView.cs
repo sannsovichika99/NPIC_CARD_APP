@@ -31,7 +31,7 @@ namespace NPIC_CARD_APP
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                      ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true);
-            BackColor = Color.FromArgb(232, 234, 240);
+            BackColor = Theme.Dark ? Theme.Tile : Color.FromArgb(232, 234, 240);
         }
 
         /// <summary>The image to crop (not owned: the caller disposes it). Setting it selects the whole image.</summary>
