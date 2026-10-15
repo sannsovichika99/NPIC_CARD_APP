@@ -200,18 +200,11 @@ namespace NPIC_CARD_APP
                 new BrandBlock("NPIC Card Studio", "Epson L8050  ·  ID cards", logo),
                 Spacer(14),
                 dashboard,
+                Nav("Import Students…", Theme.IcoDownload, ShowImportPage,
+                    "Load the student list from Excel, CSV, the web API or SQL Server, or save an Excel template (Ctrl+L)"),
                 _navGallery,
                 _navHistory,
                 Nav("Print Queue", Theme.IcoPrint, ShowPrintQueue, "See or cancel jobs waiting in Windows"),
-
-                Section("IMPORT STUDENTS"),
-                Nav("From API…", Theme.IcoGlobe, ImportApi, "Download students from the school's web API (Ctrl+I)"),
-                Nav("From Excel…", Theme.IcoList, ImportExcel, "Load students from an Excel workbook (.xlsx) (Ctrl+E)"),
-                Nav("From CSV…", Theme.IcoDocument, ImportCsv, "Load students from a UTF-8 CSV file (Ctrl+O)"),
-                Nav("SQL Server…", Theme.IcoDatabase, ConnectSqlServer,
-                    "Open the SQL Server connection page and load students from a database (Ctrl+D)"),
-                Nav("Excel Template", Theme.IcoDownload, SaveExcelTemplate,
-                    "Save an empty Excel file with the right columns to fill in, then use From Excel…"),
 
                 Section("CARD"),
                 Nav("Photo Folder…", Theme.IcoFolder, ChoosePhotoFolder, "Folder with photos named {StudentId}.jpg / .png"),
@@ -468,6 +461,8 @@ namespace NPIC_CARD_APP
             body.Controls.Add(gridHost, 0, 1);
 
             return MakeCard("Students", body, _lblCount,
+                MakeButton("Import…", PillKind.Ghost, (s, e) => ShowImportPage(),
+                    "Load the student list from Excel, CSV, the web API or SQL Server (Ctrl+L)"),
                 MakeButton("View List", PillKind.Ghost, (s, e) => ShowGallery(),
                     "View every loaded student with photo, details and print status (Ctrl+G)"));
         }
@@ -925,8 +920,8 @@ namespace NPIC_CARD_APP
         {
             if (_lblEmpty == null) return;
             _lblEmpty.Text = _students.Count == 0
-                ? "No students loaded yet.\n\nUse  From API…,  From Excel…,  From CSV…  or  SQL Server…  in the sidebar to begin.\n" +
-                  "No list yet? Click  Excel Template  in the sidebar for a file to fill in."
+                ? "No students loaded yet.\n\nClick  Import Students…  in the sidebar (Ctrl+L) to load them from Excel, CSV, API or SQL Server.\n" +
+                  "No list yet? Save an Excel template there to fill in."
                 : "No students match “" + _txtSearch.Text.Trim() + "”.\n\nPress Esc to clear the search.";
             _lblEmpty.Visible = _view.Count == 0;
         }
@@ -1073,6 +1068,26 @@ namespace NPIC_CARD_APP
         }
 
         // ===================== Data =====================
+        /// <summary>Opens the Import Students page; the source picked there is imported with the usual dialog.</summary>
+        private void ShowImportPage()
+        {
+            ImportSource choice;
+            using (var form = new ImportStudentsForm(_students.Count, _source))
+            {
+                if (form.ShowDialog(this) != DialogResult.OK) return;
+                choice = form.Choice;
+            }
+
+            switch (choice)
+            {
+                case ImportSource.Excel: ImportExcel(); break;
+                case ImportSource.Csv: ImportCsv(); break;
+                case ImportSource.Api: ImportApi(); break;
+                case ImportSource.SqlServer: ConnectSqlServer(); break;
+                case ImportSource.ExcelTemplate: SaveExcelTemplate(); break;
+            }
+        }
+
         private void ImportCsv()
         {
             using (var dlg = new OpenFileDialog { Filter = "CSV UTF-8 (*.csv)|*.csv", Title = "Import students" })
@@ -1304,7 +1319,8 @@ namespace NPIC_CARD_APP
 
             SetStatus("Excel template saved: " + path);
             if (AppDialog.Show(this,
-                    "Template saved.\n\nFill in the Students sheet (one student per row), save it, then click Import Excel…\n\nOpen it now?",
+                    "Template saved.\n\nFill in the Students sheet (one student per row), save it, then click " +
+                    "Import Students… → From Excel…\n\nOpen it now?",
                     Text, MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
             {
                 try { System.Diagnostics.Process.Start(path); }
@@ -1496,6 +1512,7 @@ namespace NPIC_CARD_APP
             {
                 case Keys.F11: ShowFullScreen(PreviewSide.Both); return true;
                 case Keys.Control | Keys.F: _txtSearch.Focus(); _txtSearch.SelectAll(); return true;
+                case Keys.Control | Keys.L: ShowImportPage(); return true;
                 case Keys.Control | Keys.O: ImportCsv(); return true;
                 case Keys.Control | Keys.E: ImportExcel(); return true;
                 case Keys.Control | Keys.I: ImportApi(); return true;

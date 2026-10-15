@@ -88,6 +88,9 @@
     <Compile Include="SqlServerForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="ImportStudentsForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Models\Student.cs" />
     <Compile Include="Services\ApiStudentLoader.cs" />
     <Compile Include="Services\AppSettings.cs" />
