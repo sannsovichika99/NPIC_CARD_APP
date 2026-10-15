@@ -391,7 +391,7 @@ namespace NPIC_CARD_APP
             return body;
         }
 
-        /// <summary>Students card: search field + student list.</summary>
+        /// <summary>Students card: search field + student list; "View List" in the header opens the student gallery.</summary>
         private Control BuildStudentPanel()
         {
             _lblCount = new Label { AutoSize = true, ForeColor = TextMuted, Font = Theme.Small, BackColor = Surface, Margin = new Padding(0, 13, 2, 0) };
@@ -462,7 +462,9 @@ namespace NPIC_CARD_APP
             body.Controls.Add(search, 0, 0);
             body.Controls.Add(gridHost, 0, 1);
 
-            return MakeCard("Students", body, _lblCount);
+            return MakeCard("Students", body, _lblCount,
+                MakeButton("View List", PillKind.Ghost, (s, e) => ShowGallery(),
+                    "View every loaded student with photo, details and print status (Ctrl+G)"));
         }
 
         /// <summary>Front and back thumbnails side by side; the side that will print gets a violet outline.</summary>
