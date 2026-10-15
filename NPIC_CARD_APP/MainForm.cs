@@ -1428,32 +1428,14 @@ namespace NPIC_CARD_APP
 
         private void EditCardText()
         {
-            using (var dlg = new Form
+            using (var dlg = new CardTextForm(_settings.CardText))
             {
-                Text = "Card Text",
-                Size = new Size(720, 480),
-                StartPosition = FormStartPosition.CenterParent,
-                MinimizeBox = false,
-                MaximizeBox = false,
-                ShowInTaskbar = false
-            })
-            {
-                var grid = new PropertyGrid
-                {
-                    Dock = DockStyle.Fill,
-                    SelectedObject = _settings.CardText,
-                    PropertySort = PropertySort.Categorized,
-                    ToolbarVisible = false,
-                    Font = new Font(CardFonts.UI, 9f)
-                };
-                var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Dock = DockStyle.Bottom, Height = 34 };
-                dlg.Controls.Add(grid);
-                dlg.Controls.Add(ok);
-                dlg.AcceptButton = ok;
-                dlg.ShowDialog(this);
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;   // Cancel / Esc / ✕: nothing changes
+                _settings.CardText = dlg.Result;
             }
             SaveSettings(false);
             UpdatePreview();
+            SetStatus("Card text saved.");
         }
 
         private Student CurrentStudent()
