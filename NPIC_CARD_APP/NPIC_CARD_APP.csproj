@@ -93,6 +93,7 @@
     <Compile Include="Services\ExcelStudentLoader.cs" />
     <Compile Include="Services\ExcelTemplateWriter.cs" />
     <Compile Include="Services\PrintHistory.cs" />
+    <Compile Include="Services\RfidCardWriter.cs" />
     <Compile Include="Services\SqlStudentLoader.cs" />
     <Compile Include="Rendering\AssetStore.cs" />
     <Compile Include="Rendering\BackgroundRemover.cs" />

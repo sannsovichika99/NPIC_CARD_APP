@@ -72,6 +72,15 @@ namespace NPIC_CARD_APP
         private bool _refreshOnActivate;   // photo folder opened in Explorer: re-read photos when the user comes back
         private NavItem _navGallery, _navHistory;
 
+        // RFID tab of the Print setup card: save the printed card's chip UID to SQL Server
+        private PillTabs _setupTabs;
+        private TextBox _txtRfid;
+        private Button _btnRfidUpload;
+        private Label _lblRfidStudent, _lblRfidPrinted, _lblRfidResult, _lblRfidTarget;
+        private bool _rfidBusy;
+        private Dictionary<string, DateTime> _lastPrinted =                  // StudentId → last time a side was printed
+            new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+
         /// <summary>True when Print Selected / Print Preview send the front side.</summary>
         private bool PrintFront { get { return _sideTabs.SelectedIndex == 0; } }
 
@@ -438,7 +447,7 @@ namespace NPIC_CARD_APP
             _grid.DefaultCellStyle.Padding = new Padding(8, 0, 8, 0);
             _grid.AlternatingRowsDefaultCellStyle.BackColor = SurfaceAlt;
             _grid.DataBindingComplete += (s, e) => ApplyColumnTitles();
-            _grid.SelectionChanged += (s, e) => { UpdatePreview(); UpdateSlotHint(); UpdateCount(); };
+            _grid.SelectionChanged += (s, e) => { UpdatePreview(); UpdateSlotHint(); UpdateCount(); UpdateRfidPanel(); };
             _grid.CellDoubleClick += (s, e) => { if (e.RowIndex >= 0) ShowFullScreen(PreviewSide.Both); };
 
             _lblEmpty = new Label
@@ -513,21 +522,28 @@ namespace NPIC_CARD_APP
         {
             Control printerPage = BuildPrinterPage();
             Control trayPage = BuildTrayPage();
+            Control rfidPage = BuildRfidPage();
             printerPage.Dock = DockStyle.Fill;
             trayPage.Dock = DockStyle.Fill;
+            rfidPage.Dock = DockStyle.Fill;
             trayPage.Visible = false;
+            rfidPage.Visible = false;
 
             var pages = new Panel { Dock = DockStyle.Fill, BackColor = Surface, Margin = new Padding(0) };
             pages.Controls.Add(printerPage);
             pages.Controls.Add(trayPage);
+            pages.Controls.Add(rfidPage);
 
-            var tabs = new PillTabs("Printer", "Tray") { Margin = new Padding(0, 4, 0, 0) };
+            var tabs = _setupTabs = new PillTabs("Printer", "Tray", "RFID") { Margin = new Padding(0, 4, 0, 0) };
             tabs.SelectedIndexChanged += (s, e) =>
             {
                 printerPage.Visible = tabs.SelectedIndex == 0;
                 trayPage.Visible = tabs.SelectedIndex == 1;
+                rfidPage.Visible = tabs.SelectedIndex == 2;
+                if (rfidPage.Visible) { UpdateRfidPanel(); _txtRfid.Focus(); }
             };
-            _tip.SetToolTip(tabs, "Printer = driver and checks · Tray = slot positions and card orientation");
+            _tip.SetToolTip(tabs, "Printer = driver and checks · Tray = slot positions and card orientation · " +
+                                  "RFID = save the printed card's chip number to the database");
 
             return MakeCard("Print setup", pages, tabs);
         }
@@ -631,6 +647,85 @@ namespace NPIC_CARD_APP
             rows.Controls.Add(Row(FieldLabel("Rotate 180°"), _chkRotateFront, _chkRotateBack,
                 MakeButton("Save", PillKind.Ghost, (s, e) => SaveSettings(true), "Save slot positions and print options")));
             return rows;
+        }
+
+        /// <summary>
+        /// RFID tab: after a card is printed, tap it on the USB reader (or type its number) and Upload saves
+        /// the chip UID for the selected student in SQL Server (table <see cref="AppSettings.RfidTable"/>).
+        /// </summary>
+        private Control BuildRfidPage()
+        {
+            _lblRfidStudent = new Label
+            {
+                Dock = DockStyle.Fill, AutoEllipsis = true, Font = SemiFont, ForeColor = TextMain,
+                TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(0)
+            };
+            _lblRfidPrinted = new Label
+            {
+                Dock = DockStyle.Fill, AutoEllipsis = true, Font = CaptionFont, ForeColor = TextMuted,
+                TextAlign = ContentAlignment.TopLeft, Margin = new Padding(1, 0, 0, 0)
+            };
+
+            _txtRfid = new TextBox
+            {
+                Dock = DockStyle.Fill, Font = new Font("Consolas", 12f), CharacterCasing = CharacterCasing.Upper,
+                MaxLength = 80, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(0, 4, 8, 4)
+            };
+            _txtRfid.HandleCreated += (s, e) => SetCueBanner(_txtRfid, "Tap the card on the reader…");
+            _txtRfid.TextChanged += (s, e) => UpdateRfidButton();
+            _txtRfid.KeyDown += (s, e) =>
+            {
+                // USB RFID readers type the card number followed by Enter.
+                if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; UploadRfid(); }
+                else if (e.KeyCode == Keys.Escape) { _txtRfid.Clear(); e.SuppressKeyPress = true; }
+            };
+            _tip.SetToolTip(_txtRfid, "RFID card number (UID). A USB reader types it here and presses Enter, which uploads it.");
+
+            _btnRfidUpload = MakeButton("Upload", PillKind.Primary, (s, e) => UploadRfid(),
+                "Save this RFID card number for the selected student in the SQL Server database (Enter)");
+            _btnRfidUpload.MinimumSize = new Size(110, 36);
+            _btnRfidUpload.Margin = new Padding(0, 2, 0, 2);
+            _btnRfidUpload.Anchor = AnchorStyles.Right;
+
+            var inputRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(0) };
+            inputRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            inputRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            inputRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            inputRow.Controls.Add(_txtRfid, 0, 0);
+            inputRow.Controls.Add(_btnRfidUpload, 1, 0);
+
+            _lblRfidResult = new Label
+            {
+                Dock = DockStyle.Fill, AutoEllipsis = true, ForeColor = TextMuted, Font = Theme.Small,
+                TextAlign = ContentAlignment.TopLeft, Margin = new Padding(1, 4, 0, 0)
+            };
+
+            _lblRfidTarget = new Label
+            {
+                Dock = DockStyle.Fill, AutoEllipsis = true, ForeColor = TextMuted, Font = CaptionFont,
+                TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(1, 0, 0, 0)
+            };
+            var targetRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(0) };
+            targetRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            targetRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            targetRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            targetRow.Controls.Add(_lblRfidTarget, 0, 0);
+            targetRow.Controls.Add(MakeButton("SQL Server…", PillKind.Ghost, (s, e) => ConnectSqlServer(),
+                "Set the SQL Server and database the RFID numbers are saved to (Ctrl+D)"), 1, 0);
+
+            var body = new TableLayoutPanel { ColumnCount = 1, RowCount = 5, Margin = new Padding(0), BackColor = Surface, Font = SetupFont };
+            body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 24f));    // selected student
+            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 20f));    // printed? / saved card
+            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 46f));    // textbox + Upload
+            body.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));    // last result
+            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 36f));    // database + SQL Server…
+            body.Controls.Add(_lblRfidStudent, 0, 0);
+            body.Controls.Add(_lblRfidPrinted, 0, 1);
+            body.Controls.Add(inputRow, 0, 2);
+            body.Controls.Add(_lblRfidResult, 0, 3);
+            body.Controls.Add(targetRow, 0, 4);
+            return body;
         }
 
         private Control BuildStatusBar()
@@ -768,12 +863,17 @@ namespace NPIC_CARD_APP
                 _statPrinted.Value = today.ToString("N0");
                 _statPrinted.Caption = all.Count == 0 ? "Nothing printed yet" : all.Count.ToString("N0") + " card sides printed in total";
                 _navHistory.Badge = today > 0 ? today.ToString() : null;
+
+                _lastPrinted = all.Where(r => !string.IsNullOrEmpty(r.StudentId))
+                    .GroupBy(r => r.StudentId.Trim(), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.Max(r => r.PrintedAt), StringComparer.OrdinalIgnoreCase);
             }
             catch (Exception)
             {
                 _statPrinted.Value = "–";
                 _statPrinted.Caption = "Print history unavailable";
             }
+            UpdateRfidPanel();
         }
 
         // ---------- Search / list helpers ----------
@@ -1152,6 +1252,7 @@ namespace NPIC_CARD_APP
             }
             SaveSettings(false);   // keep the connection details even when only Test Connection was used
             if (loaded != null) ShowSqlStudents(loaded, source);
+            UpdateRfidPanel();   // the RFID tab shows the database it saves to
         }
 
         /// <summary>Replaces the student list with the students read from SQL Server.</summary>
@@ -1678,8 +1779,14 @@ namespace NPIC_CARD_APP
             }
             SetStatus(historyError != null
                 ? string.Format("Missing history: {0} card(s) printed, but the print history could not be saved ({1}).", list.Count, historyError)
-                : string.Format("Done: {0} card(s), {1} side.", list.Count, side));
+                : string.Format("Done: {0} card(s), {1} side. Tap each card on the RFID reader to save it to the database.", list.Count, side));
             UpdatePrintedStat();
+
+            // Next step: register the printed card's RFID chip. The selection is kept (the back side may be printed next);
+            // the RFID tab saves the card for the current row.
+            _setupTabs.SelectedIndex = 2;
+            UpdateRfidPanel();
+            _txtRfid.Focus();
         }
 
         /// <summary>
@@ -1739,6 +1846,7 @@ namespace NPIC_CARD_APP
             }
 
             if (sqlStudents != null) ShowSqlStudents(sqlStudents, sqlSource);   // loaded with SQL Server… in the overview
+            UpdateRfidPanel();   // SQL settings may have changed there
         }
 
         /// <summary>Photo + details gallery of the loaded students; the student chosen there is selected here.</summary>
@@ -1781,6 +1889,165 @@ namespace NPIC_CARD_APP
         private static string Describe(Student s)
         {
             return s.StudentId + " — " + (string.IsNullOrEmpty(s.NameEn) ? s.NameKh : s.NameEn);
+        }
+
+        // ===================== RFID upload =====================
+        private string _rfidStudentId;   // student the RFID textbox currently belongs to
+
+        /// <summary>Refreshes the RFID tab: selected student, printed or not, and the database it saves to.</summary>
+        private void UpdateRfidPanel()
+        {
+            if (_txtRfid == null || _lblRfidStudent == null) return;
+
+            Student s = CurrentStudent();
+            string id = s == null ? null : s.StudentId;
+            if (!_rfidBusy && !string.Equals(id, _rfidStudentId, StringComparison.OrdinalIgnoreCase))
+            {
+                // A number read for the previous student must never be saved for this one.
+                _rfidStudentId = id;
+                _txtRfid.Clear();
+                _lblRfidResult.Text = "";
+            }
+
+            if (s == null)
+            {
+                _lblRfidStudent.Text = "Select the student whose card you printed";
+                _lblRfidPrinted.Text = "";
+            }
+            else
+            {
+                _lblRfidStudent.Text = Describe(s);
+                DateTime printed;
+                bool done = _lastPrinted.TryGetValue((s.StudentId ?? "").Trim(), out printed);
+                _lblRfidPrinted.Text = done
+                    ? "Printed " + printed.ToString("dd/MM/yyyy HH:mm") + "  ·  tap the card on the reader"
+                    : "Not printed yet — print the card first";
+                _lblRfidPrinted.ForeColor = done ? Success : Warning;
+            }
+
+            bool hasServer = !string.IsNullOrWhiteSpace(_settings.SqlServer);
+            string table = string.IsNullOrWhiteSpace(_settings.RfidTable) ? RfidCardWriter.DefaultTable : _settings.RfidTable.Trim();
+            _lblRfidTarget.Text = hasServer
+                ? "Saves to " + _settings.SqlServer.Trim() +
+                  (string.IsNullOrWhiteSpace(_settings.SqlDatabase) ? "" : " / " + _settings.SqlDatabase.Trim()) + "  ·  " + table
+                : "No SQL Server set up yet — click SQL Server…";
+            _lblRfidTarget.ForeColor = hasServer ? TextMuted : Warning;
+            _tip.SetToolTip(_lblRfidTarget, _lblRfidTarget.Text);
+
+            UpdateRfidButton();
+        }
+
+        private void UpdateRfidButton()
+        {
+            if (_btnRfidUpload == null) return;
+            _btnRfidUpload.Enabled = !_rfidBusy && CurrentStudent() != null && _txtRfid.Text.Trim().Length > 0;
+        }
+
+        private void SetRfidBusy(bool busy)
+        {
+            _rfidBusy = busy;
+            _txtRfid.ReadOnly = busy;   // a second card tapped during the upload must not be appended
+            _btnRfidUpload.Text = busy ? "Saving…" : "Upload";
+            UseWaitCursor = busy;
+            UpdateRfidButton();
+        }
+
+        private void ShowRfidResult(string text, Color tone)
+        {
+            _lblRfidResult.Text = text;
+            _lblRfidResult.ForeColor = tone;
+        }
+
+        /// <summary>Saves the RFID number in the textbox for the selected (printed) student to SQL Server.</summary>
+        private async void UploadRfid()
+        {
+            if (_rfidBusy) return;
+
+            Student s = CurrentStudent();
+            if (s == null)
+            {
+                MessageBox.Show(this, "Select the student whose card you printed, then tap the card again.",
+                    Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string typed = _txtRfid.Text.Trim();
+            if (typed.Length == 0) { _txtRfid.Focus(); return; }
+            string uid = RfidCardWriter.NormalizeUid(typed);
+            if (uid == null)
+            {
+                ShowRfidResult("“" + typed + "” is not an RFID card number.", Danger);
+                MessageBox.Show(this, "“" + typed + "” is not an RFID card number.\n\n" +
+                    "Tap the card on the reader again, or type its number (letters A–F / digits, at least 4 characters).",
+                    Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _txtRfid.Focus();
+                _txtRfid.SelectAll();
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_settings.SqlServer))
+            {
+                if (MessageBox.Show(this, "No SQL Server is set up yet, so the RFID card cannot be saved.\n\n" +
+                        "Open the SQL Server page now? (Test Connection is enough — you don't need to load students.)",
+                        Text, MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+                    ConnectSqlServer();
+                return;
+            }
+
+            DateTime printedAt;
+            bool printed = _lastPrinted.TryGetValue((s.StudentId ?? "").Trim(), out printedAt);
+            if (!printed && MessageBox.Show(this,
+                    Describe(s) + " has no printed card in the print history.\n\nSave RFID card " + uid + " for this student anyway?",
+                    Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                return;
+
+            SetRfidBusy(true);
+            try
+            {
+                DateTime? when = printed ? printedAt : (DateTime?)null;
+                RfidSaveResult result = await RfidCardWriter.SaveAsync(_settings, s, uid, when, false, CancellationToken.None);
+
+                if (result.Status == RfidSaveStatus.NeedsReplace)
+                {
+                    if (MessageBox.Show(this,
+                            Describe(s) + " already has RFID card " + result.PreviousUid + ".\n\n" +
+                            "Replace it with " + uid + "? (e.g. the card was reprinted)",
+                            Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                    {
+                        ShowRfidResult("Not saved — kept card " + result.PreviousUid + " for " + s.StudentId + ".", Warning);
+                        return;
+                    }
+                    result = await RfidCardWriter.SaveAsync(_settings, s, uid, when, true, CancellationToken.None);
+                }
+
+                if (result.Status == RfidSaveStatus.InUse)
+                {
+                    ShowRfidResult("Not saved — card " + uid + " belongs to student " + result.OtherStudentId + ".", Danger);
+                    SetStatus("Error: RFID card " + uid + " is already saved for student " + result.OtherStudentId + ".");
+                    MessageBox.Show(this, "RFID card " + uid + " is already saved for student " + result.OtherStudentId + ".\n\n" +
+                        "Nothing was changed. Check you tapped the right card for " + Describe(s) + ".",
+                        Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _txtRfid.SelectAll();
+                    return;
+                }
+
+                string what = result.Status == RfidSaveStatus.Updated ? "replaced " + result.PreviousUid + " with"
+                            : result.Status == RfidSaveStatus.Unchanged ? "already saved:"
+                            : "saved";
+                ShowRfidResult("✓ " + s.StudentId + ": " + what + " " + uid + "  (" + DateTime.Now.ToString("HH:mm:ss") + ")", Success);
+                SetStatus("RFID card " + uid + " saved for " + Describe(s) + ".");
+                _txtRfid.Clear();
+            }
+            catch (Exception ex)
+            {
+                ShowRfidResult("Not saved — " + ex.Message.Split('\n')[0], Danger);
+                ShowError(ex);
+            }
+            finally
+            {
+                SetRfidBusy(false);
+                _txtRfid.Focus();
+            }
         }
 
         // ===================== Misc =====================

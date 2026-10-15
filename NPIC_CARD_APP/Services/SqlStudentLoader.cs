@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
@@ -178,8 +178,14 @@ namespace NPIC_CARD_APP.Services
             }
         }
 
+        /// <summary>True for a plain table / view name: Students, dbo.Students, [NPIC].[dbo].[Students] …</summary>
+        internal static bool IsTableName(string text)
+        {
+            return TableName.IsMatch(text ?? "") && !ReadOnlyStart.IsMatch(text ?? "");
+        }
+
         /// <summary>"dbo.Students" → "[dbo].[Students]" (names already in brackets are kept).</summary>
-        private static string QuoteName(string dotted)
+        internal static string QuoteName(string dotted)
         {
             var parts = new List<string>();
             foreach (Match m in Regex.Matches(dotted, @"\[[^\]]+\]|[^.\s\[\]]+"))
