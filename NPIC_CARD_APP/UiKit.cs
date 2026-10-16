@@ -110,7 +110,7 @@ namespace NPIC_CARD_APP
             IcoGlobe = "", IcoDocument = "", IcoOpenFile = "", IcoDatabase = "",
             IcoDownload = "", IcoFolder = "", IcoBrush = "", IcoEdit = "", IcoFont = "",
             IcoFullScreen = "", IcoSettings = "", IcoSearch = "", IcoMultiSelect = "",
-            IcoPhoto = "", IcoList = "", IcoCloud = "",
+            IcoPhoto = "", IcoList = "", IcoCloud = "", IcoSync = "",
             IcoMoon = "", IcoSun = "";   // QuietHours (moon) / Brightness (sun)
 
         // Popup header / message icons

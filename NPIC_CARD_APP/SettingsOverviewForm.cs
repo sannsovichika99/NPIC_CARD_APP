@@ -278,8 +278,8 @@ namespace NPIC_CARD_APP
                     return;
                 }
                 AppDialog.Show(this, "Settings exported to:\n" + dlg.FileName +
-                    "\n\nThe API token and SQL password are not in the file; enter them again with Import API… " +
-                    "and SQL Server… on another PC.",
+                    "\n\nThe API token, Google Drive API key and SQL password are not in the file; enter them again with " +
+                    "Import API…, Google Drive Photos… and SQL Server… on another PC.",
                     Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
@@ -474,6 +474,17 @@ namespace NPIC_CARD_APP
             // ---- Google Sheets ----
             add("Google Sheets", "Sheet link", Or(s.GoogleSheetUrl, NotSet), false,
                 "Used by From Google Sheets… (Ctrl+Shift+G). Change it there.", null);
+
+            // ---- Google Drive photos ----
+            const string drive = "Google Drive photos";
+            add(drive, "Folder link", Or(s.DriveFolderUrl, NotSet), false,
+                "Used by Google Drive Photos… (Ctrl+Shift+D). Change it there.", null);
+            string driveKey;
+            bool driveKeyWarn = false;
+            if (!string.IsNullOrEmpty(s.DriveApiKey)) driveKey = "Saved (encrypted for this Windows user)";
+            else if (!string.IsNullOrEmpty(s.DriveApiKeyProtected)) { driveKey = "Saved by another Windows user or PC — enter it again"; driveKeyWarn = true; }
+            else driveKey = NotSet;
+            add(drive, "API key", driveKey, driveKeyWarn, "The key itself is never shown.", null);
 
             // ---- SQL Server ----
             const string sql = "SQL Server";

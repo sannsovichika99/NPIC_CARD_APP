@@ -65,6 +65,22 @@ namespace NPIC_CARD_APP.Services
         /// <summary>Google Sheet link for From Google Sheets… (remembered between runs).</summary>
         public string GoogleSheetUrl { get; set; }
 
+        // ---- Google Drive Photos page ----
+        /// <summary>Link of the shared Google Drive folder that holds the student photos.</summary>
+        public string DriveFolderUrl { get; set; }
+
+        /// <summary>Google API key for the Drive API, DPAPI-encrypted like the API token. Use <see cref="DriveApiKey"/>.</summary>
+        public string DriveApiKeyProtected { get; set; }
+
+        [XmlIgnore]
+        public string DriveApiKey
+        {
+            get { return Unprotect(DriveApiKeyProtected, DriveKeyEntropy); }
+            set { DriveApiKeyProtected = Protect(value, DriveKeyEntropy); }
+        }
+
+        private static readonly byte[] DriveKeyEntropy = Encoding.UTF8.GetBytes("NPIC_CARD_APP.DriveApiKey");
+
         // ---- SQL Server connection (Connect SQL Server… page) ----
         /// <summary>Server name, e.g. "localhost\SQLEXPRESS" or "192.168.1.10,1433".</summary>
         public string SqlServer { get; set; }
@@ -173,6 +189,8 @@ namespace NPIC_CARD_APP.Services
             ApiUrl = "";
             ApiTokenProtected = "";
             GoogleSheetUrl = "";
+            DriveFolderUrl = "";
+            DriveApiKeyProtected = "";
             SqlServer = "";
             SqlDatabase = "";
             SqlWindowsAuth = true;
@@ -248,7 +266,7 @@ namespace NPIC_CARD_APP.Services
         }
 
         /// <summary>
-        /// Writes the settings to any file (Export Settings…). The API token and SQL password are left out: they are
+        /// Writes the settings to any file (Export Settings…). The API token, Drive API key and SQL password are left out: they are
         /// encrypted for this Windows user only, so they would be useless on another PC and should not travel with the file.
         /// </summary>
         public void ExportTo(string path)
@@ -256,6 +274,7 @@ namespace NPIC_CARD_APP.Services
             var copy = (AppSettings)MemberwiseClone();
             copy.ApiTokenProtected = "";
             copy.SqlPasswordProtected = "";
+            copy.DriveApiKeyProtected = "";
             WriteTo(path, copy);
         }
 

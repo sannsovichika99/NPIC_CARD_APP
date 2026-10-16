@@ -88,6 +88,9 @@
     <Compile Include="SqlServerForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="GoogleDriveForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="GoogleSheetForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -101,6 +104,7 @@
     <Compile Include="Services\CsvStudentLoader.cs" />
     <Compile Include="Services\ExcelStudentLoader.cs" />
     <Compile Include="Services\ExcelTemplateWriter.cs" />
+    <Compile Include="Services\GoogleDrivePhotoSync.cs" />
     <Compile Include="Services\GoogleSheetStudentLoader.cs" />
     <Compile Include="Services\PrintHistory.cs" />
     <Compile Include="Services\RfidCardWriter.cs" />

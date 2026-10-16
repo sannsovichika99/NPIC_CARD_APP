@@ -213,6 +213,8 @@ namespace NPIC_CARD_APP
                 Nav("Open Photo Folder", Theme.IcoOpenFolder, OpenPhotoFolder,
                     "Open the photo folder in Windows Explorer to add, rename or delete photos " +
                     "(the selected student's photo is highlighted)"),
+                Nav("Google Drive Photos…", Theme.IcoSync, ShowGoogleDrivePhotos,
+                    "Download student photos from a shared Google Drive folder into the photo folder (Ctrl+Shift+D)"),
                 Nav("Remove Background…", Theme.IcoBrush, RemovePhotoBackground,
                     "Crop the selected student's photo and remove the wall / screen behind it (Ctrl+B)"),
                 Nav("Signature…", Theme.IcoEdit, ChooseSignature, "Director signature image (white background is removed)"),
@@ -1391,6 +1393,21 @@ namespace NPIC_CARD_APP
             }
         }
 
+        /// <summary>Opens the Google Drive Photos page; downloaded photos show on the cards straight away.</summary>
+        private void ShowGoogleDrivePhotos()
+        {
+            int downloaded;
+            using (var form = new GoogleDriveForm(_settings, _students))
+            {
+                form.ShowDialog(this);
+                downloaded = form.Downloaded;
+            }
+            SaveSettings(false);   // folder link, API key and a newly chosen photo folder
+            if (downloaded == 0) return;
+            UpdatePreview();
+            SetStatus(string.Format("Downloaded {0} photo(s) from Google Drive to {1}", downloaded, _settings.PhotoFolder));
+        }
+
         /// <summary>
         /// Opens the photo folder in Windows Explorer to add, rename or delete images there.
         /// The selected student's photo is highlighted; with no folder set yet, asks for one first.
@@ -1544,6 +1561,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.E: ImportExcel(); return true;
                 case Keys.Control | Keys.I: ImportApi(); return true;
                 case Keys.Control | Keys.D: ConnectSqlServer(); return true;
+                case Keys.Control | Keys.Shift | Keys.D: ShowGoogleDrivePhotos(); return true;
                 case Keys.Control | Keys.Shift | Keys.G: ImportGoogleSheet(); return true;
                 case Keys.Control | Keys.P: PrintSelected(); return true;
                 case Keys.Control | Keys.B: RemovePhotoBackground(); return true;
