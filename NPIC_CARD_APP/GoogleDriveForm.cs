@@ -60,6 +60,19 @@ namespace NPIC_CARD_APP
         private List<DriveFile> _files;
         private List<PhotoSyncItem> _items;
 
+        // Photo list grouped by Drive folder: one header row per folder, its photos below.
+        private const string ChevronDown = "", ChevronRight = "";   // Segoe Fluent Icons / MDL2 Assets
+        private const int GroupRowHeight = 40, GroupGap = 6;
+        private readonly HashSet<string> _collapsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);   // kept across scans
+        private readonly Font _groupFont = new Font(CardFonts.UI, 9f, FontStyle.Bold);
+
+        /// <summary>Tag of a folder header row.</summary>
+        private sealed class FolderGroup
+        {
+            public string Path;                  // "" = the shared folder itself, else "Sub/Sub"
+            public List<PhotoSyncItem> Items;
+        }
+
         /// <summary>Photos written to the Photo Folder while the page was open.</summary>
         public int Downloaded { get; private set; }
 
@@ -206,7 +219,13 @@ namespace NPIC_CARD_APP
             _grid.DefaultCellStyle.SelectionBackColor = AccentSoft;
             _grid.DefaultCellStyle.SelectionForeColor = Accent;
             _grid.DefaultCellStyle.Padding = new Padding(4, 0, 4, 0);
-            _grid.AlternatingRowsDefaultCellStyle.BackColor = SurfaceAlt;
+            // Rows alternate within each folder group (set per row in FillGrid), not across the whole list.
+            _grid.RowPrePaint += PaintGroupRow;
+            _grid.CellMouseClick += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Left && e.RowIndex >= 0 && _grid.Rows[e.RowIndex].Tag is FolderGroup) ToggleGroup(e.RowIndex, null);
+            };
+            _grid.KeyDown += OnGridKeyDown;
             AddColumn("File on Drive", 190);
             AddColumn("Student", 170);
             AddColumn("Size", 55).DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
@@ -327,6 +346,12 @@ namespace NPIC_CARD_APP
             if (photos) return;
             if (_txtFolder.TextLength == 0) _txtFolder.Focus();
             else if (_txtKey.TextLength == 0) _txtKey.Focus();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _groupFont.Dispose();
+            base.Dispose(disposing);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
@@ -466,22 +491,134 @@ namespace NPIC_CARD_APP
         }
 
         // ===================== List =====================
+        /// <summary>
+        /// One header row per Drive folder (the shared folder first, then sub-folders A–Z), its photos below in
+        /// status order. Folders the user collapsed stay collapsed after a rescan.
+        /// </summary>
         private void FillGrid()
         {
             _grid.Rows.Clear();
-            foreach (PhotoSyncItem item in _items)
+            IEnumerable<IGrouping<string, PhotoSyncItem>> groups = _items
+                .GroupBy(i => i.File.Folder ?? "", StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g.Key.Length == 0 ? 0 : 1)
+                .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
+
+            foreach (IGrouping<string, PhotoSyncItem> g in groups)
             {
-                DriveFile f = item.File;
-                int row = _grid.Rows.Add(
-                    f.Folder.Length == 0 ? f.Name : f.Folder + " / " + f.Name,
-                    item.StudentId == null ? "—" : item.StudentId + (string.IsNullOrEmpty(item.StudentName) ? "" : "  " + item.StudentName),
-                    f.Size > 0 ? Math.Max(1, (f.Size + 512) / 1024) + " KB" : "",
-                    f.Modified.HasValue ? f.Modified.Value.ToString("yyyy-MM-dd") : "",
-                    "");
-                _grid.Rows[row].Tag = item;
+                var group = new FolderGroup { Path = g.Key, Items = g.ToList() };
+                DataGridViewRow header = _grid.Rows[_grid.Rows.Add()];
+                header.Tag = group;
+                header.Height = GroupRowHeight;
+                bool collapsed = _collapsed.Contains(group.Path);
+
+                int n = 0;
+                foreach (PhotoSyncItem item in group.Items)
+                {
+                    DriveFile f = item.File;
+                    DataGridViewRow row = _grid.Rows[_grid.Rows.Add(
+                        f.Name,
+                        item.StudentId == null ? "—" : item.StudentId + (string.IsNullOrEmpty(item.StudentName) ? "" : "  " + item.StudentName),
+                        f.Size > 0 ? Math.Max(1, (f.Size + 512) / 1024) + " KB" : "",
+                        f.Modified.HasValue ? f.Modified.Value.ToString("yyyy-MM-dd") : "",
+                        "")];
+                    row.Tag = item;
+                    row.DefaultCellStyle.BackColor = n++ % 2 == 1 ? SurfaceAlt : Surface;
+                    row.Cells[0].ToolTipText = f.Folder.Length == 0 ? f.Name : f.Folder + "/" + f.Name;
+                    row.Visible = !collapsed;
+                }
             }
             RefreshGrid();
             UpdateEmpty();
+        }
+
+        /// <summary>Collapses or expands the folder whose header is at <paramref name="headerIndex"/> (null = toggle).</summary>
+        private void ToggleGroup(int headerIndex, bool? collapse)
+        {
+            DataGridViewRow header = _grid.Rows[headerIndex];
+            var group = header.Tag as FolderGroup;
+            if (group == null) return;
+            bool hide = collapse ?? !_collapsed.Contains(group.Path);
+            if (hide == _collapsed.Contains(group.Path)) return;
+            if (hide) _collapsed.Add(group.Path); else _collapsed.Remove(group.Path);
+
+            // Park the current cell on the header first: the grid cannot hide the row it is on.
+            _grid.CurrentCell = header.Cells[0];
+            for (int i = headerIndex + 1; i < _grid.Rows.Count && !(_grid.Rows[i].Tag is FolderGroup); i++)
+                _grid.Rows[i].Visible = !hide;
+            _grid.InvalidateRow(headerIndex);
+        }
+
+        /// <summary>On a folder header: Enter / Space toggle, Left collapses, Right expands.</summary>
+        private void OnGridKeyDown(object sender, KeyEventArgs e)
+        {
+            DataGridViewRow row = _grid.CurrentRow;
+            if (row == null || !(row.Tag is FolderGroup) || e.Modifiers != Keys.None) return;
+            bool? collapse;
+            switch (e.KeyCode)
+            {
+                case Keys.Enter:
+                case Keys.Space: collapse = null; break;
+                case Keys.Left: collapse = true; break;
+                case Keys.Right: collapse = false; break;
+                default: return;
+            }
+            ToggleGroup(row.Index, collapse);
+            e.Handled = e.SuppressKeyPress = true;
+        }
+
+        /// <summary>Folder header: chevron, folder icon, folder path, photo counts, and what Download will do on the right.</summary>
+        private void PaintGroupRow(object sender, DataGridViewRowPrePaintEventArgs e)
+        {
+            var group = _grid.Rows[e.RowIndex].Tag as FolderGroup;
+            if (group == null) return;
+            e.Handled = true;
+
+            Graphics g = e.Graphics;
+            Rectangle r = e.RowBounds;
+            int top = e.RowIndex == 0 ? 0 : GroupGap;   // breathing room between groups
+            using (var b = new SolidBrush(Surface)) g.FillRectangle(b, r.X, r.Y, r.Width, top);
+            Rectangle band = new Rectangle(r.X, r.Y + top, r.Width, r.Height - top);
+            bool selected = _grid.Rows[e.RowIndex].Selected;
+            using (var b = new SolidBrush(selected ? AccentSoft : Theme.Tile)) g.FillRectangle(b, band);
+            using (var pen = new Pen(GridLine)) g.DrawLine(pen, band.Left, band.Bottom - 1, band.Right, band.Bottom - 1);
+
+            bool collapsed = _collapsed.Contains(group.Path);
+            Theme.DrawIcon(g, collapsed ? ChevronRight : ChevronDown, 10f, TextMuted, new RectangleF(band.X + 8, band.Y, 20, band.Height));
+            Theme.DrawIcon(g, Theme.IcoFolder, 16f, Accent, new RectangleF(band.X + 30, band.Y, 22, band.Height));
+
+            // Counts that describe the folder, then what Download will do with it.
+            Func<PhotoSyncStatus, int> count = st => group.Items.Count(i => i.Status == st);
+            int toDownload = group.Items.Count(i => i.WillDownload(_chkReplace.Checked));
+            int problems = count(PhotoSyncStatus.NotMatched) + count(PhotoSyncStatus.Unsupported) + count(PhotoSyncStatus.Failed);
+            var parts = new List<string> { group.Items.Count + (group.Items.Count == 1 ? " photo" : " photos") };
+            Action<int, string> part = (n, text) => { if (n > 0) parts.Add(n + " " + text); };
+            part(count(PhotoSyncStatus.New), "new");
+            part(count(PhotoSyncStatus.Changed), "changed");
+            part(count(PhotoSyncStatus.Downloaded), "downloaded");
+            part(count(PhotoSyncStatus.NotMatched), "not matched");
+            part(count(PhotoSyncStatus.Unsupported), "not JPG/PNG");
+            part(count(PhotoSyncStatus.Failed), "failed");
+
+            string state;
+            Color stateColor;
+            if (toDownload > 0) { state = toDownload + " to download"; stateColor = Accent; }
+            else if (problems > 0) { state = problems + " need attention"; stateColor = Warning; }
+            else { state = "All up to date"; stateColor = Success; }
+
+            const TextFormatFlags Flags = TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix |
+                                          TextFormatFlags.EndEllipsis;
+            int stateWidth = TextRenderer.MeasureText(g, state, _groupFont, band.Size, Flags).Width;
+            var stateRect = new Rectangle(band.Right - stateWidth - 16, band.Y, stateWidth + 4, band.Height);
+            TextRenderer.DrawText(g, state, _groupFont, stateRect, stateColor, Flags);
+
+            string name = group.Path.Length == 0 ? "Shared folder" : group.Path.Replace("/", "  ›  ");
+            int x = band.X + 56, maxRight = stateRect.Left - 16;
+            int nameWidth = Math.Min(TextRenderer.MeasureText(g, name, _groupFont, band.Size, Flags).Width, Math.Max(0, maxRight - x));
+            TextRenderer.DrawText(g, name, _groupFont, new Rectangle(x, band.Y, nameWidth, band.Height), TextMain, Flags);
+            x += nameWidth + 10;
+            if (x < maxRight)
+                TextRenderer.DrawText(g, string.Join("  ·  ", parts), _grid.DefaultCellStyle.Font ?? Font,
+                    new Rectangle(x, band.Y, maxRight - x, band.Height), TextMuted, Flags);
         }
 
         /// <summary>Grid when there is a scan result with photos; otherwise the empty state that says what to do next.</summary>
@@ -515,6 +652,7 @@ namespace NPIC_CARD_APP
                 cell.Style.ForeColor = cell.Style.SelectionForeColor = color;
                 cell.ToolTipText = item.Error ?? "";
             }
+            _grid.Invalidate();   // folder headers recount their photos as statuses change
         }
 
         private static string Describe(PhotoSyncItem item, bool replaceChanged, out Color color)
@@ -552,7 +690,8 @@ namespace NPIC_CARD_APP
         private void ShowSummary()
         {
             Func<PhotoSyncStatus, int> count = st => _items.Count(i => i.Status == st);
-            var parts = new List<string> { _items.Count + " picture(s) on Drive" };
+            int folders = _items.Select(i => i.File.Folder ?? "").Distinct(StringComparer.OrdinalIgnoreCase).Count();
+            var parts = new List<string> { _items.Count + " picture(s) on Drive" + (folders > 1 ? " in " + folders + " folders" : "") };
             Action<int, string> part = (n, text) => { if (n > 0) parts.Add(n + " " + text); };
             part(count(PhotoSyncStatus.New), "new");
             part(count(PhotoSyncStatus.Changed), "changed");
