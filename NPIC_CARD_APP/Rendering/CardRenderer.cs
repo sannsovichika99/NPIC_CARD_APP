@@ -108,9 +108,9 @@ namespace NPIC_CARD_APP.Rendering
 
                 // Director, stamp, signature
                 DrawText(g, t.DirectorTitle, CardFonts.Muol, DirectorTitlePt, FontStyle.Regular, Blue, 55f, 37.3f, 24.8f, 3.8f, TextFormatFlags.HorizontalCenter);
-                DrawAsset(g, AssetStore.Get("stamp.png", true, true), 56.7f, 39.1f, 12.2f, 12.2f, 1f, false);
-                DrawAsset(g, AssetStore.GetFile(settings.SignaturePath, true, true), 61.5f, 43.4f + SignatureOffsetYMm, 13f, 5.6f, 1f, false);
-                DrawText(g, t.DirectorName, CardFonts.Muol, DirectorNamePt, FontStyle.Regular, Navy, 62.9f, 48.4f + SignatureOffsetYMm, 20f, 3.6f, TextFormatFlags.HorizontalCenter);
+                DrawAsset(g, AssetStore.Get("stamp.png", true, true), 56.7f, 38.1f, 12.2f, 12.2f, 1f, false);
+                DrawAsset(g, AssetStore.GetFile(settings.SignaturePath, true, true), 61.5f, 41.4f + SignatureOffsetYMm, 13f, 5.6f, 1f, false);
+                DrawText(g, t.DirectorName, CardFonts.Muol, DirectorNamePt, FontStyle.Regular, Navy, 62.9f, 46.4f + SignatureOffsetYMm, 20f, 3.6f, TextFormatFlags.HorizontalCenter);
             }
             return bmp;
         }
@@ -128,8 +128,8 @@ namespace NPIC_CARD_APP.Rendering
                 DrawWatermarkText(g);
 
                 // Logos
-                DrawAsset(g, AssetStore.Get("ministry_of_labour_logo.png", true, true), 4.4f, 8.5f, 16.4f, 16.4f, 1f, false);
-                DrawAsset(g, AssetStore.Get("npic_png.png", true, true), 68.3f, 8.5f, 11.6f, 17.4f, 1f, false);
+                DrawAsset(g, AssetStore.Get("ministry_of_labour_logo.png", true, true), 4.4f, 5.5f, 16.4f, 16.4f, 1f, false);
+                DrawAsset(g, AssetStore.Get("npic_png.png", true, true), 68.3f, 5.5f, 11.6f, 17.4f, 1f, false);
 
                 // Titles (box widths match the template; text shrinks to fit)
                 DrawText(g, "ព្រះរាជាណាចក្រកម្ពុជា", CardFonts.MuolLight, KingdomPt, FontStyle.Regular, Blue,
