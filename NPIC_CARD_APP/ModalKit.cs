@@ -271,6 +271,7 @@ namespace NPIC_CARD_APP
             base.OnHandleCreated(e);
             Native.SetCorners(Handle, true);
             DarkControls.Apply(this);   // before the child handles exist, so restyling recreates nothing
+            SlimScroll.Apply(this);
             // Re-run WM_NCCALCSIZE so the top frame becomes client area (the header).
             Native.SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0,
                 Native.SWP_FRAMECHANGED | Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOZORDER |

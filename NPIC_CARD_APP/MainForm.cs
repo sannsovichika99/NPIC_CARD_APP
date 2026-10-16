@@ -100,6 +100,7 @@ namespace NPIC_CARD_APP
 
             BuildUi();
             DarkControls.Apply(this);   // dark mode only; before the handles exist, so restyling recreates nothing
+            SlimScroll.Apply(this);     // slim scroll bars on every grid, list and scrolling panel
             LoadPrinters();
             ApplySettingsToUi();
 
@@ -184,7 +185,7 @@ namespace NPIC_CARD_APP
             };
 
             Image logo = null;
-            try { logo = AssetStore.Get("npic_png.png", false, true); }
+            try { logo = AssetStore.Get("npic_png.png", true, true); }
             catch (Exception) { /* missing / unreadable logo: the badge falls back to initials */ }
 
             NavItem dashboard = Nav("Dashboard", Theme.IcoHome, () => { _txtSearch.Focus(); _txtSearch.SelectAll(); },
