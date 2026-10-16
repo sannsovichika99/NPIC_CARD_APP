@@ -33,23 +33,27 @@ namespace NPIC_CARD_APP
         private static readonly Color Danger     = Theme.Danger;
 
         private const string SetupSteps =
-            "Connect the Google Drive folder with the student photos\n\n" +
             "1.  In Google Drive right-click the folder → Share → General access → “Anyone with the link” (Viewer) → Copy link.\n" +
             "2.  Paste the link above. Photos in sub-folders (e.g. Google Form uploads) are found too.\n" +
             "3.  Paste a Google API key with the Google Drive API turned on — click “Get a Key…” (free, once per school).\n" +
-            "4.  Click Scan Folder, check the list, then Download.\n\n" +
+            "4.  Click Scan Folder (F5), check the Student Photos tab, then Download.\n\n" +
             "Files named NPIC24001.jpg or “NPIC24001 - Sok Dara.jpg” go to student NPIC24001.\n" +
             "Only new photos are downloaded; photos edited with Remove Background are never replaced.";
+
+        private const int PhotosTab = 0, SettingsTab = 1;
 
         private readonly AppSettings _settings;
         private readonly IList<Student> _students;
 
+        private readonly PillTabs _tabs;
+        private readonly Control _photosPage, _settingsPage;
         private readonly TextBox _txtFolder, _txtKey;
         private readonly CheckBox _chkShowKey, _chkReplace;
-        private readonly Label _lblSaveTo, _lblEmpty, _lblStatus;
+        private readonly Label _lblSaveTo, _lblSource, _lblEmpty, _lblStatus;
         private readonly DataGridView _grid;
-        private readonly Button _btnScan, _btnOpenDrive, _btnGetKey, _btnChange, _btnOpenLocal, _btnDownload, _btnClose;
-        private readonly Panel _top;
+        private readonly Control _emptyHost;
+        private readonly Button _btnScan, _btnOpenDrive, _btnGetKey, _btnChange, _btnOpenLocal, _btnDownload, _btnClose,
+                                _btnGoSettings;
 
         private CancellationTokenSource _cts;
         private bool _closeWhenDone;
@@ -79,17 +83,36 @@ namespace NPIC_CARD_APP
             MinimizeBox = false;
             ShowInTaskbar = false;
 
-            // ---- Connection rows ----
+            // ---- Tab bar: tabs | where the photos go | Scan (works from both tabs) ----
+            _tabs = new PillTabs("Student Photos", "Drive Settings") { Dock = DockStyle.Left, Margin = new Padding(0) };
+            _tabs.SelectedIndexChanged += (s, e) => OnTabChanged();
+            _btnScan = ModalUi.Button("Scan Folder (F5)", PillKind.Primary, async (s, e) => await ScanAsync());
+            _btnScan.Dock = DockStyle.Right;
+            _btnScan.MinimumSize = new Size(128, 32);
+            _lblSource = new Label
+            {
+                Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft, UseMnemonic = false,
+                Padding = new Padding(16, 0, 12, 0)
+            };
+            var tabBar = new Panel { Dock = DockStyle.Top, Height = 56, Padding = new Padding(16, 12, 16, 12), BackColor = Surface };
+            tabBar.Paint += (s, e) =>
+            {
+                using (var pen = new Pen(GridLine)) e.Graphics.DrawLine(pen, 0, tabBar.Height - 1, tabBar.Width, tabBar.Height - 1);
+            };
+            tabBar.Controls.Add(_lblSource);   // fill first, edges last
+            tabBar.Controls.Add(_btnScan);
+            tabBar.Controls.Add(_tabs);
+
+            // ---- Settings tab: connection rows ----
             _txtFolder = MakeText(settings.DriveFolderUrl, "Paste the folder link: https://drive.google.com/drive/folders/…");
             _txtKey = MakeText(settings.DriveApiKey, "Google API key, e.g. AIzaSy…");
             _txtKey.UseSystemPasswordChar = true;
-            _txtFolder.TextChanged += (s, e) => UpdateButtons();
-            _txtKey.TextChanged += (s, e) => UpdateButtons();
+            _txtFolder.TextChanged += (s, e) => { UpdateButtons(); UpdateEmpty(); };
+            _txtKey.TextChanged += (s, e) => { UpdateButtons(); UpdateEmpty(); };
 
-            _chkShowKey = new CheckBox { Text = "Show", AutoSize = true, Margin = new Padding(0, 12, 6, 0), BackColor = SurfaceAlt };
+            _chkShowKey = new CheckBox { Text = "Show", AutoSize = true, Margin = new Padding(0, 12, 6, 0), BackColor = Surface };
             _chkShowKey.CheckedChanged += (s, e) => _txtKey.UseSystemPasswordChar = !_chkShowKey.Checked;
 
-            _btnScan = RowButton("Scan Folder (F5)", PillKind.Primary, async (s, e) => await ScanAsync());
             _btnOpenDrive = RowButton("Open in Browser", PillKind.Secondary, (s, e) => OpenDriveFolder());
             _btnGetKey = RowButton("Get a Key…", PillKind.Secondary, (s, e) => OpenUrl(GoogleDrivePhotoSync.ApiKeyHelpUrl));
             _btnChange = RowButton("Change…", PillKind.Secondary, (s, e) => ChooseSaveFolder());
@@ -103,20 +126,64 @@ namespace NPIC_CARD_APP
 
             var rows = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 3, BackColor = SurfaceAlt, Padding = new Padding(16, 6, 10, 6)
+                Dock = DockStyle.Top, Height = 126, ColumnCount = 4, RowCount = 3, BackColor = Surface, Padding = new Padding(0)
             };
-            rows.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 84));
+            rows.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             rows.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
             rows.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             rows.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            for (int i = 0; i < 3; i++) rows.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-            AddRow(rows, 0, "Folder link", _txtFolder, _btnScan, _btnOpenDrive);
+            for (int i = 0; i < 3; i++) rows.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            AddRow(rows, 0, "Folder link", _txtFolder, null, _btnOpenDrive);
+            rows.SetColumnSpan(_txtFolder, 2);   // the link is long: use the free middle cell too
             AddRow(rows, 1, "API key", _txtKey, _chkShowKey, _btnGetKey);
             AddRow(rows, 2, "Save to", _lblSaveTo, _btnChange, _btnOpenLocal);
-            _top = new Panel { Dock = DockStyle.Top, Height = 134, BackColor = SurfaceAlt };
-            _top.Controls.Add(rows);
 
-            // ---- Photo list ----
+            // ---- Settings tab: download option ----
+            _chkReplace = new CheckBox
+            {
+                Text = "Replace photos that changed on Drive", AutoSize = true, Checked = true, BackColor = Surface,
+                Margin = new Padding(0, 4, 0, 0)
+            };
+            _chkReplace.CheckedChanged += (s, e) => { RefreshGrid(); UpdateButtons(); };
+            var replaceRow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top, Height = 50, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = Surface
+            };
+            replaceRow.Controls.Add(_chkReplace);
+            replaceRow.Controls.Add(new Label
+            {
+                Text = "Unticked: a photo that differs on Drive keeps the copy in the Photo Folder. " +
+                       "Photos edited with Remove Background are always kept.",
+                AutoSize = true, ForeColor = TextMuted, Margin = new Padding(18, 2, 0, 0)
+            });
+
+            // ---- Settings tab: how-to ----
+            var helpBox = new Panel { Dock = DockStyle.Top, BackColor = SurfaceAlt, Padding = new Padding(14, 12, 14, 12) };
+            var help = new Label { Dock = DockStyle.Fill, Text = SetupSteps, ForeColor = TextMuted, UseMnemonic = false };
+            helpBox.Controls.Add(help);
+            helpBox.SizeChanged += (s, e) =>
+            {
+                // Grow to the wrapped text so nothing is cut off at narrow widths.
+                int w = Math.Max(100, helpBox.ClientSize.Width - helpBox.Padding.Horizontal);
+                int h = TextRenderer.MeasureText(SetupSteps, help.Font, new Size(w, int.MaxValue), TextFormatFlags.WordBreak).Height;
+                int want = h + helpBox.Padding.Vertical + 4;
+                if (helpBox.Height != want) helpBox.Height = want;
+            };
+
+            var settingsPage = new Panel
+            {
+                Dock = DockStyle.Fill, BackColor = Surface, Padding = new Padding(24, 0, 24, 12), AutoScroll = true, Visible = false
+            };
+            // Top-docked: last added sits highest.
+            settingsPage.Controls.Add(helpBox);
+            settingsPage.Controls.Add(Section("How to connect"));
+            settingsPage.Controls.Add(replaceRow);
+            settingsPage.Controls.Add(Section("Download"));
+            settingsPage.Controls.Add(rows);
+            settingsPage.Controls.Add(Section("Connection"));
+            _settingsPage = settingsPage;
+
+            // ---- Photos tab: photo list ----
             _grid = new DataGridView
             {
                 Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, AllowUserToDeleteRows = false,
@@ -146,13 +213,38 @@ namespace NPIC_CARD_APP
             AddColumn("Modified", 85);
             AddColumn("Result", 150);
 
+            // Empty state: icon, message and (when not connected) a shortcut to the settings tab, centred.
+            var emptyIcon = new Panel { Size = new Size(56, 56), Anchor = AnchorStyles.None, BackColor = Surface, Margin = new Padding(0, 0, 0, 8) };
+            emptyIcon.Paint += (s, e) =>
+            {
+                Theme.HighQuality(e.Graphics);
+                using (var b = new SolidBrush(AccentSoft)) e.Graphics.FillEllipse(b, 0, 0, 55, 55);
+                Theme.DrawIcon(e.Graphics, Theme.IcoCloud, 26f, Accent, new RectangleF(0, 0, 56, 56));
+            };
             _lblEmpty = new Label
             {
-                Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, ForeColor = TextMuted, BackColor = Surface, Text = SetupSteps
+                AutoSize = true, Anchor = AnchorStyles.None, TextAlign = ContentAlignment.MiddleCenter, ForeColor = TextMuted,
+                BackColor = Surface, UseMnemonic = false, Margin = new Padding(0, 0, 0, 14)
             };
-            var gridHost = new Panel { Dock = DockStyle.Fill, BackColor = Surface };
-            gridHost.Controls.Add(_grid);
-            gridHost.Controls.Add(_lblEmpty);
+            _btnGoSettings = ModalUi.Button("Open Drive Settings", PillKind.Secondary, (s, e) => ShowTab(SettingsTab));
+            _btnGoSettings.Anchor = AnchorStyles.None;
+            _btnGoSettings.Margin = new Padding(0);
+            var empty = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, BackColor = Surface };
+            empty.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            empty.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
+            empty.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            empty.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            empty.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            empty.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
+            empty.Controls.Add(emptyIcon, 0, 1);
+            empty.Controls.Add(_lblEmpty, 0, 2);
+            empty.Controls.Add(_btnGoSettings, 0, 3);
+            _emptyHost = empty;
+
+            var photosPage = new Panel { Dock = DockStyle.Fill, BackColor = Surface };
+            photosPage.Controls.Add(_grid);
+            photosPage.Controls.Add(_emptyHost);
+            _photosPage = photosPage;
 
             _lblStatus = new Label { Dock = DockStyle.Bottom, Height = 40, Padding = new Padding(10, 6, 10, 4), UseMnemonic = false };
             ModalUi.StyleStatus(_lblStatus);
@@ -165,24 +257,19 @@ namespace NPIC_CARD_APP
                 else DialogResult = DialogResult.Cancel;
             });
             _btnDownload = ModalUi.Button("Download Photos", PillKind.Primary, async (s, e) => await DownloadAsync());
-            _chkReplace = new CheckBox
-            {
-                Text = "Replace photos that changed on Drive", AutoSize = true, Checked = true, BackColor = SurfaceAlt,
-                Margin = new Padding(0, 7, 18, 0)
-            };
-            _chkReplace.CheckedChanged += (s, e) => { RefreshGrid(); UpdateButtons(); };
             footer.Controls.Add(_btnClose);
             footer.Controls.Add(_btnDownload);
-            footer.Controls.Add(_chkReplace);
 
-            // Docking runs in reverse add order: the fill control first, the edges last.
-            Controls.Add(gridHost);
-            Controls.Add(_top);
+            // Docking runs in reverse add order: the fill controls first, the edges last.
+            Controls.Add(_photosPage);
+            Controls.Add(_settingsPage);
+            Controls.Add(tabBar);
             Controls.Add(_lblStatus);
             Controls.Add(footer);
             CancelButton = _btnClose;
 
             var tip = new ToolTip();
+            tip.SetToolTip(_tabs, "Ctrl+Tab switches between the photo list and the Drive settings");
             tip.SetToolTip(_btnScan, "List the photos in the Drive folder and compare them with the Photo Folder. Nothing is written yet.");
             tip.SetToolTip(_btnGetKey, "Google Cloud Console → Create credentials → API key, then APIs & Services → Library → " +
                                        "Google Drive API → Enable. The key is saved encrypted for this Windows user.");
@@ -195,13 +282,15 @@ namespace NPIC_CARD_APP
                 ? "No student list loaded: file names are taken as the StudentId. Import the students first to match names like “NPIC24001 - Sok Dara.jpg”."
                 : "Not connected.", _students.Count == 0 ? Warning : TextMuted);
             UpdateButtons();
+            UpdateEmpty();
         }
 
         protected override async void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            if (_txtFolder.TextLength == 0) { _txtFolder.Focus(); return; }
-            if (_txtKey.TextLength == 0) { _txtKey.Focus(); return; }
+            // Not set up yet: start on the settings tab, at the first missing field.
+            if (_txtFolder.TextLength == 0) { ShowTab(SettingsTab); _txtFolder.Focus(); return; }
+            if (_txtKey.TextLength == 0) { ShowTab(SettingsTab); _txtKey.Focus(); return; }
             _btnScan.Focus();
             await ScanAsync();   // saved folder: show what is new right away
         }
@@ -211,6 +300,33 @@ namespace NPIC_CARD_APP
             base.OnKeyDown(e);
             if (e.KeyCode == Keys.F5) { BeginScan(); e.Handled = true; }
             else if (e.KeyCode == Keys.Enter && (_txtFolder.Focused || _txtKey.Focused)) { BeginScan(); e.Handled = e.SuppressKeyPress = true; }
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == (Keys.Control | Keys.Tab) || keyData == (Keys.Control | Keys.Shift | Keys.Tab))
+            {
+                ShowTab(_tabs.SelectedIndex == PhotosTab ? SettingsTab : PhotosTab);
+                return true;
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        // ===================== Tabs =====================
+        private void ShowTab(int index)
+        {
+            if (_tabs.SelectedIndex != index) _tabs.SelectedIndex = index;   // raises OnTabChanged
+            else OnTabChanged();
+        }
+
+        private void OnTabChanged()
+        {
+            bool photos = _tabs.SelectedIndex == PhotosTab;
+            _photosPage.Visible = photos;
+            _settingsPage.Visible = !photos;
+            if (photos) return;
+            if (_txtFolder.TextLength == 0) _txtFolder.Focus();
+            else if (_txtKey.TextLength == 0) _txtKey.Focus();
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
@@ -245,6 +361,7 @@ namespace NPIC_CARD_APP
             catch (ArgumentException ex)
             {
                 ShowStatus(OneLine(ex.Message), Danger);
+                ShowTab(SettingsTab);
                 (link.Length == 0 || key.Length > 0 ? _txtFolder : _txtKey).Focus();
                 return;
             }
@@ -258,6 +375,7 @@ namespace NPIC_CARD_APP
                 _settings.DriveApiKey = key;
                 _files = files;
                 await PlanAsync();
+                ShowTab(PhotosTab);   // connected: show the result
             }
             catch (OperationCanceledException)
             {
@@ -363,9 +481,25 @@ namespace NPIC_CARD_APP
                 _grid.Rows[row].Tag = item;
             }
             RefreshGrid();
-            _grid.Visible = _items.Count > 0;
-            _lblEmpty.Visible = _items.Count == 0;
-            _lblEmpty.Text = _items.Count == 0 ? "The Google Drive folder has no pictures.\n\nCheck the link, or upload the photos to it." : SetupSteps;
+            UpdateEmpty();
+        }
+
+        /// <summary>Grid when there is a scan result with photos; otherwise the empty state that says what to do next.</summary>
+        private void UpdateEmpty()
+        {
+            bool hasRows = _items != null && _items.Count > 0;
+            _grid.Visible = hasRows;
+            _emptyHost.Visible = !hasRows;
+            if (hasRows) return;
+
+            bool connected = _txtFolder.TextLength > 0 && _txtKey.TextLength > 0;
+            if (_items != null)
+                _lblEmpty.Text = "The Google Drive folder has no pictures.\nCheck the link, or upload the photos to it.";
+            else if (!connected)
+                _lblEmpty.Text = "Google Drive is not connected yet.\nAdd the shared folder link and an API key in Drive Settings.";
+            else
+                _lblEmpty.Text = "Not scanned yet.\nClick Scan Folder (F5) to list the student photos on Drive.";
+            _btnGoSettings.Visible = _items != null || !connected;
         }
 
         /// <summary>Updates the Result column (statuses change while downloading).</summary>
@@ -463,6 +597,8 @@ namespace NPIC_CARD_APP
             bool set = !string.IsNullOrEmpty(_settings.PhotoFolder);
             _lblSaveTo.Text = set ? _settings.PhotoFolder : "No Photo Folder yet — click Change… (or Download asks for one)";
             _lblSaveTo.ForeColor = set ? TextMain : Warning;
+            _lblSource.Text = set ? "Saving to  " + _settings.PhotoFolder : "No Photo Folder yet — set it in Drive Settings";
+            _lblSource.ForeColor = set ? TextMuted : Warning;
             _btnOpenLocal.Enabled = set && Directory.Exists(_settings.PhotoFolder);
         }
 
@@ -487,7 +623,7 @@ namespace NPIC_CARD_APP
         // ===================== UI state =====================
         private void SetBusy(bool busy, string message)
         {
-            _top.Enabled = _chkReplace.Enabled = !busy;
+            _settingsPage.Enabled = !busy;   // tabs stay usable: watch the list while it downloads
             _btnClose.Text = busy ? "Stop" : "Close";
             UseWaitCursor = busy;
             if (busy) ShowStatus(message, TextMuted);
@@ -530,8 +666,19 @@ namespace NPIC_CARD_APP
                 Text = caption, AutoSize = true, ForeColor = TextMuted, Margin = new Padding(0, 12, 6, 0)
             }, 0, row);
             rows.Controls.Add(field, 1, row);
-            rows.Controls.Add(a, 2, row);
-            rows.Controls.Add(b, 3, row);
+            if (a != null) rows.Controls.Add(a, 2, row);
+            if (b != null) rows.Controls.Add(b, 3, row);
+        }
+
+        /// <summary>Small-caps section heading on the settings tab.</summary>
+        private static Label Section(string text)
+        {
+            return new Label
+            {
+                Text = text.ToUpperInvariant(), Font = Theme.SmallCaps, ForeColor = TextMuted, BackColor = Surface,
+                Dock = DockStyle.Top, Height = 30, TextAlign = ContentAlignment.BottomLeft, Padding = new Padding(0, 0, 0, 6),
+                UseMnemonic = false
+            };
         }
 
         private static Button RowButton(string text, PillKind kind, EventHandler onClick)
