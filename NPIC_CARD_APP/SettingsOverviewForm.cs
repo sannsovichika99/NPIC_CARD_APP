@@ -486,6 +486,21 @@ namespace NPIC_CARD_APP
             else driveKey = NotSet;
             add(drive, "API key", driveKey, driveKeyWarn, "The key itself is never shown.", null);
 
+            // ---- OneDrive photos ----
+            const string oneDrive = "OneDrive photos";
+            bool oneDriveOnline = OneDriveOnlineSync.IsOnline(s.OneDriveFolder);
+            bool oneDriveMissing = !string.IsNullOrEmpty(s.OneDriveFolder) && !oneDriveOnline && !System.IO.Directory.Exists(s.OneDriveFolder);
+            add(oneDrive, "Folder", Or(s.OneDriveFolder, NotSet), oneDriveMissing,
+                oneDriveMissing ? "Not found on this PC — check that OneDrive is signed in, or choose the folder again in OneDrive Photos…."
+                                : "Used by OneDrive Photos… (Ctrl+Shift+O). Change it there.", null);
+            add(oneDrive, "App ID", Or(s.OneDriveClientId, NotSet), false, "Application (client) ID of the Microsoft app registration.", null);
+            string oneDriveAccount;
+            bool oneDriveWarn = false;
+            if (!string.IsNullOrEmpty(s.OneDriveRefreshToken)) oneDriveAccount = "Signed in" + (string.IsNullOrEmpty(s.OneDriveAccount) ? "" : " as " + s.OneDriveAccount);
+            else if (!string.IsNullOrEmpty(s.OneDriveRefreshTokenProtected)) { oneDriveAccount = "Signed in by another Windows user or PC — sign in again"; oneDriveWarn = true; }
+            else oneDriveAccount = "Not signed in";
+            add(oneDrive, "Account", oneDriveAccount, oneDriveWarn && oneDriveOnline, "Needed for a OneDrive link, not for a synced folder on this PC.", null);
+
             // ---- SQL Server ----
             const string sql = "SQL Server";
             bool hasServer = !string.IsNullOrEmpty(s.SqlServer);

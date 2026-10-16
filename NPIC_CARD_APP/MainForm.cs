@@ -216,6 +216,8 @@ namespace NPIC_CARD_APP
                     "(the selected student's photo is highlighted)"),
                 Nav("Google Drive Photos…", Theme.IcoSync, ShowGoogleDrivePhotos,
                     "Download student photos from a shared Google Drive folder into the photo folder (Ctrl+Shift+D)"),
+                Nav("OneDrive Photos…", Theme.IcoCloud, ShowOneDrivePhotos,
+                    "Download student photos from a OneDrive folder link (Microsoft sign-in) into the photo folder (Ctrl+Shift+O)"),
                 Nav("Remove Background…", Theme.IcoBrush, RemovePhotoBackground,
                     "Crop the selected student's photo and remove the wall / screen behind it (Ctrl+B)"),
                 Nav("Signature…", Theme.IcoEdit, ChooseSignature, "Director signature image (white background is removed)"),
@@ -1397,16 +1399,27 @@ namespace NPIC_CARD_APP
         /// <summary>Opens the Google Drive Photos page; downloaded photos show on the cards straight away.</summary>
         private void ShowGoogleDrivePhotos()
         {
+            ShowPhotoSync(new GoogleDrivePhotoSource(_settings));
+        }
+
+        /// <summary>Opens the OneDrive Photos page (a OneDrive folder synced to this PC).</summary>
+        private void ShowOneDrivePhotos()
+        {
+            ShowPhotoSync(new OneDrivePhotoSource(_settings));
+        }
+
+        private void ShowPhotoSync(PhotoSource source)
+        {
             int downloaded;
-            using (var form = new GoogleDriveForm(_settings, _students))
+            using (var form = new PhotoSyncForm(_settings, _students, source))
             {
                 form.ShowDialog(this);
                 downloaded = form.Downloaded;
             }
-            SaveSettings(false);   // folder link, API key and a newly chosen photo folder
+            SaveSettings(false);   // the source's folder / key and a newly chosen photo folder
             if (downloaded == 0) return;
             UpdatePreview();
-            SetStatus(string.Format("Downloaded {0} photo(s) from Google Drive to {1}", downloaded, _settings.PhotoFolder));
+            SetStatus(string.Format("Downloaded {0} photo(s) from {1} to {2}", downloaded, source.Name, _settings.PhotoFolder));
         }
 
         /// <summary>
@@ -1563,6 +1576,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.I: ImportApi(); return true;
                 case Keys.Control | Keys.D: ConnectSqlServer(); return true;
                 case Keys.Control | Keys.Shift | Keys.D: ShowGoogleDrivePhotos(); return true;
+                case Keys.Control | Keys.Shift | Keys.O: ShowOneDrivePhotos(); return true;
                 case Keys.Control | Keys.Shift | Keys.G: ImportGoogleSheet(); return true;
                 case Keys.Control | Keys.P: PrintSelected(); return true;
                 case Keys.Control | Keys.B: RemovePhotoBackground(); return true;

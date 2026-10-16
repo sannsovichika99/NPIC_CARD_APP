@@ -264,10 +264,27 @@ namespace NPIC_CARD_APP.Services
         // ===================== Download =====================
         /// <summary>Downloads the planned photos, <see cref="ParallelDownloads"/> at a time. Failures are recorded per item.</summary>
         /// <param name="progress">Called with the number of photos finished so far.</param>
-        public static async Task DownloadAsync(IList<PhotoSyncItem> items, string photoFolder, string apiKey,
+        public static Task DownloadAsync(IList<PhotoSyncItem> items, string photoFolder, string apiKey,
             IProgress<int> progress, CancellationToken cancel)
         {
             apiKey = CheckKey(apiKey);
+            return SaveAllAsync(items, photoFolder, async (f, ct) =>
+            {
+                byte[] bytes = await GetAsync(Api + "/" + Uri.EscapeDataString(f.Id) + "?alt=media&supportsAllDrives=true&key=" +
+                                              Uri.EscapeDataString(apiKey), f.Id, f.ResourceKey, ct).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(f.Md5) && !string.Equals(Md5Of(bytes), f.Md5, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("The download was incomplete. Try again.");
+                return bytes;
+            }, progress, cancel);
+        }
+
+        /// <summary>
+        /// Fetches the bytes of each planned photo with <paramref name="fetch"/> and saves it as {StudentId}.jpg / .png,
+        /// <see cref="ParallelDownloads"/> at a time. Shared by every photo source; failures are recorded per item.
+        /// </summary>
+        internal static async Task SaveAllAsync(IList<PhotoSyncItem> items, string photoFolder,
+            Func<DriveFile, CancellationToken, Task<byte[]>> fetch, IProgress<int> progress, CancellationToken cancel)
+        {
             Directory.CreateDirectory(photoFolder);
             int done = 0;
             using (var gate = new SemaphoreSlim(ParallelDownloads))
@@ -281,7 +298,8 @@ namespace NPIC_CARD_APP.Services
                     {
                         try
                         {
-                            await DownloadOneAsync(item, photoFolder, apiKey, cancel).ConfigureAwait(false);
+                            byte[] bytes = await fetch(item.File, cancel).ConfigureAwait(false);
+                            SavePhoto(item, bytes, photoFolder);
                             item.Status = PhotoSyncStatus.Downloaded;
                         }
                         catch (Exception ex) when (!(ex is OperationCanceledException))
@@ -302,14 +320,10 @@ namespace NPIC_CARD_APP.Services
             cancel.ThrowIfCancellationRequested();
         }
 
-        private static async Task DownloadOneAsync(PhotoSyncItem item, string photoFolder, string apiKey, CancellationToken cancel)
+        /// <summary>Checks that the bytes are a picture, then writes them as the student's only photo.</summary>
+        private static void SavePhoto(PhotoSyncItem item, byte[] bytes, string photoFolder)
         {
             DriveFile f = item.File;
-            byte[] bytes = await GetAsync(Api + "/" + Uri.EscapeDataString(f.Id) + "?alt=media&supportsAllDrives=true&key=" +
-                                          Uri.EscapeDataString(apiKey), f.Id, f.ResourceKey, cancel).ConfigureAwait(false);
-
-            if (!string.IsNullOrEmpty(f.Md5) && !string.Equals(Md5Of(bytes), f.Md5, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("The download was incomplete. Try again.");
             try
             {
                 using (var ms = new MemoryStream(bytes))

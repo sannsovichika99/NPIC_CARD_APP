@@ -81,6 +81,28 @@ namespace NPIC_CARD_APP.Services
 
         private static readonly byte[] DriveKeyEntropy = Encoding.UTF8.GetBytes("NPIC_CARD_APP.DriveApiKey");
 
+        // ---- OneDrive Photos page ----
+        /// <summary>OneDrive folder with the student photos: a share link (online) or a folder synced to this PC.</summary>
+        public string OneDriveFolder { get; set; }
+
+        /// <summary>Application (client) ID of the app registration used to sign in to Microsoft (not a secret).</summary>
+        public string OneDriveClientId { get; set; }
+
+        /// <summary>Name of the signed-in Microsoft account, for display only.</summary>
+        public string OneDriveAccount { get; set; }
+
+        /// <summary>Microsoft sign-in (refresh token), DPAPI-encrypted. Use <see cref="OneDriveRefreshToken"/>.</summary>
+        public string OneDriveRefreshTokenProtected { get; set; }
+
+        [XmlIgnore]
+        public string OneDriveRefreshToken
+        {
+            get { return Unprotect(OneDriveRefreshTokenProtected, OneDriveTokenEntropy); }
+            set { OneDriveRefreshTokenProtected = Protect(value, OneDriveTokenEntropy); }
+        }
+
+        private static readonly byte[] OneDriveTokenEntropy = Encoding.UTF8.GetBytes("NPIC_CARD_APP.OneDriveRefreshToken");
+
         // ---- SQL Server connection (Connect SQL Server… page) ----
         /// <summary>Server name, e.g. "localhost\SQLEXPRESS" or "192.168.1.10,1433".</summary>
         public string SqlServer { get; set; }
@@ -191,6 +213,10 @@ namespace NPIC_CARD_APP.Services
             GoogleSheetUrl = "";
             DriveFolderUrl = "";
             DriveApiKeyProtected = "";
+            OneDriveFolder = "";
+            OneDriveClientId = "";
+            OneDriveAccount = "";
+            OneDriveRefreshTokenProtected = "";
             SqlServer = "";
             SqlDatabase = "";
             SqlWindowsAuth = true;
@@ -266,8 +292,9 @@ namespace NPIC_CARD_APP.Services
         }
 
         /// <summary>
-        /// Writes the settings to any file (Export Settings…). The API token, Drive API key and SQL password are left out: they are
-        /// encrypted for this Windows user only, so they would be useless on another PC and should not travel with the file.
+        /// Writes the settings to any file (Export Settings…). The API token, Drive API key, SQL password and OneDrive sign-in are
+        /// left out: they are encrypted for this Windows user only, so they would be useless on another PC and should not travel
+        /// with the file.
         /// </summary>
         public void ExportTo(string path)
         {
@@ -275,6 +302,8 @@ namespace NPIC_CARD_APP.Services
             copy.ApiTokenProtected = "";
             copy.SqlPasswordProtected = "";
             copy.DriveApiKeyProtected = "";
+            copy.OneDriveRefreshTokenProtected = "";
+            copy.OneDriveAccount = "";
             WriteTo(path, copy);
         }
 
