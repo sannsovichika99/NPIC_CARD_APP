@@ -35,7 +35,7 @@ namespace CardStudio.Setup
             catch (ArgumentException ex)
             {
                 MessageBox.Show(ex.Message + Environment.NewLine + Environment.NewLine +
-                                "CardStudio-Setup.exe [/S] [/D=folder] [/NoDesktop] [/NoStartMenu]" + Environment.NewLine +
+                                "CardStudio-Setup.exe [/S] [/D=folder] [/NoDesktop] [/NoStartMenu] [/WaitForApp]" + Environment.NewLine +
                                 "uninstall.exe /uninstall [/S] [/purge]",
                                 ProductInfo.Name + " Setup", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return ExitCodes.BadArguments;
@@ -82,6 +82,10 @@ namespace CardStudio.Setup
                     Process.Start(ProductInfo.NetFrameworkDownloadUrl);
                 return ExitCodes.MissingNetFramework;
             }
+
+            // Started by the app's Check for Updates, which closes right after: give it time to exit before
+            // the "Card Studio is running" check below.
+            if (o.WaitForApp) InstallEngine.WaitForAppToClose(TimeSpan.FromSeconds(30));
 
             if (!o.Silent)
             {

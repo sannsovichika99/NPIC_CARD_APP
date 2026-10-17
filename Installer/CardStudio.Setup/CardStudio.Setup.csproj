@@ -55,6 +55,9 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="ProductInfo.cs" />
+    <Compile Include="..\..\Version.cs">
+      <Link>Version.cs</Link>
+    </Compile>
     <Compile Include="SetupOptions.cs" />
     <Compile Include="InstallEngine.cs" />
     <Compile Include="UninstallEngine.cs" />

@@ -144,6 +144,12 @@ namespace NPIC_CARD_APP
             CardFonts.WarnIfMissing(this);
         }
 
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            CheckForUpdatesQuietly();
+        }
+
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             SaveSettings(false);
@@ -228,7 +234,7 @@ namespace NPIC_CARD_APP
                 Nav("Full Screen", Theme.IcoFullScreen, () => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"),
                 Nav("Settings & Help…", Theme.IcoSettings, ShowSettingsHub,
                     (Theme.Dark ? "Light Mode" : "Dark Mode") + ", Theme Color, Folders (Ctrl+Shift+F), All Settings (Ctrl+,), " +
-                    "System Info (Ctrl+Shift+I) and Help & About (F1) in one page · ការណែនាំប្រើប្រាស់ជាភាសាខ្មែរ"),
+                    "System Info (Ctrl+Shift+I), Check for Updates (Ctrl+U) and Help & About (F1) in one page · ការណែនាំប្រើប្រាស់ជាភាសាខ្មែរ"),
                 Spacer(10)
             };
 
@@ -1593,6 +1599,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.Shift | Keys.E: DriverSetup(); return true;
                 case Keys.Control | Keys.Shift | Keys.R: ShowRfidList(); return true;
                 case Keys.Control | Keys.Shift | Keys.I: ShowHelp(HelpForm.Page.SystemInfo); return true;
+                case Keys.Control | Keys.U: ShowUpdates(); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
@@ -1924,8 +1931,55 @@ namespace NPIC_CARD_APP
                 case SettingsHubChoice.Folders: ShowFolders(); break;
                 case SettingsHubChoice.AllSettings: ShowAllSettings(); break;
                 case SettingsHubChoice.SystemInfo: ShowHelp(HelpForm.Page.SystemInfo); break;
+                case SettingsHubChoice.Updates: ShowUpdates(); break;
                 case SettingsHubChoice.HelpAbout: ShowHelp(HelpForm.Page.Overview); break;
             }
+        }
+
+        // ===================== Updates =====================
+
+        /// <summary>Check for Updates page (Ctrl+U). Closes the app when the user starts the update's setup.</summary>
+        private void ShowUpdates(UpdateInfo found = null)
+        {
+            bool setupStarted;
+            using (var form = new UpdateForm(_settings, found))
+            {
+                form.ShowDialog(this);
+                setupStarted = form.SetupStarted;
+            }
+            SaveSettings(false);   // update address, startup option, last check, skipped version
+
+            if (setupStarted) Close();   // the setup waits for this window to close, then updates and can restart the app
+        }
+
+        /// <summary>
+        /// Startup check (at most once a day, when switched on and an update address is known). Silent unless a new version
+        /// that was not skipped is found; then the Check for Updates page opens if the main window is free, otherwise only
+        /// the status bar says so. Network errors are ignored here: Check for Updates shows them.
+        /// </summary>
+        private async void CheckForUpdatesQuietly()
+        {
+            if (!UpdateService.IsStartupCheckDue(_settings)) return;
+
+            UpdateInfo info;
+            try
+            {
+                info = await UpdateService.CheckAsync(UpdateService.SourceOf(_settings), CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                return;   // offline, share not reachable…: try again at the next start
+            }
+            if (IsDisposed) return;
+
+            _settings.LastUpdateCheck = DateTime.Now;
+            SaveSettings(false);
+            if (!info.IsNewerThanRunning ||
+                string.Equals(_settings.SkippedUpdateVersion, info.VersionText, StringComparison.Ordinal))
+                return;
+
+            SetStatus("Update available: Card Studio " + info.VersionText + " — press Ctrl+U to install it.");
+            if (ActiveForm == this && OwnedForms.Length == 0) ShowUpdates(info);
         }
 
         private void ShowAllSettings()

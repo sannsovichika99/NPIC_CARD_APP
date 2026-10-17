@@ -5,10 +5,10 @@ using System.Windows.Forms;
 namespace NPIC_CARD_APP
 {
     /// <summary>Page picked on the <see cref="SettingsHubForm"/>.</summary>
-    public enum SettingsHubChoice { None, DarkMode, ThemeColor, Folders, AllSettings, SystemInfo, HelpAbout }
+    public enum SettingsHubChoice { None, DarkMode, ThemeColor, Folders, AllSettings, SystemInfo, Updates, HelpAbout }
 
     /// <summary>
-    /// "Settings &amp; Help" page: Dark / Light Mode, Theme Color…, Folders…, All Settings…, System Info and Help &amp; About
+    /// "Settings &amp; Help" page: Dark / Light Mode, Theme Color…, Folders…, All Settings…, System Info, Check for Updates and Help &amp; About
     /// grouped in one popup, so the sidebar stays short. Picking a tile closes the page and sets <see cref="Choice"/>; the main
     /// window then runs that command, so each page itself is unchanged. Their keyboard shortcuts keep working here and in the
     /// main window.
@@ -24,22 +24,22 @@ namespace NPIC_CARD_APP
         public SettingsHubForm(string accentHex)
         {
             Text = "Settings & Help";
-            Subtitle = "Appearance, folders, settings, system info and the user guide";
+            Subtitle = "Appearance, folders, settings, system info, updates and the user guide";
             Glyph = Theme.IcoSettings;
             KeyPreview = true;
             Rectangle work = Screen.FromPoint(Cursor.Position).WorkingArea;
-            Size = new Size(Math.Min(720, work.Width), Math.Min(620, work.Height));
-            MinimumSize = new Size(Math.Min(560, work.Width), Math.Min(540, work.Height));
+            Size = new Size(Math.Min(720, work.Width), Math.Min(740, work.Height));
+            MinimumSize = new Size(Math.Min(560, work.Width), Math.Min(640, work.Height));
 
-            // ---- Tiles (2 x 3): appearance, settings, help ----
+            // ---- Tiles (2 x 3, then one wide tile): appearance, settings, help, updates ----
             var grid = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 3, BackColor = Theme.Surface,
+                Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4, BackColor = Theme.Surface,
                 Padding = new Padding(16, 14, 16, 12)
             };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
-            for (int i = 0; i < 3; i++) grid.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33f));
+            for (int i = 0; i < 4; i++) grid.RowStyles.Add(new RowStyle(SizeType.Percent, 25f));
 
             _first = Theme.Dark
                 ? Card(SettingsHubChoice.DarkMode, "Light Mode", Theme.IcoSun, "",
@@ -58,6 +58,11 @@ namespace NPIC_CARD_APP
                 "Version, students loaded, cards printed, RFID cards, data files, printer, fonts and card images of this PC."), 0, 2);
             grid.Controls.Add(Card(SettingsHubChoice.HelpAbout, "Help & About", Theme.IcoQuestion, "F1",
                 "What Card Studio does, step-by-step guide, shortcuts and troubleshooting, in English or Khmer · ជាភាសាខ្មែរ."), 1, 2);
+            ImportOptionCard updates = Card(SettingsHubChoice.Updates, "Check for Updates", Theme.IcoSync, "Ctrl+U",
+                "Version " + Services.UpdateService.CurrentVersionText + " is installed. Look for a newer version and install it; " +
+                "settings, print history and card images are kept.");
+            grid.Controls.Add(updates, 0, 3);
+            grid.SetColumnSpan(updates, 2);
 
             // ---- Footer ----
             var footer = ModalUi.Footer();
@@ -84,6 +89,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.Oemcomma: Pick(SettingsHubChoice.AllSettings); return true;
                 case Keys.Control | Keys.Shift | Keys.F: Pick(SettingsHubChoice.Folders); return true;
                 case Keys.Control | Keys.Shift | Keys.I: Pick(SettingsHubChoice.SystemInfo); return true;
+                case Keys.Control | Keys.U: Pick(SettingsHubChoice.Updates); return true;
                 case Keys.F1: Pick(SettingsHubChoice.HelpAbout); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);

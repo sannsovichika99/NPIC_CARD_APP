@@ -146,6 +146,21 @@ namespace NPIC_CARD_APP.Services
         /// </summary>
         public string RfidCsvPath { get; set; }
 
+        /// <summary>
+        /// Where Check for Updates looks for new versions: an https:// address or a network / local folder holding the
+        /// update.json that Installer\build.ps1 writes next to CardStudio-Setup.exe. Empty = <see cref="UpdateService.DefaultSource"/>.
+        /// </summary>
+        public string UpdateUrl { get; set; }
+
+        /// <summary>Look for a new version (at most once a day) when Card Studio starts.</summary>
+        public bool CheckUpdatesOnStartup { get; set; }
+
+        /// <summary>Last time an update check succeeded (local time; MinValue = never).</summary>
+        public DateTime LastUpdateCheck { get; set; }
+
+        /// <summary>Version the user chose to skip ("Skip This Version"): the startup check stays quiet about it.</summary>
+        public string SkippedUpdateVersion { get; set; }
+
         private static readonly byte[] SqlPasswordEntropy = Encoding.UTF8.GetBytes("NPIC_CARD_APP.SqlPassword");
 
         private static string Protect(string value, byte[] entropy)
@@ -245,6 +260,10 @@ namespace NPIC_CARD_APP.Services
             SqlTrustServerCertificate = true;
             SqlQuery = "";
             RfidCsvPath = "";
+            UpdateUrl = "";
+            CheckUpdatesOnStartup = true;
+            LastUpdateCheck = DateTime.MinValue;
+            SkippedUpdateVersion = "";
             Slot1X = 0f;
             Slot1Y = 0f;
             Slot2X = 0f;

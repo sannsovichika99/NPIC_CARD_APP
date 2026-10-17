@@ -63,6 +63,22 @@ namespace CardStudio.Setup
             return running.Length > 0;
         }
 
+        /// <summary>Waits until Card Studio is no longer running, or until <paramref name="timeout"/>; true = it closed.</summary>
+        public static bool WaitForAppToClose(TimeSpan timeout)
+        {
+            Stopwatch clock = Stopwatch.StartNew();
+            while (IsAppRunning())
+            {
+                if (clock.Elapsed >= timeout)
+                {
+                    Log.Write("Card Studio still running after " + timeout.TotalSeconds + " s");
+                    return false;
+                }
+                System.Threading.Thread.Sleep(250);
+            }
+            return true;
+        }
+
         /// <summary>Uncompressed size of the payload, in bytes.</summary>
         public static long PayloadSize()
         {

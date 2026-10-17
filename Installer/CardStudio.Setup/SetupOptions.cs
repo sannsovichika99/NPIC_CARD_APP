@@ -7,6 +7,8 @@ namespace CardStudio.Setup
     ///   CardStudio-Setup.exe                         interactive install
     ///   CardStudio-Setup.exe /S [/D=path]            silent install (both shortcuts unless /NoDesktop, /NoStartMenu)
     ///   uninstall.exe /uninstall [/S] [/purge]       uninstall; /purge also deletes %AppData%\NPIC_CARD_APP
+    ///   CardStudio-Setup.exe /WaitForApp             first wait (up to 30 s) for Card Studio to close: the app's
+    ///                                                Check for Updates starts the setup this way, then exits
     /// </summary>
     internal sealed class SetupOptions
     {
@@ -16,6 +18,7 @@ namespace CardStudio.Setup
         public string InstallDir;          // null = existing install location or Program Files\Card Studio
         public bool DesktopShortcut = true;
         public bool StartMenuShortcut = true;
+        public bool WaitForApp;
 
         public static SetupOptions Parse(string[] args)
         {
@@ -30,6 +33,7 @@ namespace CardStudio.Setup
                 else if (Is(a, "/purge")) o.Purge = true;
                 else if (Is(a, "/NoDesktop")) o.DesktopShortcut = false;
                 else if (Is(a, "/NoStartMenu")) o.StartMenuShortcut = false;
+                else if (Is(a, "/WaitForApp")) o.WaitForApp = true;
                 else if (a.StartsWith("/D=", StringComparison.OrdinalIgnoreCase)) o.InstallDir = a.Substring(3).Trim('"');
                 else throw new ArgumentException("Unknown argument: " + raw);
             }

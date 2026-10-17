@@ -32,14 +32,15 @@ No third-party tools are needed (no WiX, Inno Setup or NSIS), only Visual Studio
 
 ```
 NPIC_CARD_APP.sln                    ← now contains both projects
-NPIC_CARD_APP\                       ← the existing WinForms app (unchanged)
+Version.cs                           ← THE version number, compiled into the app and the setup
+NPIC_CARD_APP\                       ← the WinForms app (Check for Updates: UpdateForm.cs, Services\UpdateService.cs)
 Installer\
   build.ps1                          ← one-command build
   README.md                          ← this guide
   CardStudio.Setup\
     CardStudio.Setup.csproj          ← builds the app, zips its output, embeds the zip
     app.manifest                     ← requireAdministrator + DPI awareness
-    ProductInfo.cs                   ← name, version, paths, registry key (edit here)
+    ProductInfo.cs                   ← name, paths, registry key (edit here)
     SetupOptions.cs                  ← command-line parsing
     Program.cs                       ← entry point: install or /uninstall, exit codes
     InstallEngine.cs                 ← extract files, ACL, shortcuts, registry, rollback, log
@@ -50,6 +51,7 @@ Installer\
     UninstallForm.cs                 ← uninstall dialog (Confirm → Progress → Finished)
 dist\
   CardStudio-Setup.exe               ← build output (git-ignored)
+  update.json                        ← version + SHA-256 + notes, read by the app's Check for Updates
 ```
 
 ---
@@ -108,18 +110,22 @@ From the repository root:
 powershell -ExecutionPolicy Bypass -File Installer\build.ps1
 ```
 
-With a release version (stamped into `ProductInfo.cs` and shown in Settings > Apps):
+With a release version (stamped into `Version.cs`, so both the app and Settings > Apps show it) and the
+release notes the app's **Check for Updates** shows under "What's new":
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File Installer\build.ps1 -Version 1.1.0
+powershell -ExecutionPolicy Bypass -File Installer\build.ps1 -Version 1.1.0 -Notes "Faster printing.`nNew RFID page."
+powershell -ExecutionPolicy Bypass -File Installer\build.ps1 -Version 1.1.0 -NotesFile release-notes.txt
 ```
 
-The script finds MSBuild with `vswhere`, rebuilds the app and the setup in Release, and prints the result:
+The script finds MSBuild with `vswhere`, rebuilds the app and the setup in Release, writes `dist\update.json`,
+and prints the result:
 
 ```
 Installer : O:\Claude\NPIC_CARD_APP\dist\CardStudio-Setup.exe
 Size      : 1.4 MB
 SHA-256   : C1A7D042…
+Update    : O:\Claude\NPIC_CARD_APP\dist\update.json
 ```
 
 ### Option B: Visual Studio
@@ -179,6 +185,8 @@ CardStudio-Setup.exe /S /D=D:\Apps\Card Studio /NoDesktop
 uninstall.exe /uninstall                      interactive uninstall (what Settings > Apps runs)
 uninstall.exe /uninstall /S                   silent uninstall, keeps %AppData% data
 uninstall.exe /uninstall /S /purge            silent uninstall, also deletes %AppData%\NPIC_CARD_APP
+CardStudio-Setup.exe /WaitForApp              wait up to 30 s for Card Studio to close first
+                                              (how the app's Check for Updates starts the setup)
 ```
 
 Run silent commands from an elevated prompt. Exit codes:
@@ -216,10 +224,46 @@ Run silent commands from an elevated prompt. Exit codes:
 ## 8. Releasing a new version
 
 1. Change the app as usual.
-2. Run `Installer\build.ps1 -Version X.Y.Z` (or edit `AssemblyVersion` in `ProductInfo.cs`).
-3. Commit the version bump and distribute `dist\CardStudio-Setup.exe`. Users run it over the old version; no uninstall is needed.
+2. Run `Installer\build.ps1 -Version X.Y.Z -Notes "…"` (or edit `AssemblyVersion` in `Version.cs`).
+3. Commit the version bump.
+4. **Publish it** by copying **both** `dist\CardStudio-Setup.exe` and `dist\update.json` to the update folder (below).
+   Every PC then finds it with **Check for Updates**, or by itself at the next start. You can still hand out the setup by
+   hand: users run it over the old version, and no uninstall is needed.
 
 To rename the product, publisher, install folder or registry key, edit only `ProductInfo.cs`.
+
+### Check for Updates (in the app)
+
+*Settings & Help… → Check for Updates*, or **Ctrl+U**. The app reads `update.json` from the **update address**, compares
+its `version` with its own (`Version.cs`), downloads the setup to `%TEMP%\CardStudio-Update`, checks the SHA-256, starts
+`CardStudio-Setup.exe /WaitForApp` (UAC prompt) and closes. The setup upgrades in place as usual. The app also checks
+quietly at start-up, at most once a day (it can be switched off), and opens the page only when there is a version the user
+did not skip.
+
+The update address can be:
+
+| Address | Example |
+|---|---|
+| A network folder holding the two files (the usual choice at school) | `\\server\Software\CardStudio` |
+| An https:// folder or `update.json` URL | `https://example.org/cardstudio/` |
+| A GitHub repository with releases (must be public); attach `CardStudio-Setup.exe` to the release and tag it `v1.2.0` | `https://github.com/owner/repo` |
+
+Plain `http://` is refused, because the setup runs as administrator. The address is saved per Windows user in
+`settings.xml`. Set it once on a PC and spread it with **All Settings… → Export / Import**, or build it in for every PC by
+setting `UpdateService.DefaultSource` in `NPIC_CARD_APP\Services\UpdateService.cs`.
+
+`update.json` format (`url` may be relative to the file; `sha256` is optional, but without it the download cannot be verified):
+
+```json
+{
+  "version": "1.2.0",
+  "url": "CardStudio-Setup.exe",
+  "sha256": "C1A7D042…",
+  "size": 1468006,
+  "date": "2026-10-17",
+  "notes": "Faster printing.\nNew RFID page."
+}
+```
 
 ---
 

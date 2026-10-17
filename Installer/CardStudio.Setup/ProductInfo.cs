@@ -2,12 +2,10 @@ using System;
 using System.IO;
 using System.Reflection;
 
-// Bump AssemblyVersion for every release: it is the version shown in Settings > Apps.
+// The version (shown in Settings > Apps) is in <repo>\Version.cs, shared with the app.
 [assembly: AssemblyTitle("Card Studio Setup")]
 [assembly: AssemblyProduct("Card Studio")]
 [assembly: AssemblyCompany("NPIC")]
-[assembly: AssemblyVersion("1.0.2.0")]
-[assembly: AssemblyFileVersion("1.0.2.0")]
 
 namespace CardStudio.Setup
 {

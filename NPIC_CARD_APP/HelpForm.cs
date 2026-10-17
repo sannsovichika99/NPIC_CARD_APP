@@ -799,11 +799,19 @@ namespace NPIC_CARD_APP
 
             w.Heading(T("Other", "ផ្សេងៗ"));
             w.Bullet(T("**Settings & Help…** — one page with **Dark Mode / Light Mode**, **Theme Color…**, **Folders…**, **All Settings…**, " +
-                       "**System Info** and **Help & About**. " +
-                       "Their shortcuts (Ctrl+Shift+F, Ctrl+,, Ctrl+Shift+I, F1) still open each one directly.",
+                       "**System Info**, **Check for Updates** and **Help & About**. " +
+                       "Their shortcuts (Ctrl+Shift+F, Ctrl+,, Ctrl+Shift+I, Ctrl+U, F1) still open each one directly.",
                        "**Settings & Help…** — ទំព័រតែមួយដែលមាន **Dark Mode / Light Mode** **Theme Color…** **Folders…** **All Settings…** " +
-                       "**System Info** និង **Help & About**។ " +
-                       "ផ្លូវកាត់ (Ctrl+Shift+F, Ctrl+,, Ctrl+Shift+I, F1) នៅតែបើកនីមួយៗដោយផ្ទាល់។"));
+                       "**System Info** **Check for Updates** និង **Help & About**។ " +
+                       "ផ្លូវកាត់ (Ctrl+Shift+F, Ctrl+,, Ctrl+Shift+I, Ctrl+U, F1) នៅតែបើកនីមួយៗដោយផ្ទាល់។"));
+            w.Bullet(T("**Check for Updates** (Ctrl+U) — looks for a newer version at the update address (a network folder or https:// " +
+                       "address you get from whoever maintains Card Studio) and installs it. Card Studio closes, Windows asks for " +
+                       "administrator approval, and your settings, print history, RFID file and card images are kept. " +
+                       "It also checks by itself once a day at start-up; untick the option on that page to stop this.",
+                       "**Check for Updates** (Ctrl+U) — ស្វែងរកកំណែថ្មីនៅអាសយដ្ឋានបច្ចុប្បន្នភាព (ថតបណ្តាញ ឬអាសយដ្ឋាន https:// " +
+                       "ដែលអ្នកទទួលបានពីអ្នកថែទាំ Card Studio) ហើយដំឡើងវា។ Card Studio នឹងបិទ Windows សុំការអនុញ្ញាតពីអ្នកគ្រប់គ្រង " +
+                       "(administrator) ហើយការកំណត់ ប្រវត្តិបោះពុម្ព ឯកសារ RFID និងរូបភាពកាតរបស់អ្នកត្រូវបានរក្សាទុក។ " +
+                       "កម្មវិធីក៏ពិនិត្យដោយខ្លួនឯងម្តងក្នុងមួយថ្ងៃពេលបើកដែរ — ដោះធីកជម្រើសនៅលើទំព័រនោះ ដើម្បីបញ្ឈប់។"));
             w.Bullet(T("**Folders…** (Ctrl+Shift+F) — every folder the app uses: open, change or create them.",
                        "**Folders…** (Ctrl+Shift+F) — ថតទាំងអស់ដែលកម្មវិធីប្រើ៖ បើក ប្តូរ ឬបង្កើតថត។"));
             w.Bullet(T("**Dark Mode / Light Mode** — changes the app's colours and restarts it. Printed cards are not affected.",
@@ -842,6 +850,7 @@ namespace NPIC_CARD_APP
             w.Key("Ctrl+Shift+F", T("Folders", "ថតឯកសារ (Folders)"));
             w.Key("Ctrl+,", T("All Settings", "ការកំណត់ទាំងអស់"));
             w.Key("Ctrl+Shift+I", T("System info", "ព័ត៌មានប្រព័ន្ធ"));
+            w.Key("Ctrl+U", T("Check for updates", "ពិនិត្យរកបច្ចុប្បន្នភាព"));
 
             w.Heading(T("Lists and boxes", "បញ្ជី និងប្រអប់"));
             w.Key("Esc", T("In the search box: clear the search", "ក្នុងប្រអប់ស្វែងរក៖ សម្អាតការស្វែងរក"));
@@ -921,6 +930,21 @@ namespace NPIC_CARD_APP
             w.Row("Windows", RuntimeInformation.OSDescription.Trim() + (Environment.Is64BitOperatingSystem ? " (64-bit)" : " (32-bit)"));
             w.Row(".NET", RuntimeInformation.FrameworkDescription.Trim());
             w.Row(T("Computer / user", "កុំព្យូទ័រ / អ្នកប្រើ"), Environment.MachineName + " / " + Environment.UserName);
+
+            w.Heading(T("Updates", "បច្ចុប្បន្នភាព"));
+            string updateSource = UpdateService.SourceOf(_settings);
+            w.Row(T("Update address", "អាសយដ្ឋានបច្ចុប្បន្នភាព"), updateSource.Length > 0
+                    ? updateSource
+                    : T("(not set — Check for Updates, Ctrl+U)", "(មិនទាន់កំណត់ — Check for Updates, Ctrl+U)"),
+                updateSource.Length == 0);
+            w.Row(T("Check at start-up", "ពិនិត្យពេលបើកកម្មវិធី"), _settings.CheckUpdatesOnStartup
+                ? T("On (at most once a day)", "បើក (យ៉ាងច្រើនម្តងក្នុងមួយថ្ងៃ)")
+                : T("Off", "បិទ"));
+            w.Row(T("Last checked", "ពិនិត្យចុងក្រោយ"), _settings.LastUpdateCheck == DateTime.MinValue
+                ? T("Never", "មិនដែល")
+                : _settings.LastUpdateCheck.ToString("yyyy-MM-dd HH:mm"));
+            if (!string.IsNullOrEmpty(_settings.SkippedUpdateVersion))
+                w.Row(T("Skipped version", "កំណែដែលបានរំលង"), _settings.SkippedUpdateVersion);
 
             w.Heading(T("Activity", "សកម្មភាព"));
             if (_studentCount >= 0)
