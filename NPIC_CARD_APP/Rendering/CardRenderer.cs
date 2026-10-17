@@ -21,7 +21,7 @@ namespace NPIC_CARD_APP.Rendering
     /// </summary>
     public static class CardRenderer
     {
-        public const float CardWidthMm = 85.6f;
+        public const float CardWidthMm = 84.6f;
         public const float CardHeightMm = 54f;
         public const int Dpi = 600;
 
@@ -43,7 +43,7 @@ namespace NPIC_CARD_APP.Rendering
         private const float CardTitleEnPt = 9.5f;// STUDENT IDENTIFICATION CARD     (Times New Roman Bold)
         private const float ContactPt = 7.2f;    // address / email / website       (Khmer OS Siemreap + Times New Roman)
         private const float ScanPt = 3.6f;       // ស្កេនទីនេះសម្រាប់ព័ត៌មាន        (Siemreap)
-        private const float FieldPt = 7.6f;      // front rows, អត្តលេខ + ID, ជំនាន់ទី (Khmer OS Siemreap + Times New Roman)
+        private const float FieldPt = 7.1f;      // front rows, អត្តលេខ + ID, ជំនាន់ទី (Khmer OS Siemreap + Times New Roman)
         private const float ExpiryPt = 6.4f;     // ផុតកំណត់...                     (Khmer OS Siemreap)
         private const float IssuePt = 6.0f;      // ថ្ងៃចេញប័ណ្ណ... / រាជធានីភ្នំពេញ... (Khmer OS Siemreap)
         private const float DirectorTitlePt = 6.6f; // នាយកវិទ្យាស្ថាន              (Khmer OS Muol)
