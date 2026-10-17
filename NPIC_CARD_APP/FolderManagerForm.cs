@@ -455,6 +455,10 @@ namespace NPIC_CARD_APP
             list.Add(signature);
             list.Add(Make(files, "Last student file folder", ParentOf(s.LastCsvPath),
                 "Folder of the Excel / CSV file the students were last imported from.", false, false));
+            Entry csv = Make(files, "CSV folder", s.CsvFolder,
+                "Folder listed by CSV Files… When it is not set, CSV Files… lists the last student file folder.", false, false);
+            csv.ChangeHint = "Change it in CSV Files… → Change Folder… (Ctrl+Shift+C).";
+            list.Add(csv);
 
             return list;
         }

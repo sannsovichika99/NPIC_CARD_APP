@@ -49,6 +49,9 @@ namespace NPIC_CARD_APP.Services
 
         public string LastCsvPath { get; set; }
 
+        /// <summary>Folder listed by CSV Files…. Empty = the folder of <see cref="LastCsvPath"/>.</summary>
+        public string CsvFolder { get; set; }
+
         /// <summary>Web API address for Import API… (remembered between runs).</summary>
         public string ApiUrl { get; set; }
 
@@ -213,6 +216,7 @@ namespace NPIC_CARD_APP.Services
             PhotoFolder = "";
             SignaturePath = "";
             LastCsvPath = "";
+            CsvFolder = "";
             ApiUrl = "";
             ApiTokenProtected = "";
             GoogleSheetUrl = "";

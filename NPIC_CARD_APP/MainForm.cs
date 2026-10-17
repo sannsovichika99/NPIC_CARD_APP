@@ -203,6 +203,8 @@ namespace NPIC_CARD_APP
                 dashboard,
                 Nav("Import Students…", Theme.IcoDownload, ShowImportPage,
                     "Load the student list from Excel, CSV, Google Sheets, the web API or SQL Server, or save an Excel template (Ctrl+L)"),
+                Nav("CSV Files…", Theme.IcoDocument, ShowCsvFiles,
+                    "Student CSV files in one folder: check, preview, create, rename, delete or load them (Ctrl+Shift+C)"),
                 Nav("Google Sheets", Theme.IcoCloud, ImportGoogleSheet,
                     "Connect a shared Google Sheet, preview its students and import them (Ctrl+Shift+G)"),
                 _navGallery,
@@ -1585,6 +1587,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.G: ShowGallery(); return true;
                 case Keys.Control | Keys.Oemcomma: ShowAllSettings(); return true;
                 case Keys.Control | Keys.Shift | Keys.F: ShowFolders(); return true;
+                case Keys.Control | Keys.Shift | Keys.C: ShowCsvFiles(); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
@@ -1909,6 +1912,20 @@ namespace NPIC_CARD_APP
             SaveSettings(false);
             UpdatePreview();
             SetStatus("Photo folder: " + _settings.PhotoFolder);
+        }
+
+        /// <summary>CSV Files page: the student CSVs of one folder. The file picked with Load Students is loaded here.</summary>
+        private void ShowCsvFiles()
+        {
+            string load;
+            bool settingsChanged;
+            using (var form = new CsvFilesForm(_settings))
+            {
+                load = form.ShowDialog(this) == DialogResult.OK ? form.FileToLoad : null;
+                settingsChanged = form.SettingsChanged;
+            }
+            if (load != null) LoadStudents(load);           // also saves the settings
+            else if (settingsChanged) SaveSettings(false);   // new CSV folder, or the loaded file was renamed
         }
 
         /// <summary>Photo + details gallery of the loaded students; the student chosen there is selected here.</summary>

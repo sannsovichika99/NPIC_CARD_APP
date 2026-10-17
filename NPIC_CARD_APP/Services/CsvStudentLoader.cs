@@ -12,6 +12,9 @@ namespace NPIC_CARD_APP.Services
     /// </summary>
     public static class CsvStudentLoader
     {
+        /// <summary>Header row of a new, empty student CSV (same columns and order as the Excel template).</summary>
+        public const string Header = "StudentId,NameKh,NameEn,Gender,DateOfBirth,Faculty,Level,Generation,ValidUntil,QrData";
+
         public static List<Student> Load(string path)
         {
             return FromText(File.ReadAllText(path, Encoding.UTF8), "CSV header");
