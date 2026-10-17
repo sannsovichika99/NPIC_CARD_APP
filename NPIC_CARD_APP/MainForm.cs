@@ -229,6 +229,8 @@ namespace NPIC_CARD_APP
                     : Nav("Dark Mode", Theme.IcoMoon, ToggleDarkMode,
                         "Switch to dark colours, easier on the eyes in a dim room (restarts the app)"),
                 Nav("Full Screen", Theme.IcoFullScreen, () => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"),
+                Nav("Folders…", Theme.IcoFolder, ShowFolders,
+                    "Every folder the app uses: photos, backups, app data, card images — open, change or create them (Ctrl+Shift+F)"),
                 Nav("All Settings…", Theme.IcoSettings, ShowAllSettings,
                     "Show every setting of the app and this PC: printer, tray, files, API, card text, fonts (Ctrl+,)"),
                 Spacer(10)
@@ -1583,6 +1585,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.H: ShowPrintHistory(); return true;
                 case Keys.Control | Keys.G: ShowGallery(); return true;
                 case Keys.Control | Keys.Oemcomma: ShowAllSettings(); return true;
+                case Keys.Control | Keys.Shift | Keys.F: ShowFolders(); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
@@ -1892,6 +1895,21 @@ namespace NPIC_CARD_APP
 
             if (sqlStudents != null) ShowSqlStudents(sqlStudents, sqlSource);   // loaded with SQL Server… in the overview
             UpdateRfidPanel();   // SQL settings may have changed there
+        }
+
+        /// <summary>Folders page: every folder the app uses. A new Photo Folder chosen there is saved and shown here.</summary>
+        private void ShowFolders()
+        {
+            bool photoFolderChanged;
+            using (var form = new FolderManagerForm(_settings))
+            {
+                form.ShowDialog(this);
+                photoFolderChanged = form.PhotoFolderChanged;
+            }
+            if (!photoFolderChanged) return;
+            SaveSettings(false);
+            UpdatePreview();
+            SetStatus("Photo folder: " + _settings.PhotoFolder);
         }
 
         /// <summary>Photo + details gallery of the loaded students; the student chosen there is selected here.</summary>
