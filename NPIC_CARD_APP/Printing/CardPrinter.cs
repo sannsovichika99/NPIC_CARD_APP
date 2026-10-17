@@ -232,7 +232,8 @@ namespace NPIC_CARD_APP.Printing
             return IsCardSource(PortraitPage(CreatePrinterSettings()).PaperSource.SourceName);
         }
 
-        private static bool IsCardSource(string source)
+        /// <summary>True when the paper source name is the ID card / PVC / disc tray.</summary>
+        internal static bool IsCardSource(string source)
         {
             source = source ?? "";
             return source.IndexOf("Card", StringComparison.OrdinalIgnoreCase) >= 0

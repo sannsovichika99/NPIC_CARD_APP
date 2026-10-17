@@ -210,6 +210,8 @@ namespace NPIC_CARD_APP
                 _navGallery,
                 _navHistory,
                 Nav("Print Queue", Theme.IcoPrint, ShowPrintQueue, "See or cancel jobs waiting in Windows"),
+                Nav("Epson Driver Setup…", Theme.IcoSettings, DriverSetup,
+                    "Choose the Epson card printer and save its paper source, paper type and quality (Ctrl+Shift+E)"),
 
                 Section("CARD"),
                 Nav("Photo Folder…", Theme.IcoFolder, ShowPhotoFolderPage,
@@ -585,7 +587,7 @@ namespace NPIC_CARD_APP
             buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
             buttons.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
             buttons.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
-            buttons.Controls.Add(FillButton(MakeButton("Driver Setup…", PillKind.Secondary, (s, e) => DriverSetup(), "Paper size, tray and quality in the Epson driver")), 0, 0);
+            buttons.Controls.Add(FillButton(MakeButton("Driver Setup…", PillKind.Secondary, (s, e) => DriverSetup(), "Epson printers: paper source, paper type and quality (Ctrl+Shift+E)")), 0, 0);
             buttons.Controls.Add(FillButton(MakeButton("Check Printer", PillKind.Secondary, (s, e) => CheckPrinter(), "Show the page setup and any problems found")), 1, 0);
             buttons.Controls.Add(FillButton(MakeButton("Test Print", PillKind.Secondary, (s, e) => TestPrint(), "Print a calibration card to tune slot X / Y")), 0, 1);
             buttons.Controls.Add(FillButton(MakeButton("Print Queue…", PillKind.Secondary, (s, e) => ShowPrintQueue(), "See or cancel jobs waiting in Windows")), 1, 1);
@@ -1588,6 +1590,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.Oemcomma: ShowAllSettings(); return true;
                 case Keys.Control | Keys.Shift | Keys.F: ShowFolders(); return true;
                 case Keys.Control | Keys.Shift | Keys.C: ShowCsvFiles(); return true;
+                case Keys.Control | Keys.Shift | Keys.E: DriverSetup(); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
@@ -1644,24 +1647,22 @@ namespace NPIC_CARD_APP
 
         }
 
+        /// <summary>Epson Driver Setup page: pick an Epson printer and save its paper source / type / quality.</summary>
         private void DriverSetup()
         {
-            if (!EnsureCardPrinter()) return;
-            try
+            ReadUiToSettings();   // the page saves _settings, so it must hold the current tray values
+            bool changed;
+            using (var form = new EpsonDriverForm(_settings))
             {
-                PrinterSettings ps = new CardPrinter(_settings).CreatePrinterSettings();
-                byte[] devMode = PrinterDevMode.ShowDriverDialog(Handle, ps);
-                if (devMode == null) return; // cancelled
+                form.ShowDialog(this);
+                changed = form.SettingsChanged;
+            }
+            if (!changed) return;
 
-                _settings.DevModeBase64 = Convert.ToBase64String(devMode);
-                SaveSettings(false);
-                UpdatePageInfo();
-                SetStatus("Driver settings saved.");
-            }
-            catch (Exception ex)
-            {
-                ShowError(ex);
-            }
+            LoadPrinters();       // the page may have switched the card printer
+            SaveSettings(false);
+            UpdatePageInfo();
+            SetStatus("Epson driver settings saved for " + _settings.PrinterName + ".");
         }
 
         /// <summary>Checks tray, driver setup, offline/error state and stuck jobs before sending a job.</summary>
