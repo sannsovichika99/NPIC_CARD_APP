@@ -443,13 +443,16 @@ namespace NPIC_CARD_APP
             add(files, "Photo folder", hasPhotos ? s.PhotoFolder : NotSet, !photosFound,
                 !hasPhotos ? "Choose it with Photo Folder…" : !photosFound ? "Folder not found." : null,
                 photosFound ? s.PhotoFolder : null);
-            bool signatureFound = File.Exists(s.SignatureFile);
+            CardText sigText = s.CardText ?? new CardText();
+            bool hasSignature = !string.IsNullOrEmpty(sigText.SignatureFile);
+            bool signatureFound = hasSignature && File.Exists(sigText.SignatureFile);
             add(files, "Director signature",
-                (s.UsesDefaultSignature ? "Default — " : "") + s.SignatureFile + (signatureFound ? "" : " — no signature is printed"),
-                !signatureFound,
-                !signatureFound ? "File not found. Choose one with Signature…" :
-                s.UsesDefaultSignature ? "Change it with Signature… in the sidebar." : null,
-                signatureFound ? s.SignatureFile : null);
+                !hasSignature ? NotSet + " — no signature is printed"
+                    : (sigText.SignaturePath == CardText.DefaultSignaturePath ? "Default — " : "") + sigText.SignatureFile +
+                      (signatureFound ? "" : " — no signature is printed"),
+                hasSignature && !signatureFound,
+                (hasSignature && !signatureFound ? "File not found. " : "") + "Change it in Card Text… → Front → Director signature.",
+                signatureFound ? sigText.SignatureFile : null);
             bool hasLast = !string.IsNullOrEmpty(s.LastCsvPath);
             add(files, "Last student file", hasLast ? s.LastCsvPath : NotSet,
                 hasLast && !File.Exists(s.LastCsvPath), hasLast && !File.Exists(s.LastCsvPath) ? "File not found." : null,

@@ -420,6 +420,10 @@ namespace NPIC_CARD_APP
                 "Copies of the logos chosen in Card Text… for the QR code, so cards still print if the original moves.", false, true);
             if (logos.State == FolderState.Missing) logos.State = FolderState.NotCreated;
             list.Add(logos);
+            Entry signatures = Make(data, "Signatures", Path.Combine(appData, "Signatures"),
+                "Copies of the signature images chosen in Card Text… → Front → Director signature.", false, true);
+            if (signatures.State == FolderState.Missing) signatures.State = FolderState.NotCreated;
+            list.Add(signatures);
 
             // ---- Program ----
             const string program = "Program";
@@ -437,14 +441,15 @@ namespace NPIC_CARD_APP
 
             // ---- Files in use ----
             const string files = "Files in use";
-            Entry signature = Make(files, "Signature folder", ParentOf(s.SignatureFile),
-                "Folder of the director's signature image (Signature… in the sidebar). " +
-                "Default: Assets\\" + AssetStore.DefaultSignatureFile + ".", false, false);
+            CardText text = s.CardText ?? new CardText();
+            Entry signature = Make(files, "Signature folder", ParentOf(text.SignatureFile),
+                "Folder of the director's signature image. Change it in Card Text… → Front → Director signature. " +
+                "Default: " + CardText.DefaultSignaturePath + ".", false, false);
             if (signature.State == FolderState.Ok)
             {
-                bool found = File.Exists(s.SignatureFile);
-                signature.Contents = (s.UsesDefaultSignature ? "Default " : "") + Path.GetFileName(s.SignatureFile) +
-                    (found ? "" : " — not found, no signature printed");
+                bool found = File.Exists(text.SignatureFile);
+                signature.Contents = (text.SignaturePath == CardText.DefaultSignaturePath ? "Default " : "") +
+                    Path.GetFileName(text.SignatureFile) + (found ? "" : " — not found, no signature printed");
                 signature.Warn = !found;
             }
             list.Add(signature);

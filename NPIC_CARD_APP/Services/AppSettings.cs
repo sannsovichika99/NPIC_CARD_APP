@@ -41,19 +41,11 @@ namespace NPIC_CARD_APP.Services
         public bool DarkMode { get; set; }
         public string DevModeBase64 { get; set; }   // Epson driver settings (Paper Source / Paper Type)
         public string PhotoFolder { get; set; }
-        /// <summary>PNG/JPG of the director's signature chosen with Signature…; empty = the default in Assets.</summary>
+        /// <summary>
+        /// Old place of the director signature (the removed Signature… button). Only read from older settings files:
+        /// <see cref="MigrateSignature"/> moves it to <see cref="Services.CardText.SignaturePath"/>, where Card Text… edits it.
+        /// </summary>
         public string SignaturePath { get; set; }
-
-        /// <summary>True when no signature was chosen, so Assets\director_signature.png is used.</summary>
-        [XmlIgnore]
-        public bool UsesDefaultSignature { get { return string.IsNullOrEmpty(SignaturePath); } }
-
-        /// <summary>The signature image the cards print: <see cref="SignaturePath"/>, or Assets\director_signature.png.</summary>
-        [XmlIgnore]
-        public string SignatureFile
-        {
-            get { return UsesDefaultSignature ? AssetStore.DefaultSignaturePath : SignaturePath; }
-        }
 
         public string LastCsvPath { get; set; }
 
@@ -282,6 +274,7 @@ namespace NPIC_CARD_APP.Services
                     {
                         var settings = (AppSettings)serializer.Deserialize(fs);
                         if (settings.CardText == null) settings.CardText = new CardText();
+                        settings.MigrateSignature();
                         return settings;
                     }
                 }
@@ -331,6 +324,7 @@ namespace NPIC_CARD_APP.Services
                 {
                     var settings = (AppSettings)serializer.Deserialize(fs);
                     if (settings.CardText == null) settings.CardText = new CardText();
+                    settings.MigrateSignature();
                     return settings;
                 }
             }
@@ -352,6 +346,17 @@ namespace NPIC_CARD_APP.Services
                 p.SetValue(this, p.GetValue(other));
             }
             if (CardText == null) CardText = new CardText();
+        }
+
+        /// <summary>
+        /// Settings from before the signature moved to Card Text: a signature chosen with the old Signature… button
+        /// becomes <see cref="Services.CardText.SignaturePath"/> (only if Card Text still has the default), then the old value is cleared.
+        /// </summary>
+        private void MigrateSignature()
+        {
+            if (string.IsNullOrEmpty(SignaturePath)) return;
+            if (CardText.SignaturePath == CardText.DefaultSignaturePath) CardText.SignaturePath = SignaturePath;
+            SignaturePath = "";
         }
 
         private static void WriteTo(string path, AppSettings settings)

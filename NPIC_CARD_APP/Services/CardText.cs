@@ -21,6 +21,23 @@ namespace NPIC_CARD_APP.Services
         [Category("1. Front"), DisplayName("Director name")]
         public string DirectorName { get; set; }
 
+        [Category("1. Front"), DisplayName("Director signature"),
+         Description("Signature image printed over the stamp; its white background is removed automatically. " +
+                     "Default: Assets\\director_signature.png. Click … to choose another PNG/JPG — it is copied into the app's settings folder. " +
+                     "Clear the text to print no signature."),
+         Editor(typeof(SignatureFileEditor), typeof(UITypeEditor))]
+        public string SignaturePath { get; set; }
+
+        /// <summary>Default <see cref="SignaturePath"/>, relative to the app folder so it survives moving the app.</summary>
+        public const string DefaultSignaturePath = @"Assets\director_signature.png";
+
+        /// <summary>Full path of <see cref="SignaturePath"/> (a relative path is read from the app folder); "" = no signature.</summary>
+        [Browsable(false), XmlIgnore]
+        public string SignatureFile
+        {
+            get { return ResolveAppPath(SignaturePath); }
+        }
+
         [Category("1. Front"), DisplayName("QR template"),
          Description("Text in each student's QR code. Tokens: {StudentId} {NameEn} {NameKh}. The CSV column QrData overrides this.")]
         public string QrTemplate { get; set; }
@@ -88,6 +105,7 @@ namespace NPIC_CARD_APP.Services
             IssueLine2 = "រាជធានីភ្នំពេញ ថ្ងៃទី៣០ ខែធ្នូ ឆ្នាំ២០២៥";
             DirectorTitle = "នាយកវិទ្យាស្ថាន";
             DirectorName = "តាន់ កុសល";
+            SignaturePath = DefaultSignaturePath;
             QrTemplate = "{StudentId}";
             AddressKh = "ភូមិព្រៃពពេល សង្កាត់សំរោងក្រោម ខណ្ឌពោធិ៍សែនជ័យ រាជធានីភ្នំពេញ";
             Email = "info@npic.edu.kh";

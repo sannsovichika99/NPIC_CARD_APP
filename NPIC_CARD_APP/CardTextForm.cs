@@ -124,11 +124,24 @@ namespace NPIC_CARD_APP
     }
 
     /// <summary>
-    /// "…" button for CardText.BackQrLogoPath: picks an image and copies it to
-    /// %AppData%\NPIC_CARD_APP\Logos, so the card still prints if the original file is moved or deleted.
+    /// "…" button for an image path in Card Text. A picture inside Assets is kept as "Assets\…" (it travels with the app);
+    /// any other picture is copied to %AppData%\NPIC_CARD_APP\<see cref="FolderName"/>, so the card still prints if the
+    /// original file is moved or deleted.
     /// </summary>
-    public class QrLogoFileEditor : UITypeEditor
+    public abstract class ImageFileEditor : UITypeEditor
     {
+        /// <summary>Title of the file dialog.</summary>
+        protected abstract string Title { get; }
+
+        /// <summary>Folder in %AppData%\NPIC_CARD_APP the picked image is copied to.</summary>
+        protected abstract string FolderName { get; }
+
+        /// <summary>Start of the copied file's name, e.g. "qr_logo_".</summary>
+        protected abstract string FilePrefix { get; }
+
+        /// <summary>What the image is, for the error message ("logo", "signature").</summary>
+        protected abstract string What { get; }
+
         public override UITypeEditorEditStyle GetEditStyle(ITypeDescriptorContext context)
         {
             return UITypeEditorEditStyle.Modal;
@@ -139,12 +152,13 @@ namespace NPIC_CARD_APP
             string current = CardText.ResolveAppPath(value as string);   // "Assets\npic_png.png" -> full path
             using (var dlg = new OpenFileDialog
             {
-                Title = "Logo for the centre of the back QR code",
+                Title = Title,
                 Filter = "Images (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp"
             })
             {
-                dlg.InitialDirectory = !string.IsNullOrEmpty(current) && File.Exists(current)
-                    ? Path.GetDirectoryName(current) : AssetStore.Folder;
+                bool hasCurrent = !string.IsNullOrEmpty(current) && File.Exists(current);
+                dlg.InitialDirectory = hasCurrent ? Path.GetDirectoryName(current) : AssetStore.Folder;
+                if (hasCurrent) dlg.FileName = Path.GetFileName(current);
                 if (dlg.ShowDialog() != DialogResult.OK) return value;
 
                 try
@@ -153,27 +167,49 @@ namespace NPIC_CARD_APP
                     using (var fs = new FileStream(dlg.FileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                     using (Image.FromStream(fs)) { }
 
-                    // A picture shipped in Assets travels with the app: keep it relative (like the default) instead of copying it.
+                    // A picture shipped in Assets travels with the app: keep it relative (like the defaults) instead of copying it.
                     string assets = Path.GetFullPath(AssetStore.Folder).TrimEnd('\\') + "\\";
                     string picked = Path.GetFullPath(dlg.FileName);
                     if (picked.StartsWith(assets, StringComparison.OrdinalIgnoreCase))
                         return "Assets\\" + picked.Substring(assets.Length);
 
-                    string folder = Path.Combine(Path.GetDirectoryName(AppSettings.FilePath), "Logos");
+                    // Already one of our copies (picked the current file again): nothing to copy.
+                    string folder = Path.Combine(Path.GetDirectoryName(AppSettings.FilePath), FolderName);
+                    if (string.Equals(Path.GetDirectoryName(picked), Path.GetFullPath(folder), StringComparison.OrdinalIgnoreCase))
+                        return picked;
+
                     Directory.CreateDirectory(folder);
-                    // Unique name: Cancel in Card Text must not change the logo already in use
-                    string target = Path.Combine(folder, "qr_logo_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") +
+                    // Unique name: Cancel in Card Text must not change the image already in use
+                    string target = Path.Combine(folder, FilePrefix + DateTime.Now.ToString("yyyyMMdd_HHmmss") +
                                                          Path.GetExtension(dlg.FileName).ToLowerInvariant());
                     File.Copy(dlg.FileName, target, true);
                     return target;
                 }
                 catch (Exception ex)
                 {
-                    AppDialog.Show("Could not use this file as a logo:\n\n" + ex.Message, "QR logo",
+                    AppDialog.Show("Could not use this file as the " + What + ":\n\n" + ex.Message, Title,
                         MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return value;
                 }
             }
         }
+    }
+
+    /// <summary>"…" for CardText.BackQrLogoPath; uploads go to %AppData%\NPIC_CARD_APP\Logos.</summary>
+    public class QrLogoFileEditor : ImageFileEditor
+    {
+        protected override string Title { get { return "Logo for the centre of the back QR code"; } }
+        protected override string FolderName { get { return "Logos"; } }
+        protected override string FilePrefix { get { return "qr_logo_"; } }
+        protected override string What { get { return "logo"; } }
+    }
+
+    /// <summary>"…" for CardText.SignaturePath; uploads go to %AppData%\NPIC_CARD_APP\Signatures.</summary>
+    public class SignatureFileEditor : ImageFileEditor
+    {
+        protected override string Title { get { return "Director signature (white background is removed automatically)"; } }
+        protected override string FolderName { get { return "Signatures"; } }
+        protected override string FilePrefix { get { return "signature_"; } }
+        protected override string What { get { return "signature"; } }
     }
 }
