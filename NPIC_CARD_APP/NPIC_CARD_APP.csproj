@@ -54,6 +54,9 @@
       <Link>Version.cs</Link>
     </Compile>
     <Compile Include="MarkdownWriter.cs" />
+    <Compile Include="ActivationForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="UpdateForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -143,6 +146,7 @@
     <Compile Include="Services\ExcelStudentLoader.cs" />
     <Compile Include="Services\ExcelTemplateWriter.cs" />
     <Compile Include="Services\GoogleDrivePhotoSync.cs" />
+    <Compile Include="Services\LicenseService.cs" />
     <Compile Include="Services\GoogleSheetStudentLoader.cs" />
     <Compile Include="Services\OneDriveOnline.cs" />
     <Compile Include="Services\OneDrivePhotoSync.cs" />

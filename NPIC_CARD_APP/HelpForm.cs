@@ -946,6 +946,14 @@ namespace NPIC_CARD_APP
             if (!string.IsNullOrEmpty(_settings.SkippedUpdateVersion))
                 w.Row(T("Skipped version", "កំណែដែលបានរំលង"), _settings.SkippedUpdateVersion);
 
+            w.Heading(T("License", "អាជ្ញាប័ណ្ណ"));
+            LicenseState license = LicenseService.Check();
+            w.Row(T("Status", "ស្ថានភាព"), license == LicenseState.Activated
+                ? T("Activated on this PC", "បានធ្វើឱ្យសកម្មលើកុំព្យូទ័រនេះ")
+                : T("Not activated", "មិនទាន់ធ្វើឱ្យសកម្ម"), license != LicenseState.Activated);
+            w.Row(T("Machine ID", "Machine ID"), LicenseService.MachineId);
+            w.Row(T("License file", "ឯកសារអាជ្ញាប័ណ្ណ"), LicenseService.FilePath);
+
             w.Heading(T("Activity", "សកម្មភាព"));
             if (_studentCount >= 0)
                 w.Row(T("Students loaded", "និស្សិតបាននាំចូល"), _studentCount == 0

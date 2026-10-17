@@ -284,3 +284,26 @@ Add a signing step to the app's `AfterBuild` target, or sign the app, then build
 | Uninstall left `C:\Program Files\Card Studio` behind | The folder contains files the user added, or a file was in use. See the finish screen and `%TEMP%\CardStudio-Setup.log` |
 | *Delete settings* removed nothing | `%AppData%` belongs to the account that approved UAC. If a different admin account elevated the uninstaller, delete `C:\Users\<user>\AppData\Roaming\NPIC_CARD_APP` by hand |
 | Shortcut shows a blank icon | Explorer's icon cache. It refreshes after sign-out, or run `ie4uinit.exe -show` |
+
+---
+
+## 11. Serial numbers (activation)
+
+Card Studio asks for a serial number when it opens, until one valid for **that PC** is entered.
+It works offline, and every serial works on one PC only.
+
+1. On the new PC, open Card Studio. The **Activate Card Studio** window shows the **Machine ID** (e.g. `EM3S-QXMF-403A-5466`); the user clicks **Copy** and sends it to you.
+2. On your PC, make that PC's serial (it is printed, copied to the clipboard and logged to `Installer\serials.csv`):
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File Installer\serial.ps1 -MachineId EM3S-QXMF-403A-5466 -Name "Office PC 1"
+   ```
+3. Send the serial back; the user pastes it and clicks **Activate**. It is saved to `%ProgramData%\NPIC_CARD_APP\license.txt` (all Windows users of the PC) and checked again on every start.
+
+| | |
+|---|---|
+| Private key | `Installer\serial-private.key`. **Git-ignored. Back it up**: without it no new serials can be made for the builds already out there |
+| Public key | `PublicKey` in `NPIC_CARD_APP\Services\LicenseService.cs`; only the public key ships, so serials cannot be forged from the source or the exe |
+| New key pair | `serial.ps1 -NewKey` (add `-Force` to replace one). Writes the new public key into the source; rebuild. **All serials made with the old key stop working** |
+| Machine ID | From Windows' `MachineGuid`. It changes when Windows is reinstalled: that PC then needs a new serial |
+| Status | System Info (Ctrl+Shift+I) → **License** shows the status, Machine ID and license file |
+| Deactivate a PC | Delete `license.txt` (in `%ProgramData%\NPIC_CARD_APP` or `%AppData%\NPIC_CARD_APP`) |

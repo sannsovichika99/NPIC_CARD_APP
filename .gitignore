@@ -366,3 +366,7 @@ FodyWeavers.xsd
 .claude
 # Installer output
 dist/
+
+# Card Studio serial numbers: private signing key and the list of serials made (Installer\serial.ps1). Never commit.
+Installer/serial-private.key
+Installer/serials.csv
