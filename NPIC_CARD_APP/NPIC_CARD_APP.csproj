@@ -65,6 +65,9 @@
     <Compile Include="EpsonDriverForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="RfidListForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="StudentGalleryForm.cs">
       <SubType>Form</SubType>
     </Compile>

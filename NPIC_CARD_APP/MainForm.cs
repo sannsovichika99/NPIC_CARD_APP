@@ -72,7 +72,7 @@ namespace NPIC_CARD_APP
         private bool _refreshOnActivate;   // photo folder opened in Explorer: re-read photos when the user comes back
         private NavItem _navGallery, _navHistory;
 
-        // RFID tab of the Print setup card: save the printed card's chip UID to SQL Server
+        // RFID tab of the Print setup card: save the printed card's chip UID to the RFID CSV file
         private PillTabs _setupTabs;
         private TextBox _txtRfid;
         private Button _btnRfidUpload;
@@ -209,6 +209,8 @@ namespace NPIC_CARD_APP
                     "Connect a shared Google Sheet, preview its students and import them (Ctrl+Shift+G)"),
                 _navGallery,
                 _navHistory,
+                Nav("RFID Cards", Theme.IcoList, ShowRfidList,
+                    "Card numbers saved for printed cards, and loaded students who have no card yet (Ctrl+Shift+R)"),
                 Nav("Print Queue", Theme.IcoPrint, ShowPrintQueue, "See or cancel jobs waiting in Windows"),
                 Nav("Epson Driver Setup…", Theme.IcoSettings, DriverSetup,
                     "Choose the Epson card printer and save its paper source, paper type and quality (Ctrl+Shift+E)"),
@@ -548,7 +550,7 @@ namespace NPIC_CARD_APP
                 if (rfidPage.Visible) { UpdateRfidPanel(); _txtRfid.Focus(); }
             };
             _tip.SetToolTip(tabs, "Printer = driver and checks · Tray = slot positions and card orientation · " +
-                                  "RFID = save the printed card's chip number to the database");
+                                  "RFID = save the printed card's chip number to the RFID CSV file");
 
             return MakeCard("Print setup", pages, tabs);
         }
@@ -656,7 +658,7 @@ namespace NPIC_CARD_APP
 
         /// <summary>
         /// RFID tab: after a card is printed, tap it on the USB reader (or type its number) and Upload saves
-        /// the chip UID for the selected student in SQL Server (table <see cref="AppSettings.RfidTable"/>).
+        /// the chip UID for the selected student in the RFID CSV file (<see cref="RfidCardWriter.FilePath"/>).
         /// </summary>
         private Control BuildRfidPage()
         {
@@ -687,7 +689,7 @@ namespace NPIC_CARD_APP
             _tip.SetToolTip(_txtRfid, "RFID card number (UID). A USB reader types it here and presses Enter, which uploads it.");
 
             _btnRfidUpload = MakeButton("Upload", PillKind.Primary, (s, e) => UploadRfid(),
-                "Save this RFID card number for the selected student in the SQL Server database (Enter)");
+                "Save this RFID card number for the selected student in the RFID CSV file (Enter)");
             _btnRfidUpload.MinimumSize = new Size(110, 36);
             _btnRfidUpload.Margin = new Padding(0, 2, 0, 2);
             _btnRfidUpload.Anchor = AnchorStyles.Right;
@@ -710,13 +712,16 @@ namespace NPIC_CARD_APP
                 Dock = DockStyle.Fill, AutoEllipsis = true, ForeColor = TextMuted, Font = CaptionFont,
                 TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(1, 0, 0, 0)
             };
-            var targetRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(0) };
+            var targetRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = new Padding(0) };
             targetRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            targetRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             targetRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             targetRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
             targetRow.Controls.Add(_lblRfidTarget, 0, 0);
-            targetRow.Controls.Add(MakeButton("SQL Server…", PillKind.Ghost, (s, e) => ConnectSqlServer(),
-                "Set the SQL Server and database the RFID numbers are saved to (Ctrl+D)"), 1, 0);
+            targetRow.Controls.Add(MakeButton("List…", PillKind.Ghost, (s, e) => ShowRfidList(),
+                "Every saved card number, and loaded students who have no card yet (Ctrl+Shift+R)"), 1, 0);
+            targetRow.Controls.Add(MakeButton("Change…", PillKind.Ghost, (s, e) => ChangeRfidFile(),
+                "Choose where the RFID CSV file is kept, e.g. a shared network folder used by several PCs"), 2, 0);
 
             var body = new TableLayoutPanel { ColumnCount = 1, RowCount = 5, Margin = new Padding(0), BackColor = Surface, Font = SetupFont };
             body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
@@ -724,7 +729,7 @@ namespace NPIC_CARD_APP
             body.RowStyles.Add(new RowStyle(SizeType.Absolute, 20f));    // printed? / saved card
             body.RowStyles.Add(new RowStyle(SizeType.Absolute, 46f));    // textbox + Upload
             body.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));    // last result
-            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 36f));    // database + SQL Server…
+            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 36f));    // RFID file + Open / Change…
             body.Controls.Add(_lblRfidStudent, 0, 0);
             body.Controls.Add(_lblRfidPrinted, 0, 1);
             body.Controls.Add(inputRow, 0, 2);
@@ -1302,7 +1307,6 @@ namespace NPIC_CARD_APP
             }
             SaveSettings(false);   // keep the connection details even when only Test Connection was used
             if (loaded != null) ShowSqlStudents(loaded, source);
-            UpdateRfidPanel();   // the RFID tab shows the database it saves to
         }
 
         /// <summary>Replaces the student list with the students read from SQL Server.</summary>
@@ -1591,6 +1595,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.Shift | Keys.F: ShowFolders(); return true;
                 case Keys.Control | Keys.Shift | Keys.C: ShowCsvFiles(); return true;
                 case Keys.Control | Keys.Shift | Keys.E: DriverSetup(); return true;
+                case Keys.Control | Keys.Shift | Keys.R: ShowRfidList(); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
@@ -1803,7 +1808,7 @@ namespace NPIC_CARD_APP
             }
             SetStatus(historyError != null
                 ? string.Format("Missing history: {0} card(s) printed, but the print history could not be saved ({1}).", list.Count, historyError)
-                : string.Format("Done: {0} card(s), {1} side. Tap each card on the RFID reader to save it to the database.", list.Count, side));
+                : string.Format("Done: {0} card(s), {1} side. Tap each card on the RFID reader to save its number.", list.Count, side));
             UpdatePrintedStat();
 
             // Next step: register the printed card's RFID chip. The selection is kept (the back side may be printed next);
@@ -1897,7 +1902,7 @@ namespace NPIC_CARD_APP
             }
 
             if (sqlStudents != null) ShowSqlStudents(sqlStudents, sqlSource);   // loaded with SQL Server… in the overview
-            UpdateRfidPanel();   // SQL settings may have changed there
+            UpdateRfidPanel();   // an imported settings file may use another RFID file
         }
 
         /// <summary>Folders page: every folder the app uses. A new Photo Folder chosen there is saved and shown here.</summary>
@@ -2005,14 +2010,11 @@ namespace NPIC_CARD_APP
                 _lblRfidPrinted.ForeColor = done ? Success : Warning;
             }
 
-            bool hasServer = !string.IsNullOrWhiteSpace(_settings.SqlServer);
-            string table = string.IsNullOrWhiteSpace(_settings.RfidTable) ? RfidCardWriter.DefaultTable : _settings.RfidTable.Trim();
-            _lblRfidTarget.Text = hasServer
-                ? "Saves to " + _settings.SqlServer.Trim() +
-                  (string.IsNullOrWhiteSpace(_settings.SqlDatabase) ? "" : " / " + _settings.SqlDatabase.Trim()) + "  ·  " + table
-                : "No SQL Server set up yet — click SQL Server…";
-            _lblRfidTarget.ForeColor = hasServer ? TextMuted : Warning;
-            _tip.SetToolTip(_lblRfidTarget, _lblRfidTarget.Text);
+            string path = RfidCardWriter.FilePath(_settings);
+            bool isDefault = string.IsNullOrWhiteSpace(_settings.RfidCsvPath);
+            _lblRfidTarget.Text = "Saves to " + Path.GetFileName(path) + (isDefault ? "  (app data)" : "  ·  " + Path.GetDirectoryName(path));
+            _lblRfidTarget.ForeColor = TextMuted;
+            _tip.SetToolTip(_lblRfidTarget, "RFID CSV file: " + path);
 
             UpdateRfidButton();
         }
@@ -2038,7 +2040,74 @@ namespace NPIC_CARD_APP
             _lblRfidResult.ForeColor = tone;
         }
 
-        /// <summary>Saves the RFID number in the textbox for the selected (printed) student to SQL Server.</summary>
+        /// <summary>RFID Cards page: saved card numbers and loaded students without a card; the student chosen there is selected here.</summary>
+        private void ShowRfidList()
+        {
+            using (var form = new RfidListForm(_settings, _students, SelectStudentById))
+            {
+                form.ShowDialog(this);
+            }
+            UpdateRfidPanel();
+        }
+
+        /// <summary>Chooses where the RFID CSV file is kept. An existing RFID file is used as it is; otherwise the current one is copied there.</summary>
+        private void ChangeRfidFile()
+        {
+            string current = RfidCardWriter.FilePath(_settings);
+            string chosen;
+            using (var dlg = new SaveFileDialog
+            {
+                Title = "RFID CSV file",
+                Filter = "CSV file (*.csv)|*.csv",
+                FileName = Path.GetFileName(current),
+                InitialDirectory = Path.GetDirectoryName(current),
+                OverwritePrompt = false,   // picking an existing RFID file means "use it", not "replace it"
+                AddExtension = true,
+                DefaultExt = "csv"
+            })
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                chosen = dlg.FileName;
+            }
+            if (string.Equals(Path.GetFullPath(chosen), Path.GetFullPath(current), StringComparison.OrdinalIgnoreCase)) return;
+
+            string message;
+            try
+            {
+                if (File.Exists(chosen))
+                {
+                    int cards = RfidCardWriter.CheckFile(chosen);   // throws when it is not an RFID file
+                    message = "Using the existing RFID file with " + cards + " card(s):\n" + chosen;
+                }
+                else if (File.Exists(current))
+                {
+                    int cards = RfidCardWriter.CheckFile(current);
+                    Directory.CreateDirectory(Path.GetDirectoryName(chosen));
+                    File.Copy(current, chosen);
+                    message = "The " + cards + " saved card(s) were copied to the new RFID file:\n" + chosen +
+                              "\n\nThe old file is kept:\n" + current;
+                }
+                else
+                {
+                    message = "New RFID cards will be saved to:\n" + chosen + "\n\nThe file is created with the first card.";
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowError(ex);
+                return;
+            }
+
+            // The default location is stored as "" so it follows the Windows user's AppData.
+            _settings.RfidCsvPath = string.Equals(Path.GetFullPath(chosen), Path.GetFullPath(RfidCardWriter.DefaultPath),
+                StringComparison.OrdinalIgnoreCase) ? "" : chosen;
+            SaveSettings(false);
+            UpdateRfidPanel();
+            SetStatus("RFID file: " + chosen);
+            AppDialog.Show(this, message, Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        /// <summary>Saves the RFID number in the textbox for the selected (printed) student to the RFID CSV file.</summary>
         private async void UploadRfid()
         {
             if (_rfidBusy) return;
@@ -2062,15 +2131,6 @@ namespace NPIC_CARD_APP
                     Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 _txtRfid.Focus();
                 _txtRfid.SelectAll();
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(_settings.SqlServer))
-            {
-                if (AppDialog.Show(this, "No SQL Server is set up yet, so the RFID card cannot be saved.\n\n" +
-                        "Open the SQL Server page now? (Test Connection is enough — you don't need to load students.)",
-                        Text, MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
-                    ConnectSqlServer();
                 return;
             }
 

@@ -415,7 +415,7 @@ namespace NPIC_CARD_APP
             // ---- App data (%AppData%\NPIC_CARD_APP) ----
             const string data = "App data";
             list.Add(Make(data, "Settings & history", appData,
-                "settings.xml, its backup and print-history.csv for this Windows user.", false, true));
+                "settings.xml, its backup, print-history.csv and (by default) rfid-cards.csv for this Windows user.", false, true));
             Entry logos = Make(data, "QR logos", Path.Combine(appData, "Logos"),
                 "Copies of the logos chosen in Card Text… for the QR code, so cards still print if the original moves.", false, true);
             if (logos.State == FolderState.Missing) logos.State = FolderState.NotCreated;
@@ -459,6 +459,13 @@ namespace NPIC_CARD_APP
                 "Folder listed by CSV Files… When it is not set, CSV Files… lists the last student file folder.", false, false);
             csv.ChangeHint = "Change it in CSV Files… → Change Folder… (Ctrl+Shift+C).";
             list.Add(csv);
+            if (!string.IsNullOrWhiteSpace(s.RfidCsvPath))
+            {
+                Entry rfid = Make(files, "RFID file folder", ParentOf(s.RfidCsvPath),
+                    "Folder of " + Path.GetFileName(s.RfidCsvPath) + ", where the printed cards' RFID numbers are saved.", true, true);
+                rfid.ChangeHint = "Change it on the RFID tab → Change….";
+                list.Add(rfid);
+            }
 
             return list;
         }

@@ -133,8 +133,11 @@ namespace NPIC_CARD_APP.Services
             set { SqlPasswordProtected = Protect(value, SqlPasswordEntropy); }
         }
 
-        /// <summary>SQL table that RFID card UIDs are uploaded to after printing (created if missing).</summary>
-        public string RfidTable { get; set; }
+        /// <summary>
+        /// CSV file the RFID card UIDs are saved to after printing (created if missing).
+        /// Empty = %AppData%\NPIC_CARD_APP\rfid-cards.csv (see <see cref="RfidCardWriter.FilePath"/>).
+        /// </summary>
+        public string RfidCsvPath { get; set; }
 
         private static readonly byte[] SqlPasswordEntropy = Encoding.UTF8.GetBytes("NPIC_CARD_APP.SqlPassword");
 
@@ -234,7 +237,7 @@ namespace NPIC_CARD_APP.Services
             SqlEncrypt = false;
             SqlTrustServerCertificate = true;
             SqlQuery = "";
-            RfidTable = RfidCardWriter.DefaultTable;
+            RfidCsvPath = "";
             Slot1X = 0f;
             Slot1Y = 0f;
             Slot2X = 0f;
