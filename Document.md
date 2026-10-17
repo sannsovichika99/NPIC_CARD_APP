@@ -1,3 +1,31 @@
+### v1.0.0.2
+
+Release date: 2026-10-18
+
+This version makes Check for Updates work with no setup: Card Studio now gets new versions from its GitHub releases.
+
+## Feature
+* Check for Updates (Ctrl+U) reads the latest release from GitHub: https://github.com/sannsovichika99/NPIC_CARD_APP/releases
+* No update address to enter: the "Update address" box is removed from the Check for Updates page
+* The download is verified with the SHA-256 that GitHub publishes for CardStudio-Setup.exe
+* Release notes are shown formatted (headings, bold, lists, tables), including Khmer text
+* "Check Now" renamed to "Check Again (F5)"
+* When the check fails, the page shows what to do: check the internet connection, or download the setup from the releases page
+* System Info shows "Updates from" (the releases page) and any new version that is available
+* The user guide (F1) explains that updates come from GitHub and need the internet
+
+## Fix
+* Four-part versions are shown correctly: update.json, Settings > Apps and the GitHub tag now all show 1.0.0.2 (was 1.0.0)
+* build.ps1 accepts 1.2.0 or 1.2.0.1 with -Version
+* Removed the unused update address setting (UpdateUrl)
+
+## Known issue
+* PCs on v1.0.0.1 with no update address set will not find this version: install v1.0.0.2 by hand once, then later updates arrive by themselves
+* PCs with a 1.0.2 build will not be offered 1.0.0.2, because 1.0.0.2 is a lower number
+* Help still lists .xls files, but import only accepts .xlsx / .xlsm
+
+---
+
 ### v1.0.0.1
 
 Release date: 2026-10-17
