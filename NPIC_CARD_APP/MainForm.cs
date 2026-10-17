@@ -89,6 +89,7 @@ namespace NPIC_CARD_APP
             _settings = AppSettings.Load();
 
             Text = "NPIC Card App — Epson L8050";
+            if (Branding.Icon != null) Icon = Branding.Icon;
             StartPosition = FormStartPosition.CenterScreen;
             // Never open larger than the screen (laptops at 125 % scaling only have ~1536 x 824 to work with).
             Rectangle work = Screen.FromPoint(Cursor.Position).WorkingArea;
@@ -184,9 +185,8 @@ namespace NPIC_CARD_APP
                 using (var pen = new Pen(GridLine)) e.Graphics.DrawLine(pen, side.Width - 1, 0, side.Width - 1, side.Height);
             };
 
-            Image logo = null;
-            try { logo = AssetStore.Get("npic_png.png", true, true); }
-            catch (Exception) { /* missing / unreadable logo: the badge falls back to initials */ }
+            // App logo embedded in the exe; null (unreadable resource) makes the badge fall back to initials.
+            Image logo = Branding.Logo;
 
             NavItem dashboard = Nav("Dashboard", Theme.IcoHome, () => { _txtSearch.Focus(); _txtSearch.SelectAll(); },
                 "Student list, card preview and printing (Ctrl+F searches)");

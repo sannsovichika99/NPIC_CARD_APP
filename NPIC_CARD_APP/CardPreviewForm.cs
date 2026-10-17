@@ -69,6 +69,7 @@ namespace NPIC_CARD_APP
         public CardPreviewForm(IList<Student> students, int startIndex, AppSettings settings, PreviewSide side,
                                bool showGrid = false)
         {
+            if (Branding.Icon != null) Icon = Branding.Icon;
             _showGrid = showGrid;
             _students = students ?? new List<Student>();
             _settings = settings;

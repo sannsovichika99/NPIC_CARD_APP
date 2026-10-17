@@ -13,6 +13,7 @@
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -86,6 +87,7 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="UiKit.cs" />
+    <Compile Include="Branding.cs" />
     <Compile Include="SlimScroll.cs" />
     <Compile Include="CardTextForm.cs">
       <SubType>Form</SubType>
@@ -141,6 +143,14 @@
     <None Include="students-sample.csv">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\app.ico">
+      <LogicalName>NPIC_CARD_APP.app.ico</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\app_logo.png">
+      <LogicalName>NPIC_CARD_APP.app_logo.png</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\director_signature.png">

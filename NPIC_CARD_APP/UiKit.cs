@@ -63,6 +63,10 @@ namespace NPIC_CARD_APP
         public static readonly Color ButtonHover   = Color.FromArgb(124, 115, 250);
         public static readonly Color ButtonPressed = Color.FromArgb(86, 78, 220);
 
+        // App logo colours (Assets\app_logo.png): navy line art and orange accents.
+        public static readonly Color BrandBlue   = Color.FromArgb(31, 90, 138);    // #1F5A8A
+        public static readonly Color BrandOrange = Color.FromArgb(230, 135, 56);   // #E68738
+
         /// <summary>Veil drawn over the main window while a popup is open.</summary>
         public static readonly Color Backdrop = Pick(26, 24, 58, 0, 0, 0);
         public static readonly double BackdropOpacity = Dark ? 0.5 : 0.32;
@@ -798,16 +802,17 @@ namespace NPIC_CARD_APP
             g.Clear(Theme.Surface);
             Theme.HighQuality(g);
 
-            var badge = new RectangleF(20, 28, 40, 40);
-            Theme.DrawShadow(g, badge, 10, Theme.Accent, 6, 14, 3f);
-            using (GraphicsPath p = Theme.RoundRect(badge, 10))
+            var badge = new RectangleF(18, 24, 48, 48);
+            Theme.DrawShadow(g, badge, 12, _logo != null ? Theme.BrandBlue : Theme.Accent, 6, 14, 3f);
+            using (GraphicsPath p = Theme.RoundRect(badge, 12))
             {
                 if (_logo != null)
                 {
-                    using (var b = new SolidBrush(Theme.Surface)) g.FillPath(b, p);
-                    using (var pen = new Pen(Theme.AccentSoft)) g.DrawPath(pen, p);
+                    // The logo's navy line art needs a light tile, so the badge stays white in dark mode too.
+                    using (var b = new SolidBrush(Color.White)) g.FillPath(b, p);
+                    using (var pen = new Pen(Color.FromArgb(Theme.Dark ? 0 : 60, Theme.BrandBlue))) g.DrawPath(pen, p);
                     RectangleF inner = badge;
-                    inner.Inflate(-5, -5);
+                    inner.Inflate(-3, -3);
                     float scale = Math.Min(inner.Width / _logo.Width, inner.Height / _logo.Height);
                     float w = _logo.Width * scale, h = _logo.Height * scale;
                     g.InterpolationMode = InterpolationMode.HighQualityBicubic;
@@ -822,8 +827,8 @@ namespace NPIC_CARD_APP
                 }
             }
 
-            Theme.DrawText(g, Text, Theme.Brand, Theme.TextMain, new RectangleF(70, 28, Width - 76, 22));
-            Theme.DrawText(g, _subtitle, Theme.Small, Theme.TextMuted, new RectangleF(70, 49, Width - 76, 18));
+            Theme.DrawText(g, Text, Theme.Brand, Theme.TextMain, new RectangleF(76, 28, Width - 82, 22));
+            Theme.DrawText(g, _subtitle, Theme.Small, Theme.TextMuted, new RectangleF(76, 49, Width - 82, 18));
             using (var pen = new Pen(Theme.GridLine))
                 g.DrawLine(pen, 20, Height - 1, Width - 20, Height - 1);
         }

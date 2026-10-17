@@ -37,6 +37,7 @@ namespace NPIC_CARD_APP
             FormBorderStyle = FormBorderStyle.Sizable;
             StartPosition = FormStartPosition.CenterParent;
             ShowInTaskbar = false;
+            if (Branding.Icon != null) Icon = Branding.Icon;
             MinimizeBox = false;
             BackColor = Theme.Surface;
             ForeColor = Theme.TextMain;
