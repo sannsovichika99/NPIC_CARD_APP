@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NPIC_CARD_APP", "NPIC_CARD_
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CardStudio.Setup", "Installer\CardStudio.Setup\CardStudio.Setup.csproj", "{3A9D2C71-58E4-4B0F-9C6A-71E2B8D4F5A3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SerialGenerator", "Tools\SerialGenerator\SerialGenerator.csproj", "{5E2B7C4D-9A13-4F68-B0D2-6C8E1A3F9B57}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,6 +22,10 @@ Global
 		{3A9D2C71-58E4-4B0F-9C6A-71E2B8D4F5A3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3A9D2C71-58E4-4B0F-9C6A-71E2B8D4F5A3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3A9D2C71-58E4-4B0F-9C6A-71E2B8D4F5A3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5E2B7C4D-9A13-4F68-B0D2-6C8E1A3F9B57}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5E2B7C4D-9A13-4F68-B0D2-6C8E1A3F9B57}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5E2B7C4D-9A13-4F68-B0D2-6C8E1A3F9B57}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5E2B7C4D-9A13-4F68-B0D2-6C8E1A3F9B57}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

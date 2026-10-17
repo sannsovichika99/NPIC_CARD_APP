@@ -147,6 +147,7 @@
     <Compile Include="Services\ExcelTemplateWriter.cs" />
     <Compile Include="Services\GoogleDrivePhotoSync.cs" />
     <Compile Include="Services\LicenseService.cs" />
+    <Compile Include="Services\SerialFormat.cs" />
     <Compile Include="Services\GoogleSheetStudentLoader.cs" />
     <Compile Include="Services\OneDriveOnline.cs" />
     <Compile Include="Services\OneDrivePhotoSync.cs" />

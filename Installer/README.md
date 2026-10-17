@@ -293,7 +293,16 @@ Card Studio asks for a serial number when it opens, until one valid for **that P
 It works offline, and every serial works on one PC only.
 
 1. On the new PC, open Card Studio. The **Activate Card Studio** window shows the **Machine ID** (e.g. `EM3S-QXMF-403A-5466`); the user clicks **Copy** and sends it to you.
-2. On your PC, make that PC's serial (it is printed, copied to the clipboard and logged to `Installer\serials.csv`):
+2. On your PC, make that PC's serial with the **Serial Generator** (`Tools\SerialGenerator`): paste the Machine ID
+   (or the whole message it came in), type who it is for, press **Enter**. The serial is copied to the clipboard and
+   logged to `serials.csv` beside the key; **Copy Message** gives a ready-to-send text with instructions in English and Khmer.
+   Build it once with Visual Studio (it is in `NPIC_CARD_APP.sln`) or:
+   ```powershell
+   & "<MSBuild.exe>" Tools\SerialGenerator\SerialGenerator.csproj /p:Configuration=Release
+   Tools\SerialGenerator\bin\Release\CardStudio.SerialGenerator.exe
+   ```
+   It finds `Installer\serial-private.key` by itself; elsewhere, use **Open Key…** (Ctrl+O) or put the key next to the exe.
+   The same can be done from the command line (same log file):
    ```powershell
    powershell -ExecutionPolicy Bypass -File Installer\serial.ps1 -MachineId EM3S-QXMF-403A-5466 -Name "Office PC 1"
    ```
@@ -301,6 +310,7 @@ It works offline, and every serial works on one PC only.
 
 | | |
 |---|---|
+| Serial Generator | Admin only: **never give it to users** and never add it to the setup (the installer packs only `NPIC_CARD_APP\bin`). It shares `SerialFormat.cs` and `LicenseService.cs` with the app, so its serials always pass the app's check; it warns when its key does not match the app's public key |
 | Private key | `Installer\serial-private.key`. **Git-ignored. Back it up**: without it no new serials can be made for the builds already out there |
 | Public key | `PublicKey` in `NPIC_CARD_APP\Services\LicenseService.cs`; only the public key ships, so serials cannot be forged from the source or the exe |
 | New key pair | `serial.ps1 -NewKey` (add `-Force` to replace one). Writes the new public key into the source; rebuild. **All serials made with the old key stop working** |

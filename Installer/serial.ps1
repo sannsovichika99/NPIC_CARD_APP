@@ -100,7 +100,7 @@ if ($NewKey) {
     [IO.File]::WriteAllText($keyFile, $private + [Environment]::NewLine)
 
     $text = [IO.File]::ReadAllText($sourceFile)
-    $pattern = '(private const string PublicKey = ")[^"]*(";)'
+    $pattern = '((?:private|internal) const string PublicKey = ")[^"]*(";)'
     if ($text -notmatch $pattern) { throw "No PublicKey constant found in $sourceFile" }
     $text = [regex]::Replace($text, $pattern, { param($m) $m.Groups[1].Value + $public + $m.Groups[2].Value })
     [IO.File]::WriteAllText($sourceFile, $text)
