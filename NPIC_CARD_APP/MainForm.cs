@@ -88,7 +88,7 @@ namespace NPIC_CARD_APP
         {
             _settings = AppSettings.Load();
 
-            Text = "Card Studio";
+            UpdateTitle();
             if (Branding.Icon != null) Icon = Branding.Icon;
             StartPosition = FormStartPosition.CenterScreen;
             // Never open larger than the screen (laptops at 125 % scaling only have ~1536 x 824 to work with).
@@ -1948,8 +1948,23 @@ namespace NPIC_CARD_APP
                 setupStarted = form.SetupStarted;
             }
             SaveSettings(false);   // update address, startup option, last check, skipped version
+            UpdateTitle();         // a check on the page may have found (or ruled out) a new version
 
             if (setupStarted) Close();   // the setup waits for this window to close, then updates and can restart the app
+        }
+
+        /// <summary>
+        /// Window title: product name and running version, plus the newer version when the last check found one
+        /// ("Card Studio 1.0.2  —  Update 1.0.3 available (Ctrl+U)"). Shown on every start until that update is installed,
+        /// also when it was skipped (skipping only silences the start-up popup).
+        /// </summary>
+        private void UpdateTitle()
+        {
+            string title = "Card Studio " + UpdateService.CurrentVersionText;
+            string available = _settings.AvailableUpdateVersion;
+            if (UpdateService.IsNewerThanRunning(available))
+                title += "  —  Update " + available.Trim() + " available (Ctrl+U)";
+            Text = title;
         }
 
         /// <summary>
@@ -1972,8 +1987,9 @@ namespace NPIC_CARD_APP
             }
             if (IsDisposed) return;
 
-            _settings.LastUpdateCheck = DateTime.Now;
+            UpdateService.RememberLatest(_settings, info);
             SaveSettings(false);
+            UpdateTitle();
             if (!info.IsNewerThanRunning ||
                 string.Equals(_settings.SkippedUpdateVersion, info.VersionText, StringComparison.Ordinal))
                 return;

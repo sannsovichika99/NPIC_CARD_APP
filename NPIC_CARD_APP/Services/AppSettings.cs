@@ -161,6 +161,12 @@ namespace NPIC_CARD_APP.Services
         /// <summary>Version the user chose to skip ("Skip This Version"): the startup check stays quiet about it.</summary>
         public string SkippedUpdateVersion { get; set; }
 
+        /// <summary>
+        /// Newest version found by the last successful check ("" = none newer). Kept so the window title can say an update
+        /// is available on every start, not only on the days the startup check runs.
+        /// </summary>
+        public string AvailableUpdateVersion { get; set; }
+
         private static readonly byte[] SqlPasswordEntropy = Encoding.UTF8.GetBytes("NPIC_CARD_APP.SqlPassword");
 
         private static string Protect(string value, byte[] entropy)
@@ -264,6 +270,7 @@ namespace NPIC_CARD_APP.Services
             CheckUpdatesOnStartup = true;
             LastUpdateCheck = DateTime.MinValue;
             SkippedUpdateVersion = "";
+            AvailableUpdateVersion = "";
             Slot1X = 0f;
             Slot1Y = 0f;
             Slot2X = 0f;

@@ -118,6 +118,24 @@ namespace NPIC_CARD_APP.Services
             return v.ToString(v.Revision > 0 ? 4 : 3);
         }
 
+        /// <summary>
+        /// True when <paramref name="versionText"/> (e.g. a saved <see cref="AppSettings.AvailableUpdateVersion"/>) is newer than
+        /// the running app. False for empty or unreadable text, and once the app has been updated to it.
+        /// </summary>
+        public static bool IsNewerThanRunning(string versionText)
+        {
+            Version v;
+            return !string.IsNullOrWhiteSpace(versionText) && Version.TryParse(versionText.Trim(), out v) &&
+                   Normalize(v) > CurrentVersion;
+        }
+
+        /// <summary>Remembers the result of a successful check, for the window title.</summary>
+        public static void RememberLatest(AppSettings settings, UpdateInfo latest)
+        {
+            settings.LastUpdateCheck = DateTime.Now;
+            settings.AvailableUpdateVersion = latest.IsNewerThanRunning ? latest.VersionText : "";
+        }
+
         // ===================== Settings helpers =====================
 
         /// <summary>The update source to use: the saved one, or <see cref="DefaultSource"/>.</summary>

@@ -232,7 +232,7 @@ namespace NPIC_CARD_APP
             {
                 UpdateInfo info = await UpdateService.CheckAsync(source, _cts.Token);
                 _settings.UpdateUrl = typed;   // remembered once it worked ("" = the default source)
-                _settings.LastUpdateCheck = DateTime.Now;
+                UpdateService.RememberLatest(_settings, info);   // last check time + the version for the main window's title
                 if (info.IsNewerThanRunning) ShowAvailable(info);
                 else ShowUpToDate(info);
             }
