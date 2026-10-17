@@ -70,7 +70,7 @@ namespace NPIC_CARD_APP
             get
             {
                 return
-                    "1.  Once per school: click “Register App…” → New registration → any name (e.g. NPIC Card App) → Supported account types: " +
+                    "1.  Once per school: click “Register App…” → New registration → any name (e.g. Card Studio) → Supported account types: " +
                     "“Accounts in any organizational directory and personal Microsoft accounts” → Register.\n" +
                     "     Copy the “Application (client) ID” into App ID, then open Authentication → “Allow public client flows” → Yes → Save.\n" +
                     "2.  In OneDrive right-click the photo folder → Share → Copy link, and paste it above " +

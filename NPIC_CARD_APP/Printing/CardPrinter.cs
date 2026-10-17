@@ -90,7 +90,7 @@ namespace NPIC_CARD_APP.Printing
         /// </summary>
         public void PrintPositionFinder()
         {
-            Send("NPIC Card Position Finder", (g, page) =>
+            Send("Card Studio Position Finder", (g, page) =>
             {
                 // Cover at least 0..330 mm in both directions, whatever page size the driver reports
                 // (anything outside the real page is simply clipped).

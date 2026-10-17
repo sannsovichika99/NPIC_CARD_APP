@@ -156,10 +156,10 @@ namespace NPIC_CARD_APP.Services
             sb.Append("<sheetData>");
 
             int r = 1;
-            Row(sb, r++, StyleTitle, "NPIC Card Studio — student list template");
+            Row(sb, r++, StyleTitle, "Card Studio — student list template");
             Row(sb, r++, 0, "1. Fill in the Students sheet: one student per row. Keep the header row (row 1) unchanged.");
             Row(sb, r++, 0, "2. Type dates as dd/MM/yyyy, e.g. 15/03/2007. The columns are formatted as Text so Excel keeps them exactly as typed.");
-            Row(sb, r++, 0, "3. Save the file, then in NPIC Card Studio click  Import Excel…  and choose it.");
+            Row(sb, r++, 0, "3. Save the file, then in Card Studio click  Import Excel…  and choose it.");
             r++;
 
             sb.AppendFormat("<row r=\"{0}\">", r);

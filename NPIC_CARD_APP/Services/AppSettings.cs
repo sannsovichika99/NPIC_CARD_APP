@@ -318,7 +318,7 @@ namespace NPIC_CARD_APP.Services
         }
 
         /// <summary>Reads a settings file for Import Settings…; unlike <see cref="Load"/> it fails loudly.</summary>
-        /// <exception cref="InvalidDataException">The file is not an NPIC Card App settings file.</exception>
+        /// <exception cref="InvalidDataException">The file is not a Card Studio settings file.</exception>
         public static AppSettings ReadFile(string path)
         {
             try
@@ -334,7 +334,7 @@ namespace NPIC_CARD_APP.Services
             }
             catch (InvalidOperationException ex)   // XmlSerializer: not XML, or not <AppSettings>
             {
-                throw new InvalidDataException("This is not an NPIC Card App settings file:\n" + path, ex);
+                throw new InvalidDataException("This is not a Card Studio settings file:\n" + path, ex);
             }
         }
 

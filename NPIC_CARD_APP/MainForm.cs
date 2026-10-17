@@ -88,7 +88,7 @@ namespace NPIC_CARD_APP
         {
             _settings = AppSettings.Load();
 
-            Text = "NPIC Card App — Epson L8050";
+            Text = "Card Studio";
             if (Branding.Icon != null) Icon = Branding.Icon;
             StartPosition = FormStartPosition.CenterScreen;
             // Never open larger than the screen (laptops at 125 % scaling only have ~1536 x 824 to work with).
@@ -198,7 +198,7 @@ namespace NPIC_CARD_APP
 
             var items = new List<Control>
             {
-                new BrandBlock("NPIC Card Studio", "Epson L8050  ·  ID cards", logo),
+                new BrandBlock("Card Studio", "ID Card Printer", logo),
                 Spacer(14),
                 dashboard,
                 Nav("Import Students…", Theme.IcoDownload, ShowImportPage,
@@ -1728,7 +1728,7 @@ namespace NPIC_CARD_APP
                            ? CardPrinter.TrayImage(CardRenderer.RenderCalibration(2, _settings.Slot2X, _settings.Slot2Y), _settings, false)
                            : null)
                 {
-                    printer.Print(c1, c2, "NPIC Card Calibration");
+                    printer.Print(c1, c2, "Card Studio Calibration");
                 }
 
                 AppDialog.Show(this,
@@ -1785,7 +1785,7 @@ namespace NPIC_CARD_APP
 
                 try
                 {
-                    string document = "NPIC Card " + a.StudentId + " " + side;
+                    string document = "Card Studio " + a.StudentId + " " + side;
                     using (Bitmap img1 = RenderSide(a, front))
                     using (Bitmap img2 = b != null ? RenderSide(b, front) : null)
                     {

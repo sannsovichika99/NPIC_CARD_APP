@@ -3,6 +3,10 @@ using System.Drawing;
 using System.IO;
 using System.Reflection;
 
+// Name Windows shows for the exe (Task Manager, file properties, taskbar tooltips).
+[assembly: AssemblyTitle("Card Studio")]
+[assembly: AssemblyProduct("Card Studio")]
+
 namespace NPIC_CARD_APP
 {
     /// <summary>

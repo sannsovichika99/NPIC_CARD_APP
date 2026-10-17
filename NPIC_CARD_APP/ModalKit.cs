@@ -488,7 +488,7 @@ namespace NPIC_CARD_APP
         {
             _message = text ?? "";
             _icon = icon;
-            Text = string.IsNullOrEmpty(caption) ? "NPIC Card" : caption;
+            Text = string.IsNullOrEmpty(caption) ? "Card Studio" : caption;
             Resizable = false;
             KeyPreview = true;
             ApplyIcon(icon);
