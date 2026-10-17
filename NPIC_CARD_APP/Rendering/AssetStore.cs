@@ -28,6 +28,15 @@ namespace NPIC_CARD_APP.Rendering
             get { return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets"); }
         }
 
+        /// <summary>Director signature printed when no other signature image is chosen (optional: none printed if missing).</summary>
+        public const string DefaultSignatureFile = "director_signature.png";
+
+        /// <summary>Assets\director_signature.png next to the .exe.</summary>
+        public static string DefaultSignaturePath
+        {
+            get { return Path.Combine(Folder, DefaultSignatureFile); }
+        }
+
         public static string[] MissingFiles()
         {
             return RequiredFiles.Where(f => !File.Exists(Path.Combine(Folder, f))).ToArray();

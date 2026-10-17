@@ -220,7 +220,8 @@ namespace NPIC_CARD_APP
                     "Download student photos from a OneDrive folder link (Microsoft sign-in) into the photo folder (Ctrl+Shift+O)"),
                 Nav("Remove Background…", Theme.IcoBrush, RemovePhotoBackground,
                     "Crop the selected student's photo and remove the wall / screen behind it (Ctrl+B)"),
-                Nav("Signature…", Theme.IcoEdit, ChooseSignature, "Director signature image (white background is removed)"),
+                Nav("Signature…", Theme.IcoEdit, ChooseSignature, "Director signature image (white background is removed). Default: Assets\\" +
+                    AssetStore.DefaultSignatureFile + " — pick it again to go back to the default"),
                 Nav("Card Text…", Theme.IcoFont, EditCardText, "Edit the fixed text printed on the cards"),
 
                 Section("APP"),
@@ -1460,14 +1461,32 @@ namespace NPIC_CARD_APP
             using (var dlg = new OpenFileDialog
             {
                 Filter = "Images (*.png;*.jpg)|*.png;*.jpg;*.jpeg",
-                Title = "Director signature (white background is removed automatically)"
+                Title = "Director signature (white background is removed automatically)",
+                InitialDirectory = SignatureFolder(),
+                FileName = Path.GetFileName(_settings.SignatureFile)
             })
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
-                _settings.SignaturePath = dlg.FileName;
+                // Picking Assets\director_signature.png = back to the default (stored empty, so it follows the app folder).
+                bool isDefault = string.Equals(Path.GetFullPath(dlg.FileName), Path.GetFullPath(AssetStore.DefaultSignaturePath),
+                    StringComparison.OrdinalIgnoreCase);
+                _settings.SignaturePath = isDefault ? "" : dlg.FileName;
                 SaveSettings(false);
                 UpdatePreview();
+                SetStatus(isDefault ? "Signature: default (Assets\\" + AssetStore.DefaultSignatureFile + ")" : "Signature: " + dlg.FileName);
             }
+        }
+
+        /// <summary>Folder the Signature… dialog opens in: the current signature's folder, else Assets.</summary>
+        private string SignatureFolder()
+        {
+            try
+            {
+                string dir = Path.GetDirectoryName(_settings.SignatureFile);
+                if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir)) return dir;
+            }
+            catch (ArgumentException) { /* invalid characters in an old saved path */ }
+            return AssetStore.Folder;
         }
 
         /// <summary>Opens the background-removal dialog for the current student's photo.</summary>

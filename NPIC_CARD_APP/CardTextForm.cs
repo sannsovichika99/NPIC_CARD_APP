@@ -136,15 +136,15 @@ namespace NPIC_CARD_APP
 
         public override object EditValue(ITypeDescriptorContext context, IServiceProvider provider, object value)
         {
-            string current = value as string;
+            string current = CardText.ResolveAppPath(value as string);   // "Assets\npic_png.png" -> full path
             using (var dlg = new OpenFileDialog
             {
                 Title = "Logo for the centre of the back QR code",
                 Filter = "Images (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp"
             })
             {
-                if (!string.IsNullOrEmpty(current) && File.Exists(current))
-                    dlg.InitialDirectory = Path.GetDirectoryName(current);
+                dlg.InitialDirectory = !string.IsNullOrEmpty(current) && File.Exists(current)
+                    ? Path.GetDirectoryName(current) : AssetStore.Folder;
                 if (dlg.ShowDialog() != DialogResult.OK) return value;
 
                 try
@@ -152,6 +152,12 @@ namespace NPIC_CARD_APP
                     // Make sure it really is an image before keeping it
                     using (var fs = new FileStream(dlg.FileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                     using (Image.FromStream(fs)) { }
+
+                    // A picture shipped in Assets travels with the app: keep it relative (like the default) instead of copying it.
+                    string assets = Path.GetFullPath(AssetStore.Folder).TrimEnd('\\') + "\\";
+                    string picked = Path.GetFullPath(dlg.FileName);
+                    if (picked.StartsWith(assets, StringComparison.OrdinalIgnoreCase))
+                        return "Assets\\" + picked.Substring(assets.Length);
 
                     string folder = Path.Combine(Path.GetDirectoryName(AppSettings.FilePath), "Logos");
                     Directory.CreateDirectory(folder);

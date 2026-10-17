@@ -109,7 +109,7 @@ namespace NPIC_CARD_APP.Rendering
                 // Director, stamp, signature
                 DrawText(g, t.DirectorTitle, CardFonts.Muol, DirectorTitlePt, FontStyle.Regular, Blue, 55f, 37.3f, 24.8f, 3.8f, TextFormatFlags.HorizontalCenter);
                 DrawAsset(g, AssetStore.Get("stamp.png", true, true), 56.7f, 38.1f, 12.2f, 12.2f, 1f, false);
-                DrawAsset(g, AssetStore.GetFile(settings.SignaturePath, true, true), 61.5f, 41.4f + SignatureOffsetYMm, 13f, 5.6f, 1f, false);
+                DrawAsset(g, AssetStore.GetFile(settings.SignatureFile, true, true), 61.5f, 41.4f + SignatureOffsetYMm, 13f, 5.6f, 1f, false);
                 DrawText(g, t.DirectorName, CardFonts.Muol, DirectorNamePt, FontStyle.Regular, Navy, 62.9f, 46.4f + SignatureOffsetYMm, 20f, 3.6f, TextFormatFlags.HorizontalCenter);
             }
             return bmp;
@@ -153,7 +153,7 @@ namespace NPIC_CARD_APP.Rendering
                 // QR + social icons
                 FillMm(g, Color.White, 68.3f, 33.8f, 11.3f, 11.3f);
                 string backQr = t.BackQrSource == BackQrSource.Generate ? BuildBackQrText(t) : null;
-                Bitmap backQrLogo = backQr != null ? AssetStore.GetFile(t.BackQrLogoPath, false, true) : null;
+                Bitmap backQrLogo = backQr != null ? AssetStore.GetFile(t.BackQrLogoFile, false, true) : null;
                 if (!TryDrawQr(g, backQr, 68.3f, 33.8f, 11.3f, backQrLogo, t.BackQrLogoPercent))
                     DrawAsset(g, AssetStore.Get("qrcode_for_back_card.png", false, true), 68.6f, 34.1f, 10.7f, 10.7f, 1f, true);
                 DrawText(g, "ស្កេនទីនេះសម្រាប់ព័ត៌មាន", CardFonts.SiemreapGoogle, ScanPt, FontStyle.Regular, Red,

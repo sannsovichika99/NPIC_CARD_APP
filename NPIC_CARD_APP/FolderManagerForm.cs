@@ -437,8 +437,17 @@ namespace NPIC_CARD_APP
 
             // ---- Files in use ----
             const string files = "Files in use";
-            list.Add(Make(files, "Signature folder", ParentOf(s.SignaturePath),
-                "Folder of the director's signature image (Signature… in the sidebar).", false, false));
+            Entry signature = Make(files, "Signature folder", ParentOf(s.SignatureFile),
+                "Folder of the director's signature image (Signature… in the sidebar). " +
+                "Default: Assets\\" + AssetStore.DefaultSignatureFile + ".", false, false);
+            if (signature.State == FolderState.Ok)
+            {
+                bool found = File.Exists(s.SignatureFile);
+                signature.Contents = (s.UsesDefaultSignature ? "Default " : "") + Path.GetFileName(s.SignatureFile) +
+                    (found ? "" : " — not found, no signature printed");
+                signature.Warn = !found;
+            }
+            list.Add(signature);
             list.Add(Make(files, "Last student file folder", ParentOf(s.LastCsvPath),
                 "Folder of the Excel / CSV file the students were last imported from.", false, false));
 

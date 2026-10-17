@@ -136,6 +136,9 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <Content Include="Assets\director_signature.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="Assets\npic_png.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

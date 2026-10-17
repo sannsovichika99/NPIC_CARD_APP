@@ -1,5 +1,8 @@
+using System;
 using System.ComponentModel;
 using System.Drawing.Design;
+using System.IO;
+using System.Xml.Serialization;
 
 namespace NPIC_CARD_APP.Services
 {
@@ -42,9 +45,34 @@ namespace NPIC_CARD_APP.Services
 
         [Category("2. Back"), DisplayName("QR logo"),
          Description("Optional logo in the centre of the generated back QR (only when 'QR source' is Generate). " +
-                     "Click … to upload a PNG/JPG — it is copied into the app's settings folder. Clear the text to remove the logo."),
+                     "Default: Assets\\npic_png.png (the NPIC logo). Click … to upload another PNG/JPG — it is copied into the app's settings folder. " +
+                     "Clear the text to remove the logo."),
          Editor(typeof(QrLogoFileEditor), typeof(UITypeEditor))]
         public string BackQrLogoPath { get; set; }
+
+        /// <summary>Default <see cref="BackQrLogoPath"/>: the NPIC logo, relative to the app folder so it survives moving the app.</summary>
+        public const string DefaultBackQrLogoPath = @"Assets\npic_png.png";
+
+        /// <summary>Full path of <see cref="BackQrLogoPath"/> (a relative path is read from the app folder); "" = no logo.</summary>
+        [Browsable(false), XmlIgnore]
+        public string BackQrLogoFile
+        {
+            get { return ResolveAppPath(BackQrLogoPath); }
+        }
+
+        /// <summary>Makes a path saved relative to the app folder (e.g. Assets\npic_png.png) absolute.</summary>
+        public static string ResolveAppPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return "";
+            try
+            {
+                return Path.IsPathRooted(path) ? path : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path.Trim());
+            }
+            catch (ArgumentException)
+            {
+                return path;   // invalid characters: the file is simply not found
+            }
+        }
 
         [Category("2. Back"), DisplayName("QR logo size (%)"),
          Description("Logo width as a percentage of the QR width (10–30). Bigger is easier to see but harder to scan; 20–25 is safe.")]
@@ -65,9 +93,9 @@ namespace NPIC_CARD_APP.Services
             Email = "info@npic.edu.kh";
             Website = "www.npic.edu.kh";
             OrnamentText = "3";
-            BackQrSource = BackQrSource.Image;
-            BackQrText = "https://www.npic.edu.kh";
-            BackQrLogoPath = "";
+            BackQrSource = BackQrSource.Generate;
+            BackQrText = "https://heylink.me/npic.card/";
+            BackQrLogoPath = DefaultBackQrLogoPath;
             BackQrLogoPercent = 22;
         }
     }

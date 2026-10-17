@@ -41,7 +41,20 @@ namespace NPIC_CARD_APP.Services
         public bool DarkMode { get; set; }
         public string DevModeBase64 { get; set; }   // Epson driver settings (Paper Source / Paper Type)
         public string PhotoFolder { get; set; }
-        public string SignaturePath { get; set; }   // optional PNG/JPG of the director's signature
+        /// <summary>PNG/JPG of the director's signature chosen with Signature…; empty = the default in Assets.</summary>
+        public string SignaturePath { get; set; }
+
+        /// <summary>True when no signature was chosen, so Assets\director_signature.png is used.</summary>
+        [XmlIgnore]
+        public bool UsesDefaultSignature { get { return string.IsNullOrEmpty(SignaturePath); } }
+
+        /// <summary>The signature image the cards print: <see cref="SignaturePath"/>, or Assets\director_signature.png.</summary>
+        [XmlIgnore]
+        public string SignatureFile
+        {
+            get { return UsesDefaultSignature ? AssetStore.DefaultSignaturePath : SignaturePath; }
+        }
+
         public string LastCsvPath { get; set; }
 
         /// <summary>Web API address for Import API… (remembered between runs).</summary>
