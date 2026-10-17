@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{3A9D2C71-58E4-4B0F-9C6A-71E2B8D4F5A3}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>CardStudio.Setup</RootNamespace>
+    <AssemblyName>CardStudio-Setup</AssemblyName>
+    <!--
+      The setup targets 4.8 (not 4.8.1) on purpose: Windows 10 ships 4.8, so the setup can still start there
+      and tell the user that Card Studio needs 4.8.1, instead of Windows showing its own generic error.
+    -->
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <LangVersion>7.3</LangVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+    <!-- 64-bit process on 64-bit Windows: "C:\Program Files" and the 64-bit registry view. -->
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <ApplicationIcon>..\..\NPIC_CARD_APP\Assets\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+
+  <!-- Paths to the application this setup packages. -->
+  <PropertyGroup>
+    <AppProjectFile>$(MSBuildThisFileDirectory)..\..\NPIC_CARD_APP\NPIC_CARD_APP.csproj</AppProjectFile>
+    <AppOutputDir>$(MSBuildThisFileDirectory)..\..\NPIC_CARD_APP\bin\$(Configuration)\</AppOutputDir>
+    <DistDir>$(MSBuildThisFileDirectory)..\..\dist\</DistDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.Windows.Forms" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="ProductInfo.cs" />
+    <Compile Include="SetupOptions.cs" />
+    <Compile Include="InstallEngine.cs" />
+    <Compile Include="UninstallEngine.cs" />
+    <Compile Include="Shortcut.cs" />
+    <Compile Include="SetupUi.cs" />
+    <Compile Include="SetupForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UninstallForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app.manifest" />
+    <EmbeddedResource Include="..\..\NPIC_CARD_APP\Assets\app_logo.png">
+      <LogicalName>CardStudio.Setup.logo.png</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- Builds the app first (same Configuration) without referencing its assembly. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\NPIC_CARD_APP\NPIC_CARD_APP.csproj">
+      <Project>{7C1E5B8A-3F2D-4C6E-9A1B-2D4F6E8A0C11}</Project>
+      <Name>NPIC_CARD_APP</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+
+  <!--
+    Payload: copy the app's build output (minus debug symbols) to obj\...\payload\, zip it,
+    and embed the zip in CardStudio-Setup.exe. Runs after the app project has been built and
+    before resources are processed, so the zip is part of this build.
+  -->
+  <Target Name="BuildPayload" AfterTargets="ResolveProjectReferences">
+    <PropertyGroup>
+      <!-- IntermediateOutputPath (obj\Release\) only exists once the C# targets are imported, so set these here. -->
+      <PayloadStageDir>$(MSBuildThisFileDirectory)$(IntermediateOutputPath)payload\</PayloadStageDir>
+      <PayloadZip>$(MSBuildThisFileDirectory)$(IntermediateOutputPath)payload.zip</PayloadZip>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(AppOutputDir)NPIC_CARD_APP.exe')"
+           Text="App build output not found: $(AppOutputDir)NPIC_CARD_APP.exe" />
+    <ItemGroup>
+      <PayloadFile Include="$(AppOutputDir)**\*"
+                   Exclude="$(AppOutputDir)**\*.pdb;$(AppOutputDir)**\*.vshost.*" />
+    </ItemGroup>
+    <RemoveDir Directories="$(PayloadStageDir)" />
+    <Copy SourceFiles="@(PayloadFile)"
+          DestinationFiles="@(PayloadFile->'$(PayloadStageDir)%(RecursiveDir)%(Filename)%(Extension)')" />
+    <ZipDirectory SourceDirectory="$(PayloadStageDir)" DestinationFile="$(PayloadZip)" Overwrite="true" />
+    <ItemGroup>
+      <EmbeddedResource Include="$(PayloadZip)">
+        <LogicalName>CardStudio.Setup.payload.zip</LogicalName>
+      </EmbeddedResource>
+    </ItemGroup>
+    <Message Importance="high" Text="Payload: @(PayloadFile->Count()) files -> $(PayloadZip)" />
+  </Target>
+
+  <!-- Release builds also drop the single-file setup into <repo>\dist\. -->
+  <Target Name="CopyToDist" AfterTargets="Build" Condition=" '$(Configuration)' == 'Release' ">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(DistDir)" />
+    <Message Importance="high" Text="Setup: $(DistDir)$(TargetFileName)" />
+  </Target>
+</Project>
