@@ -234,6 +234,8 @@ namespace NPIC_CARD_APP
                     "Every folder the app uses: photos, backups, app data, card images — open, change or create them (Ctrl+Shift+F)"),
                 Nav("All Settings…", Theme.IcoSettings, ShowAllSettings,
                     "Show every setting of the app and this PC: printer, tray, files, API, card text, fonts (Ctrl+,)"),
+                Nav("System Info", Theme.IcoInfo, () => ShowHelp(HelpForm.Page.SystemInfo),
+                    "Version, students loaded, cards printed, RFID cards, data files, printer, fonts and card images of this PC (Ctrl+Shift+I)"),
                 Nav("Help & About", Theme.IcoQuestion, () => ShowHelp(HelpForm.Page.Overview),
                     "What Card Studio does, step-by-step user guide, keyboard shortcuts, troubleshooting and system info, " +
                     "in English or Khmer · ការណែនាំប្រើប្រាស់ជាភាសាខ្មែរ (F1)"),
@@ -1600,6 +1602,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.Shift | Keys.C: ShowCsvFiles(); return true;
                 case Keys.Control | Keys.Shift | Keys.E: DriverSetup(); return true;
                 case Keys.Control | Keys.Shift | Keys.R: ShowRfidList(); return true;
+                case Keys.Control | Keys.Shift | Keys.I: ShowHelp(HelpForm.Page.SystemInfo); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
@@ -1914,7 +1917,7 @@ namespace NPIC_CARD_APP
         {
             ReadUiToSettings();   // System info shows the current printer and folders
             bool khmer = _settings.HelpKhmer;
-            using (var form = new HelpForm(_settings, topic))
+            using (var form = new HelpForm(_settings, topic, _students.Count, _source))
             {
                 form.ShowDialog(this);
             }

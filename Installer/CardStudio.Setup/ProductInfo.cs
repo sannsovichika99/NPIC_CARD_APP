@@ -6,8 +6,8 @@ using System.Reflection;
 [assembly: AssemblyTitle("Card Studio Setup")]
 [assembly: AssemblyProduct("Card Studio")]
 [assembly: AssemblyCompany("NPIC")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.0.2.0")]
+[assembly: AssemblyFileVersion("1.0.2.0")]
 
 namespace CardStudio.Setup
 {

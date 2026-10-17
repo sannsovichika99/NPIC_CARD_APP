@@ -8,6 +8,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
+using Microsoft.Win32;
 using NPIC_CARD_APP.Rendering;
 using NPIC_CARD_APP.Services;
 
@@ -47,10 +48,22 @@ namespace NPIC_CARD_APP
         private int _current = -1;
         private bool _kh;
 
-        public HelpForm(AppSettings settings, Page start = Page.Overview)
+        // System info facts, read once when the page opens (files may be on a slow network share).
+        private readonly int _studentCount;
+        private readonly string _studentSource;
+        private string _installedVersion, _installedDir;
+        private int _historyTotal, _historyToday, _rfidCount;
+        private string _historyError, _rfidError;
+
+        /// <param name="studentCount">Students loaded in the main window (-1 = unknown: the Activity row is left out).</param>
+        /// <param name="studentSource">Where they came from (file name, API host, SQL server), or empty.</param>
+        public HelpForm(AppSettings settings, Page start = Page.Overview, int studentCount = -1, string studentSource = null)
         {
             _settings = settings;
             _kh = settings.HelpKhmer;
+            _studentCount = studentCount;
+            _studentSource = studentSource ?? "";
+            ReadFacts();   // before ApplyLanguage, which writes System info for the search index
             _startTopic = (int)start;
             Glyph = Theme.IcoQuestion;
             KeyPreview = true;
@@ -315,6 +328,79 @@ namespace NPIC_CARD_APP
                             T("   ·   Enter / F3 = next", "   ·   Enter / F3 = បន្ទាប់");
             _lblFind.ForeColor = Theme.TextSoft;
             return true;
+        }
+
+        // ===================== System facts =====================
+        /// <summary>Uninstall entry written by the Card Studio installer (CardStudio.Setup, ProductInfo.UninstallKey).</summary>
+        private const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\CardStudio";
+
+        /// <summary>Installed version, print history and RFID counts. Never throws: a problem becomes a warning row.</summary>
+        private void ReadFacts()
+        {
+            try
+            {
+                // The installer writes to the 64-bit registry on 64-bit Windows; this AnyCPU app may run as 32-bit.
+                using (RegistryKey hklm = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine,
+                           Environment.Is64BitOperatingSystem ? RegistryView.Registry64 : RegistryView.Registry32))
+                using (RegistryKey key = hklm.OpenSubKey(UninstallKey))
+                {
+                    if (key != null)
+                    {
+                        _installedVersion = key.GetValue("DisplayVersion") as string;
+                        _installedDir = key.GetValue("InstallLocation") as string;
+                    }
+                }
+            }
+            catch (Exception) { _installedVersion = _installedDir = null; }   // no access: show the exe's own version
+
+            try
+            {
+                List<PrintRecord> history = PrintHistory.Load();
+                _historyTotal = history.Count;
+                _historyToday = history.Count(r => r.PrintedAt.Date == DateTime.Today);
+            }
+            catch (Exception ex) { _historyError = FirstLine(ex.Message); }
+
+            try { _rfidCount = RfidCardWriter.CheckFile(RfidCardWriter.FilePath(_settings)); }
+            catch (Exception ex) { _rfidError = FirstLine(ex.Message); }
+        }
+
+        /// <summary>
+        /// The version to show: the installed version when this exe is the installed copy; otherwise the exe's own
+        /// version, or "development build" when it was not stamped (0.0.0.0, e.g. run from Visual Studio).
+        /// </summary>
+        private string VersionText(out bool warn)
+        {
+            warn = false;
+            string own = Application.ProductVersion;
+            bool stamped = !string.IsNullOrEmpty(own) && own != "0.0.0.0";
+            bool runningInstalled = !string.IsNullOrEmpty(_installedDir) && SamePath(_installedDir, AppDomain.CurrentDomain.BaseDirectory);
+
+            if (!string.IsNullOrEmpty(_installedVersion) && runningInstalled) return _installedVersion;
+
+            string dev = stamped ? own : T("Development build", "កំណែអភិវឌ្ឍន៍");
+            if (!string.IsNullOrEmpty(_installedVersion))
+            {
+                warn = true;   // the installed copy is somewhere else: the user may be running the wrong one
+                return dev + T("  ·  version " + _installedVersion + " is installed in " + _installedDir,
+                               "  ·  កំណែ " + _installedVersion + " បានដំឡើងនៅ " + _installedDir);
+            }
+            return dev + T("  ·  not installed with the Card Studio installer", "  ·  មិនបានដំឡើងដោយកម្មវិធីដំឡើង Card Studio");
+        }
+
+        private static bool SamePath(string a, string b)
+        {
+            try
+            {
+                return string.Equals(Path.GetFullPath(a).TrimEnd('\\'), Path.GetFullPath(b).TrimEnd('\\'),
+                    StringComparison.OrdinalIgnoreCase);
+            }
+            catch (Exception) { return false; }
+        }
+
+        private static string FirstLine(string text)
+        {
+            return (text ?? "").Split('\n')[0].Trim();
         }
 
         // ===================== Actions =====================
@@ -745,6 +831,7 @@ namespace NPIC_CARD_APP
             w.Key("Ctrl+Shift+E", "Epson Driver Setup");
             w.Key("Ctrl+Shift+F", T("Folders", "ថតឯកសារ (Folders)"));
             w.Key("Ctrl+,", T("All Settings", "ការកំណត់ទាំងអស់"));
+            w.Key("Ctrl+Shift+I", T("System info", "ព័ត៌មានប្រព័ន្ធ"));
 
             w.Heading(T("Lists and boxes", "បញ្ជី និងប្រអប់"));
             w.Key("Esc", T("In the search box: clear the search", "ក្នុងប្រអប់ស្វែងរក៖ សម្អាតការស្វែងរក"));
@@ -810,16 +897,35 @@ namespace NPIC_CARD_APP
         private void WriteSystemInfo(GuideWriter w)
         {
             w.Title(T("System info", "ព័ត៌មានប្រព័ន្ធ"));
-            w.Lead(T("Live details of this installation. **Copy System Info** puts all of it on the clipboard.",
-                     "ព័ត៌មានផ្ទាល់នៃការដំឡើងនេះ។ ប៊ូតុង **ចម្លងព័ត៌មានប្រព័ន្ធ** ចម្លងទាំងអស់ទៅ clipboard។"));
+            w.Lead(T("Live details of this installation. Open it any time with **System Info** in the sidebar (Ctrl+Shift+I). " +
+                     "**Copy System Info** puts all of it on the clipboard.",
+                     "ព័ត៌មានផ្ទាល់នៃការដំឡើងនេះ។ បើកវាបានគ្រប់ពេលតាម **System Info** នៅរបារចំហៀង (Ctrl+Shift+I)។ " +
+                     "ប៊ូតុង **ចម្លងព័ត៌មានប្រព័ន្ធ** ចម្លងទាំងអស់ទៅ clipboard។"));
 
             w.Heading(T("Application", "កម្មវិធី"));
             w.Row(T("Product", "ផលិតផល"), T("Card Studio — ID Card Printer", "Card Studio — កម្មវិធីបោះពុម្ពកាតសម្គាល់ខ្លួន"));
-            w.Row(T("Version", "កំណែ"), Application.ProductVersion);
+            bool versionWarn;
+            string version = VersionText(out versionWarn);
+            w.Row(T("Version", "កំណែ"), version, versionWarn);
             w.Row(T("App folder", "ថតកម្មវិធី"), AppDomain.CurrentDomain.BaseDirectory);
             w.Row("Windows", RuntimeInformation.OSDescription.Trim() + (Environment.Is64BitOperatingSystem ? " (64-bit)" : " (32-bit)"));
             w.Row(".NET", RuntimeInformation.FrameworkDescription.Trim());
             w.Row(T("Computer / user", "កុំព្យូទ័រ / អ្នកប្រើ"), Environment.MachineName + " / " + Environment.UserName);
+
+            w.Heading(T("Activity", "សកម្មភាព"));
+            if (_studentCount >= 0)
+                w.Row(T("Students loaded", "និស្សិតបាននាំចូល"), _studentCount == 0
+                    ? T("None — Import Students… (Ctrl+L)", "គ្មាន — Import Students… (Ctrl+L)")
+                    : _studentCount.ToString("N0") + (_studentSource.Length == 0 ? "" : T("  ·  from ", "  ·  ពី ") + _studentSource));
+            w.Row(T("Cards printed", "កាតបានបោះពុម្ព"), _historyError != null
+                ? T("Print history unreadable: ", "មិនអាចអានប្រវត្តិបោះពុម្ព៖ ") + _historyError
+                : T(_historyTotal.ToString("N0") + " card sides in total  ·  " + _historyToday.ToString("N0") + " today",
+                    "សរុប " + _historyTotal.ToString("N0") + " ផ្នែកកាត  ·  ថ្ងៃនេះ " + _historyToday.ToString("N0")),
+                _historyError != null);
+            w.Row(T("RFID cards saved", "កាត RFID បានរក្សាទុក"), _rfidError != null
+                ? T("RFID file unreadable: ", "មិនអាចអានឯកសារ RFID៖ ") + _rfidError
+                : _rfidCount.ToString("N0"),
+                _rfidError != null);
 
             w.Heading(T("Data files", "ឯកសារទិន្នន័យ"));
             w.Row(T("Settings", "ការកំណត់"), AppSettings.FilePath, !File.Exists(AppSettings.FilePath),
