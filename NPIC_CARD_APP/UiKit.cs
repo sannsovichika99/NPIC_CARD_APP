@@ -431,6 +431,9 @@ namespace NPIC_CARD_APP
         private string _badge;
         public string Glyph { get; set; }
 
+        /// <summary>Font of the label while the item is active. Null = <see cref="Theme.NavBold"/>.</summary>
+        public Font ActiveFont { get; set; }
+
         public bool Active { get { return _active; } set { _active = value; Invalidate(); } }
         public string Badge { get { return _badge; } set { if (_badge != value) { _badge = value; Invalidate(); } } }
 
@@ -481,7 +484,7 @@ namespace NPIC_CARD_APP
             Theme.DrawIcon(g, Glyph, 16f, _active ? Theme.Accent : Theme.TextMuted, new RectangleF(18, 0, 30, Height));
 
             float badgeW = string.IsNullOrEmpty(_badge) ? 0 : g.MeasureString(_badge, Theme.NavBold).Width + 8;
-            Theme.DrawText(g, Text, _active ? Theme.NavBold : Font, fore, new RectangleF(54, 0, Width - 54 - badgeW - 14, Height));
+            Theme.DrawText(g, Text, _active ? (ActiveFont ?? Theme.NavBold) : Font, fore, new RectangleF(54, 0, Width - 54 - badgeW - 14, Height));
             if (badgeW > 0)
                 Theme.DrawText(g, _badge, Theme.NavBold, Theme.Accent, new RectangleF(Width - badgeW - 16, 0, badgeW, Height), StringAlignment.Far);
         }

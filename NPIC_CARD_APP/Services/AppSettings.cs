@@ -39,6 +39,8 @@ namespace NPIC_CARD_APP.Services
 
         /// <summary>Dark colour theme for the app windows (never the printed cards). Read once at start-up.</summary>
         public bool DarkMode { get; set; }
+        /// <summary>Language of the About &amp; User Guide page: false = English, true = Khmer.</summary>
+        public bool HelpKhmer { get; set; }
         public string DevModeBase64 { get; set; }   // Epson driver settings (Paper Source / Paper Type)
         public string PhotoFolder { get; set; }
         /// <summary>

@@ -234,6 +234,9 @@ namespace NPIC_CARD_APP
                     "Every folder the app uses: photos, backups, app data, card images — open, change or create them (Ctrl+Shift+F)"),
                 Nav("All Settings…", Theme.IcoSettings, ShowAllSettings,
                     "Show every setting of the app and this PC: printer, tray, files, API, card text, fonts (Ctrl+,)"),
+                Nav("Help & About", Theme.IcoQuestion, () => ShowHelp(HelpForm.Page.Overview),
+                    "What Card Studio does, step-by-step user guide, keyboard shortcuts, troubleshooting and system info, " +
+                    "in English or Khmer · ការណែនាំប្រើប្រាស់ជាភាសាខ្មែរ (F1)"),
                 Spacer(10)
             };
 
@@ -934,7 +937,7 @@ namespace NPIC_CARD_APP
             if (_lblEmpty == null) return;
             _lblEmpty.Text = _students.Count == 0
                 ? "No students loaded yet.\n\nClick  Import Students…  in the sidebar (Ctrl+L) to load them from Excel, CSV, API or SQL Server.\n" +
-                  "No list yet? Save an Excel template there to fill in."
+                  "No list yet? Save an Excel template there to fill in.\n\nNew to Card Studio? Press F1 for the user guide."
                 : "No students match “" + _txtSearch.Text.Trim() + "”.\n\nPress Esc to clear the search.";
             _lblEmpty.Visible = _view.Count == 0;
         }
@@ -1577,6 +1580,7 @@ namespace NPIC_CARD_APP
         {
             switch (keyData)
             {
+                case Keys.F1: ShowHelp(_students.Count == 0 ? HelpForm.Page.QuickStart : HelpForm.Page.Overview); return true;
                 case Keys.F11: ShowFullScreen(PreviewSide.Both); return true;
                 case Keys.Control | Keys.F: _txtSearch.Focus(); _txtSearch.SelectAll(); return true;
                 case Keys.Control | Keys.L: ShowImportPage(); return true;
@@ -1903,6 +1907,18 @@ namespace NPIC_CARD_APP
 
             if (sqlStudents != null) ShowSqlStudents(sqlStudents, sqlSource);   // loaded with SQL Server… in the overview
             UpdateRfidPanel();   // an imported settings file may use another RFID file
+        }
+
+        /// <summary>About &amp; User Guide page: what the system does, how to use it, shortcuts, troubleshooting, system info.</summary>
+        private void ShowHelp(HelpForm.Page topic)
+        {
+            ReadUiToSettings();   // System info shows the current printer and folders
+            bool khmer = _settings.HelpKhmer;
+            using (var form = new HelpForm(_settings, topic))
+            {
+                form.ShowDialog(this);
+            }
+            if (_settings.HelpKhmer != khmer) SaveSettings(false);   // remember the guide's language (English / Khmer)
         }
 
         /// <summary>Folders page: every folder the app uses. A new Photo Folder chosen there is saved and shown here.</summary>
