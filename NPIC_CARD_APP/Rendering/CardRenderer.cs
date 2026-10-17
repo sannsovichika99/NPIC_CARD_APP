@@ -152,7 +152,10 @@ namespace NPIC_CARD_APP.Rendering
 
                 // QR + social icons
                 FillMm(g, Color.White, 68.3f, 33.8f, 11.3f, 11.3f);
-                DrawAsset(g, AssetStore.Get("qrcode_for_back_card.png", false, true), 68.6f, 34.1f, 10.7f, 10.7f, 1f, true);
+                string backQr = t.BackQrSource == BackQrSource.Generate ? BuildBackQrText(t) : null;
+                Bitmap backQrLogo = backQr != null ? AssetStore.GetFile(t.BackQrLogoPath, false, true) : null;
+                if (!TryDrawQr(g, backQr, 68.3f, 33.8f, 11.3f, backQrLogo, t.BackQrLogoPercent))
+                    DrawAsset(g, AssetStore.Get("qrcode_for_back_card.png", false, true), 68.6f, 34.1f, 10.7f, 10.7f, 1f, true);
                 DrawText(g, "ស្កេនទីនេះសម្រាប់ព័ត៌មាន", CardFonts.SiemreapGoogle, ScanPt, FontStyle.Regular, Red,
                     65.5f, 45.4f, 16.8f, 2.8f, TextFormatFlags.HorizontalCenter);
 
@@ -206,21 +209,65 @@ namespace NPIC_CARD_APP.Rendering
             return string.IsNullOrWhiteSpace(text) ? (s.StudentId ?? "") : text;
         }
 
+        /// <summary>Back QR text: "QR text", or the Website (as an https link) when it is empty.</summary>
+        private static string BuildBackQrText(CardText t)
+        {
+            if (!string.IsNullOrWhiteSpace(t.BackQrText)) return t.BackQrText.Trim();
+            string site = (t.Website ?? "").Trim();
+            if (site.Length == 0) return null;
+            return site.IndexOf("://", StringComparison.Ordinal) >= 0 ? site : "https://" + site;
+        }
+
+        /// <summary>Draws a generated QR; false when there is no text or it is too long for a QR code
+        /// (the caller then draws the fixed image instead).</summary>
+        private static bool TryDrawQr(Graphics g, string text, float xMm, float yMm, float sizeMm, Bitmap logo, int logoPercent)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            try
+            {
+                DrawQr(g, text, xMm, yMm, sizeMm, logo, logoPercent);
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+        }
+
         private static void DrawQr(Graphics g, string text, float xMm, float yMm, float sizeMm)
         {
+            DrawQr(g, text, xMm, yMm, sizeMm, null, 0);
+        }
+
+        /// <summary>Draws a QR code. With a logo, the code uses error-correction level H (~30 %) and the
+        /// modules under the logo are left white, so the code still scans.</summary>
+        private static void DrawQr(Graphics g, string text, float xMm, float yMm, float sizeMm, Bitmap logo, int logoPercent)
+        {
             if (string.IsNullOrEmpty(text)) return;
-            QrEncoder qr = QrEncoder.Encode(text);
+            QrEncoder qr = QrEncoder.Encode(text, logo != null ? QrEcc.High : QrEcc.Medium);
             Rectangle box = RectMm(xMm, yMm, sizeMm, sizeMm);
             g.FillRectangle(Brushes.White, box);
 
             const int quiet = 1;
             float module = (float)box.Width / (qr.Size + 2 * quiet);
+
+            // Centred square of modules kept free for the logo (same parity as Size, so it is exactly centred)
+            int hole = 0;
+            if (logo != null)
+            {
+                int pct = Math.Max(10, Math.Min(30, logoPercent));
+                hole = (int)Math.Round(qr.Size * pct / 100f);
+                if (hole % 2 != qr.Size % 2) hole++;
+            }
+            int holeStart = (qr.Size - hole) / 2, holeEnd = holeStart + hole;
+
             SmoothingMode oldMode = g.SmoothingMode;
             g.SmoothingMode = SmoothingMode.None;
             for (int y = 0; y < qr.Size; y++)
                 for (int x = 0; x < qr.Size; x++)
                 {
                     if (!qr.IsDark(x, y)) continue;
+                    if (x >= holeStart && x < holeEnd && y >= holeStart && y < holeEnd) continue;
                     int left = box.X + (int)Math.Round((x + quiet) * module);
                     int top = box.Y + (int)Math.Round((y + quiet) * module);
                     int right = box.X + (int)Math.Round((x + quiet + 1) * module);
@@ -228,6 +275,25 @@ namespace NPIC_CARD_APP.Rendering
                     g.FillRectangle(Brushes.Black, left, top, right - left, bottom - top);
                 }
             g.SmoothingMode = oldMode;
+
+            if (hole > 0)
+            {
+                // Logo fits inside the free square with half a module of white around it, aspect ratio kept
+                float pad = module * 0.5f;
+                float areaX = box.X + (holeStart + quiet) * module + pad;
+                float areaY = box.Y + (holeStart + quiet) * module + pad;
+                float areaSize = hole * module - 2 * pad;
+                float scale = Math.Min(areaSize / logo.Width, areaSize / logo.Height);
+                float w = logo.Width * scale, h = logo.Height * scale;
+
+                InterpolationMode oldInterp = g.InterpolationMode;
+                PixelOffsetMode oldOffset = g.PixelOffsetMode;
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                g.DrawImage(logo, areaX + (areaSize - w) / 2f, areaY + (areaSize - h) / 2f, w, h);
+                g.InterpolationMode = oldInterp;
+                g.PixelOffsetMode = oldOffset;
+            }
         }
 
         /// <summary>"អត្តលេខ:" (Khmer OS Siemreap, navy) + ID (Times New Roman, red) — one size, one baseline.</summary>

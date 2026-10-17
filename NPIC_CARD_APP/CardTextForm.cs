@@ -1,5 +1,8 @@
 using System;
+using System.ComponentModel;
 using System.Drawing;
+using System.Drawing.Design;
+using System.IO;
 using System.Windows.Forms;
 using System.Reflection;
 using NPIC_CARD_APP.Rendering;
@@ -117,6 +120,54 @@ namespace NPIC_CARD_APP
                 if (p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0)
                     p.SetValue(copy, p.GetValue(source, null), null);
             return copy;
+        }
+    }
+
+    /// <summary>
+    /// "…" button for CardText.BackQrLogoPath: picks an image and copies it to
+    /// %AppData%\NPIC_CARD_APP\Logos, so the card still prints if the original file is moved or deleted.
+    /// </summary>
+    public class QrLogoFileEditor : UITypeEditor
+    {
+        public override UITypeEditorEditStyle GetEditStyle(ITypeDescriptorContext context)
+        {
+            return UITypeEditorEditStyle.Modal;
+        }
+
+        public override object EditValue(ITypeDescriptorContext context, IServiceProvider provider, object value)
+        {
+            string current = value as string;
+            using (var dlg = new OpenFileDialog
+            {
+                Title = "Logo for the centre of the back QR code",
+                Filter = "Images (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp"
+            })
+            {
+                if (!string.IsNullOrEmpty(current) && File.Exists(current))
+                    dlg.InitialDirectory = Path.GetDirectoryName(current);
+                if (dlg.ShowDialog() != DialogResult.OK) return value;
+
+                try
+                {
+                    // Make sure it really is an image before keeping it
+                    using (var fs = new FileStream(dlg.FileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    using (Image.FromStream(fs)) { }
+
+                    string folder = Path.Combine(Path.GetDirectoryName(AppSettings.FilePath), "Logos");
+                    Directory.CreateDirectory(folder);
+                    // Unique name: Cancel in Card Text must not change the logo already in use
+                    string target = Path.Combine(folder, "qr_logo_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") +
+                                                         Path.GetExtension(dlg.FileName).ToLowerInvariant());
+                    File.Copy(dlg.FileName, target, true);
+                    return target;
+                }
+                catch (Exception ex)
+                {
+                    AppDialog.Show("Could not use this file as a logo:\n\n" + ex.Message, "QR logo",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return value;
+                }
+            }
         }
     }
 }

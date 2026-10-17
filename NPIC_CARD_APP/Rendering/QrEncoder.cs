@@ -4,8 +4,17 @@ using System.Text;
 
 namespace NPIC_CARD_APP.Rendering
 {
+    /// <summary>QR error-correction level: how much of the code may be damaged or covered and still scan.</summary>
+    public enum QrEcc
+    {
+        /// <summary>~15 % — the default.</summary>
+        Medium,
+        /// <summary>~30 % — use when a logo covers the centre of the code.</summary>
+        High
+    }
+
     /// <summary>
-    /// Minimal QR Code encoder (byte mode, UTF-8, versions 1-40, ECC level M).
+    /// Minimal QR Code encoder (byte mode, UTF-8, versions 1-40, ECC level M or H).
     /// No NuGet package needed. Based on the public ISO/IEC 18004 algorithm.
     /// </summary>
     public sealed class QrEncoder
@@ -14,38 +23,54 @@ namespace NPIC_CARD_APP.Rendering
         private bool[,] _modules;     // [y, x]
         private bool[,] _isFunction;  // [y, x]
         private readonly int _version;
+        private readonly QrEcc _ecc;
 
-        // Error correction level M
-        private const int EclFormatBits = 0;
-        private static readonly int[] EccCodewordsPerBlock =
+        // Tables per version (index 0 unused), from ISO/IEC 18004 table 9
+        private static readonly int[] EccCodewordsPerBlockM =
         {
             -1, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26,
             26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28
         };
-        private static readonly int[] NumErrorCorrectionBlocks =
+        private static readonly int[] NumErrorCorrectionBlocksM =
         {
             -1, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16,
             17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49
+        };
+        private static readonly int[] EccCodewordsPerBlockH =
+        {
+            -1, 17, 28, 22, 16, 22, 28, 26, 26, 24, 28, 24, 28, 22, 24, 24, 30, 28, 28, 26, 28,
+            30, 24, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30
+        };
+        private static readonly int[] NumErrorCorrectionBlocksH =
+        {
+            -1, 1, 1, 2, 4, 4, 4, 5, 6, 8, 8, 11, 11, 16, 16, 18, 16, 19, 21, 25, 25,
+            25, 34, 30, 32, 35, 37, 40, 42, 45, 48, 51, 54, 57, 60, 63, 66, 70, 74, 77, 81
         };
 
         public bool IsDark(int x, int y) { return _modules[y, x]; }
 
         public static QrEncoder Encode(string text)
         {
+            return Encode(text, QrEcc.Medium);
+        }
+
+        public static QrEncoder Encode(string text, QrEcc ecc)
+        {
             byte[] data = Encoding.UTF8.GetBytes(text ?? "");
             for (int version = 1; version <= 40; version++)
             {
-                int capacityBits = GetNumDataCodewords(version) * 8;
+                int capacityBits = GetNumDataCodewords(version, ecc) * 8;
                 int countBits = version <= 9 ? 8 : 16;
                 if (4 + countBits + data.Length * 8 <= capacityBits)
-                    return new QrEncoder(version, data);
+                    return new QrEncoder(version, ecc, data);
             }
             throw new ArgumentException("Text is too long for a QR code.");
         }
 
-        private QrEncoder(int version, byte[] data)
+        private QrEncoder(int version, QrEcc ecc, byte[] data)
         {
             _version = version;
+            _ecc = ecc;
             Size = version * 4 + 17;
             _modules = new bool[Size, Size];
             _isFunction = new bool[Size, Size];
@@ -77,7 +102,7 @@ namespace NPIC_CARD_APP.Rendering
             AppendBits(bits, data.Length, _version <= 9 ? 8 : 16);      // character count
             foreach (byte b in data) AppendBits(bits, b, 8);
 
-            int capacityBits = GetNumDataCodewords(_version) * 8;
+            int capacityBits = GetNumDataCodewords(_version, _ecc) * 8;
             AppendBits(bits, 0, Math.Min(4, capacityBits - bits.Count)); // terminator
             AppendBits(bits, 0, (8 - bits.Count % 8) % 8);               // byte align
             for (int pad = 0xEC; bits.Count < capacityBits; pad ^= 0xEC ^ 0x11)
@@ -96,8 +121,8 @@ namespace NPIC_CARD_APP.Rendering
 
         private byte[] AddEccAndInterleave(byte[] data)
         {
-            int numBlocks = NumErrorCorrectionBlocks[_version];
-            int blockEccLen = EccCodewordsPerBlock[_version];
+            int numBlocks = NumBlocks(_version, _ecc);
+            int blockEccLen = EccPerBlock(_version, _ecc);
             int rawCodewords = GetNumRawDataModules(_version) / 8;
             int numShortBlocks = numBlocks - rawCodewords % numBlocks;
             int shortBlockLen = rawCodewords / numBlocks;
@@ -181,9 +206,19 @@ namespace NPIC_CARD_APP.Rendering
             return result;
         }
 
-        private static int GetNumDataCodewords(int ver)
+        private static int GetNumDataCodewords(int ver, QrEcc ecc)
         {
-            return GetNumRawDataModules(ver) / 8 - EccCodewordsPerBlock[ver] * NumErrorCorrectionBlocks[ver];
+            return GetNumRawDataModules(ver) / 8 - EccPerBlock(ver, ecc) * NumBlocks(ver, ecc);
+        }
+
+        private static int EccPerBlock(int ver, QrEcc ecc)
+        {
+            return ecc == QrEcc.High ? EccCodewordsPerBlockH[ver] : EccCodewordsPerBlockM[ver];
+        }
+
+        private static int NumBlocks(int ver, QrEcc ecc)
+        {
+            return ecc == QrEcc.High ? NumErrorCorrectionBlocksH[ver] : NumErrorCorrectionBlocksM[ver];
         }
 
         // ---------------- function patterns ----------------
@@ -211,7 +246,8 @@ namespace NPIC_CARD_APP.Rendering
 
         private void DrawFormatBits(int mask)
         {
-            int data = EclFormatBits << 3 | mask;
+            int eclFormatBits = _ecc == QrEcc.High ? 2 : 0;   // format bits: L=1, M=0, Q=3, H=2
+            int data = eclFormatBits << 3 | mask;
             int rem = data;
             for (int i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >> 9) * 0x537);
             int bits = (data << 10 | rem) ^ 0x5412;
