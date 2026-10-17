@@ -210,14 +210,9 @@ namespace NPIC_CARD_APP
                 Nav("Print Queue", Theme.IcoPrint, ShowPrintQueue, "See or cancel jobs waiting in Windows"),
 
                 Section("CARD"),
-                Nav("Photo Folder…", Theme.IcoFolder, ChoosePhotoFolder, "Folder with photos named {StudentId}.jpg / .png"),
-                Nav("Open Photo Folder", Theme.IcoOpenFolder, OpenPhotoFolder,
-                    "Open the photo folder in Windows Explorer to add, rename or delete photos " +
-                    "(the selected student's photo is highlighted)"),
-                Nav("Google Drive Photos…", Theme.IcoSync, ShowGoogleDrivePhotos,
-                    "Download student photos from a shared Google Drive folder into the photo folder (Ctrl+Shift+D)"),
-                Nav("OneDrive Photos…", Theme.IcoCloud, ShowOneDrivePhotos,
-                    "Download student photos from a OneDrive folder link (Microsoft sign-in) into the photo folder (Ctrl+Shift+O)"),
+                Nav("Photo Folder…", Theme.IcoFolder, ShowPhotoFolderPage,
+                    "Choose or open the folder with photos named {StudentId}.jpg / .png, " +
+                    "or download photos into it from Google Drive (Ctrl+Shift+D) or OneDrive (Ctrl+Shift+O)"),
                 Nav("Remove Background…", Theme.IcoBrush, RemovePhotoBackground,
                     "Crop the selected student's photo and remove the wall / screen behind it (Ctrl+B)"),
                 Nav("Card Text…", Theme.IcoFont, EditCardText,
@@ -1379,6 +1374,25 @@ namespace NPIC_CARD_APP
             catch (Exception ex)
             {
                 ShowError(ex);
+            }
+        }
+
+        /// <summary>Photo Folder page: shows the current folder and lets the user choose another one or open it.</summary>
+        private void ShowPhotoFolderPage()
+        {
+            PhotoFolderAction choice;
+            using (var form = new PhotoFolderForm(_settings.PhotoFolder, _students))
+            {
+                if (form.ShowDialog(this) != DialogResult.OK) return;
+                choice = form.Choice;
+            }
+
+            switch (choice)
+            {
+                case PhotoFolderAction.Choose: ChoosePhotoFolder(); break;
+                case PhotoFolderAction.Open: OpenPhotoFolder(); break;
+                case PhotoFolderAction.GoogleDrive: ShowGoogleDrivePhotos(); break;
+                case PhotoFolderAction.OneDrive: ShowOneDrivePhotos(); break;
             }
         }
 

@@ -483,7 +483,7 @@ namespace NPIC_CARD_APP
             // ---- Google Drive photos ----
             const string drive = "Google Drive photos";
             add(drive, "Folder link", Or(s.DriveFolderUrl, NotSet), false,
-                "Used by Google Drive Photos… (Ctrl+Shift+D). Change it there.", null);
+                "Used by Photo Folder… → Google Drive Photos… (Ctrl+Shift+D). Change it there.", null);
             string driveKey;
             bool driveKeyWarn = false;
             if (!string.IsNullOrEmpty(s.DriveApiKey)) driveKey = "Saved (encrypted for this Windows user)";
@@ -497,7 +497,7 @@ namespace NPIC_CARD_APP
             bool oneDriveMissing = !string.IsNullOrEmpty(s.OneDriveFolder) && !oneDriveOnline && !System.IO.Directory.Exists(s.OneDriveFolder);
             add(oneDrive, "Folder", Or(s.OneDriveFolder, NotSet), oneDriveMissing,
                 oneDriveMissing ? "Not found on this PC — check that OneDrive is signed in, or choose the folder again in OneDrive Photos…."
-                                : "Used by OneDrive Photos… (Ctrl+Shift+O). Change it there.", null);
+                                : "Used by Photo Folder… → OneDrive Photos… (Ctrl+Shift+O). Change it there.", null);
             add(oneDrive, "App ID", Or(s.OneDriveClientId, NotSet), false, "Application (client) ID of the Microsoft app registration.", null);
             string oneDriveAccount;
             bool oneDriveWarn = false;

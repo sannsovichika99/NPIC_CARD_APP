@@ -72,6 +72,9 @@
     <Compile Include="FolderManagerForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="PhotoFolderForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="FindPositionForm.cs">
       <SubType>Form</SubType>
     </Compile>

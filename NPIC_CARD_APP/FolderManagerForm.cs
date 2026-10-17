@@ -409,7 +409,7 @@ namespace NPIC_CARD_APP
                 if (od.State == FolderState.Missing) od.Warn = true;   // OneDrive signed out, or the folder moved
                 if (od.State == FolderState.Ok) od.Contents = CountPhotos(oneDrive);
             }
-            od.ChangeHint = "Change it in OneDrive Photos… (Ctrl+Shift+O).";
+            od.ChangeHint = "Change it in Photo Folder… → OneDrive Photos… (Ctrl+Shift+O).";
             list.Add(od);
 
             // ---- App data (%AppData%\NPIC_CARD_APP) ----
