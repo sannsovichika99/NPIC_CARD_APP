@@ -43,7 +43,12 @@ namespace CardStudio.Setup
 
         public static string Version
         {
-            get { return Assembly.GetExecutingAssembly().GetName().Version.ToString(3); }
+            get
+            {
+                // 1.2.0.0 → "1.2.0", 1.0.0.1 → "1.0.0.1": the same text the app shows and the GitHub release tag uses.
+                Version v = Assembly.GetExecutingAssembly().GetName().Version;
+                return v.ToString(v.Revision > 0 ? 4 : 3);
+            }
         }
 
         public static string DefaultInstallDir

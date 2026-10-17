@@ -50,14 +50,12 @@ namespace NPIC_CARD_APP.Services
     /// setup, checks it and starts it. The setup (CardStudio-Setup.exe /WaitForApp) waits for the app to close, then updates
     /// it in place like any manual upgrade: settings, print history and card images are kept.
     ///
-    /// The update source (<see cref="AppSettings.UpdateUrl"/>) is one of:
-    ///   • a folder — network share or local — holding update.json and CardStudio-Setup.exe, as written to dist\ by
-    ///     Installer\build.ps1:  \\server\share\CardStudio   or   D:\Updates\CardStudio
-    ///   • an https:// address of such an update.json (or of the folder holding it)
-    ///   • a GitHub repository with releases (public, or reachable without sign-in):
-    ///     https://github.com/owner/repo  →  the latest release, whose setup .exe is attached as an asset
+    /// New versions come from the GitHub releases of Card Studio (<see cref="Source"/>): the latest release (not drafts or
+    /// pre-releases), its tag as the version (v1.0.3), its description as the release notes and the attached
+    /// CardStudio-Setup.exe as the download, verified with the SHA-256 digest GitHub publishes for it.
     ///
-    /// update.json:
+    /// <see cref="CheckAsync"/> also reads other sources, which the app does not use today: a folder (network share or
+    /// local) or https:// address holding an update.json next to the setup:
     ///   { "version": "1.0.3", "url": "CardStudio-Setup.exe", "sha256": "…64 hex…", "size": 1468006,
     ///     "date": "2026-10-17", "notes": "What changed…" }
     /// "url" may be relative to update.json. Plain http:// is refused: the setup runs as administrator, so it must not be
@@ -65,11 +63,11 @@ namespace NPIC_CARD_APP.Services
     /// </summary>
     public static class UpdateService
     {
-        /// <summary>
-        /// Update source used when <see cref="AppSettings.UpdateUrl"/> is empty. Set it to the school's share or web address
-        /// before building, so every installed PC checks there without any setup; "" = each PC must enter one.
-        /// </summary>
-        public const string DefaultSource = "";
+        /// <summary>Where Card Studio is published: the GitHub releases of the repository (read as its latest release).</summary>
+        public const string Source = "https://github.com/sannsovichika99/NPIC_CARD_APP/releases";
+
+        /// <summary>Web page listing every release, for people who want to download the setup by hand.</summary>
+        public const string ReleasesPage = Source;
 
         public const string ManifestName = "update.json";
 
@@ -138,17 +136,10 @@ namespace NPIC_CARD_APP.Services
 
         // ===================== Settings helpers =====================
 
-        /// <summary>The update source to use: the saved one, or <see cref="DefaultSource"/>.</summary>
-        public static string SourceOf(AppSettings settings)
-        {
-            string saved = (settings.UpdateUrl ?? "").Trim();
-            return saved.Length > 0 ? saved : DefaultSource;
-        }
-
-        /// <summary>True when the startup check should run now (switched on, a source is known, not checked recently).</summary>
+        /// <summary>True when the startup check should run now (switched on, not checked recently).</summary>
         public static bool IsStartupCheckDue(AppSettings settings)
         {
-            if (!settings.CheckUpdatesOnStartup || SourceOf(settings).Length == 0) return false;
+            if (!settings.CheckUpdatesOnStartup) return false;
             DateTime last = settings.LastUpdateCheck;
             return last > DateTime.Now || DateTime.Now - last >= StartupCheckInterval;   // clock turned back: check
         }

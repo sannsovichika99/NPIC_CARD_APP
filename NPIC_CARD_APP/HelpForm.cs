@@ -804,12 +804,12 @@ namespace NPIC_CARD_APP
                        "**Settings & Help…** — ទំព័រតែមួយដែលមាន **Dark Mode / Light Mode** **Theme Color…** **Folders…** **All Settings…** " +
                        "**System Info** **Check for Updates** និង **Help & About**។ " +
                        "ផ្លូវកាត់ (Ctrl+Shift+F, Ctrl+,, Ctrl+Shift+I, Ctrl+U, F1) នៅតែបើកនីមួយៗដោយផ្ទាល់។"));
-            w.Bullet(T("**Check for Updates** (Ctrl+U) — looks for a newer version at the update address (a network folder or https:// " +
-                       "address you get from whoever maintains Card Studio) and installs it. Card Studio closes, Windows asks for " +
+            w.Bullet(T("**Check for Updates** (Ctrl+U) — looks for a newer version in Card Studio's GitHub releases (needs the " +
+                       "internet) and installs it. Card Studio closes, Windows asks for " +
                        "administrator approval, and your settings, print history, RFID file and card images are kept. " +
                        "It also checks by itself once a day at start-up; untick the option on that page to stop this.",
-                       "**Check for Updates** (Ctrl+U) — ស្វែងរកកំណែថ្មីនៅអាសយដ្ឋានបច្ចុប្បន្នភាព (ថតបណ្តាញ ឬអាសយដ្ឋាន https:// " +
-                       "ដែលអ្នកទទួលបានពីអ្នកថែទាំ Card Studio) ហើយដំឡើងវា។ Card Studio នឹងបិទ Windows សុំការអនុញ្ញាតពីអ្នកគ្រប់គ្រង " +
+                       "**Check for Updates** (Ctrl+U) — ស្វែងរកកំណែថ្មីនៅក្នុង GitHub releases របស់ Card Studio (ត្រូវការអ៊ីនធឺណិត) " +
+                       "ហើយដំឡើងវា។ Card Studio នឹងបិទ Windows សុំការអនុញ្ញាតពីអ្នកគ្រប់គ្រង " +
                        "(administrator) ហើយការកំណត់ ប្រវត្តិបោះពុម្ព ឯកសារ RFID និងរូបភាពកាតរបស់អ្នកត្រូវបានរក្សាទុក។ " +
                        "កម្មវិធីក៏ពិនិត្យដោយខ្លួនឯងម្តងក្នុងមួយថ្ងៃពេលបើកដែរ — ដោះធីកជម្រើសនៅលើទំព័រនោះ ដើម្បីបញ្ឈប់។"));
             w.Bullet(T("**Folders…** (Ctrl+Shift+F) — every folder the app uses: open, change or create them.",
@@ -932,11 +932,11 @@ namespace NPIC_CARD_APP
             w.Row(T("Computer / user", "កុំព្យូទ័រ / អ្នកប្រើ"), Environment.MachineName + " / " + Environment.UserName);
 
             w.Heading(T("Updates", "បច្ចុប្បន្នភាព"));
-            string updateSource = UpdateService.SourceOf(_settings);
-            w.Row(T("Update address", "អាសយដ្ឋានបច្ចុប្បន្នភាព"), updateSource.Length > 0
-                    ? updateSource
-                    : T("(not set — Check for Updates, Ctrl+U)", "(មិនទាន់កំណត់ — Check for Updates, Ctrl+U)"),
-                updateSource.Length == 0);
+            w.Row(T("Updates from", "បច្ចុប្បន្នភាពពី"), UpdateService.ReleasesPage);
+            string available = _settings.AvailableUpdateVersion;
+            if (UpdateService.IsNewerThanRunning(available))
+                w.Row(T("New version", "កំណែថ្មី"), T(available + " is available — Check for Updates (Ctrl+U)",
+                                                       "កំណែ " + available + " អាចដំឡើងបាន — Check for Updates (Ctrl+U)"), true);
             w.Row(T("Check at start-up", "ពិនិត្យពេលបើកកម្មវិធី"), _settings.CheckUpdatesOnStartup
                 ? T("On (at most once a day)", "បើក (យ៉ាងច្រើនម្តងក្នុងមួយថ្ងៃ)")
                 : T("Off", "បិទ"));
@@ -1185,6 +1185,27 @@ namespace NPIC_CARD_APP
         {
             Gap();
             Rich(text, _f.Body, _f.Bold, Theme.Warning, Px(6), Px(22), "!\t");
+        }
+
+        /// <summary>A block of monospaced lines (code, command lines) kept together, with one gap after the block.</summary>
+        public void Code(IEnumerable<string> lines)
+        {
+            foreach (string line in lines) Line(line.Length == 0 ? " " : line, _f.Mono, Theme.TextSoft, Px(12), 0);
+            Gap();
+        }
+
+        /// <summary>Normal space between blocks, e.g. after a run of <see cref="Key"/> rows or a <see cref="Note"/>.</summary>
+        public void Space()
+        {
+            Gap();
+        }
+
+        /// <summary>A horizontal divider line (Markdown "---").</summary>
+        public void Rule()
+        {
+            Gap();
+            Line(new string('─', 40), _f.Body, Theme.Border, 0, 0);
+            Gap();
         }
 
         // ---------- Plumbing ----------

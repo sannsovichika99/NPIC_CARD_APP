@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
@@ -12,9 +11,9 @@ using NPIC_CARD_APP.Services;
 namespace NPIC_CARD_APP
 {
     /// <summary>
-    /// "Check for Updates" page (Ctrl+U, or Settings &amp; Help → Check for Updates):
-    ///   Update address = where new versions are published (network folder or https://), saved in <see cref="AppSettings.UpdateUrl"/>.
-    ///   Check Now (F5) = compare the published version with this one.
+    /// "Check for Updates" page (Ctrl+U, or Settings &amp; Help → Check for Updates). New versions come from the GitHub releases
+    /// of Card Studio (<see cref="UpdateService.Source"/>); there is nothing to set up.
+    ///   Check Again (F5) = compare the latest release with this version.
     ///   Install Update = download the setup, verify it, start it and close Card Studio; the setup updates the app in place and
     ///   keeps settings, print history and card images.
     ///   Skip This Version = the startup check stays quiet about this version.
@@ -22,21 +21,18 @@ namespace NPIC_CARD_APP
     /// </summary>
     public class UpdateForm : ModalForm
     {
-        private enum State { NoSource, Checking, UpToDate, Available, Failed, Downloading }
+        private enum State { Checking, UpToDate, Available, Failed, Downloading }
 
-        private const string SourceHelp =
-            "Where are new versions published?\n\n" +
-            "•  A network folder, for example  \\\\server\\Software\\CardStudio\n" +
-            "•  An https:// address of a web folder\n" +
-            "•  A GitHub repository with releases, for example  https://github.com/owner/repo\n\n" +
-            "The folder must hold the two files that Installer\\build.ps1 writes to dist\\:\n" +
-            "update.json and CardStudio-Setup.exe. Copy both there for every new version.\n\n" +
-            "Ask whoever maintains Card Studio for the address, enter it above, then click Check Now.";
+        /// <summary>Shown under an error (Markdown, written with <see cref="MarkdownWriter"/>).</summary>
+        private static readonly string FailureHelp =
+            "### What to do\n\n" +
+            "Card Studio gets new versions from its GitHub releases: " + UpdateService.ReleasesPage + "\n\n" +
+            "- Check that this PC is connected to the internet and that github.com is not blocked, then click **Check Again**.\n" +
+            "- Or open that address in a browser, download **CardStudio-Setup.exe** from the latest release and run it.";
 
         private readonly AppSettings _settings;
-        private readonly TextBox _txtSource, _txtNotes;
+        private readonly RichTextBox _notes;
         private readonly Label _lblHeadline, _lblVersions, _lblNotesTitle, _lblStatus;
-        private readonly LinkLabel _lnkPage;
         private readonly DownloadBar _bar;
         private readonly CheckBox _chkStartup;
         private readonly Button _btnCheck, _btnInstall, _btnSkip, _btnClose;
@@ -56,38 +52,12 @@ namespace NPIC_CARD_APP
             _found = found;
 
             Text = "Check for Updates";
-            Subtitle = "Card Studio " + UpdateService.CurrentVersionText + " is installed on this PC";
+            Subtitle = "Card Studio " + UpdateService.CurrentVersionText + " is installed  ·  updates from GitHub releases";
             Glyph = Theme.IcoSync;
             Rectangle work = Screen.FromPoint(Cursor.Position).WorkingArea;
-            Size = new Size(Math.Min(760, work.Width), Math.Min(600, work.Height));
-            MinimumSize = new Size(Math.Min(600, work.Width), Math.Min(480, work.Height));
+            Size = new Size(Math.Min(760, work.Width), Math.Min(560, work.Height));
+            MinimumSize = new Size(Math.Min(600, work.Width), Math.Min(440, work.Height));
             KeyPreview = true;
-
-            // ---- Address bar: Update address [______________________] [Check Now] ----
-            _txtSource = new TextBox { Dock = DockStyle.Fill, Text = settings.UpdateUrl ?? "", Margin = new Padding(0, 9, 10, 0) };
-            _txtSource.HandleCreated += (s, e) => SendMessage(_txtSource.Handle, EM_SETCUEBANNER, (IntPtr)1,
-                UpdateService.DefaultSource.Length > 0
-                    ? "Default: " + UpdateService.DefaultSource
-                    : @"\\server\Software\CardStudio   or   https://…");
-            _txtSource.TextChanged += (s, e) => UpdateButtons();
-
-            _btnCheck = ModalUi.Button("Check Now (F5)", PillKind.Primary, async (s, e) => await CheckAsync());
-            _btnCheck.Margin = new Padding(0, 4, 6, 0);
-
-            var addressBar = new TableLayoutPanel
-            {
-                Dock = DockStyle.Top, Height = 52, ColumnCount = 3, RowCount = 1, BackColor = Theme.SurfaceAlt,
-                Padding = new Padding(16, 4, 10, 6)
-            };
-            addressBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            addressBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            addressBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            addressBar.Controls.Add(new Label
-            {
-                Text = "Update address", AutoSize = true, ForeColor = Theme.TextSoft, Margin = new Padding(0, 12, 10, 0)
-            }, 0, 0);
-            addressBar.Controls.Add(_txtSource, 1, 0);
-            addressBar.Controls.Add(_btnCheck, 2, 0);
 
             // ---- Body: headline, versions, release notes, download bar, startup option ----
             _lblHeadline = new Label
@@ -100,24 +70,15 @@ namespace NPIC_CARD_APP
             {
                 AutoSize = true, Font = Theme.SmallCaps, ForeColor = Theme.TextSoft, Margin = new Padding(0, 0, 0, 6), Text = "WHAT'S NEW"
             };
-            _lnkPage = new LinkLabel
+            // Release notes, formatted from Markdown (RichEdit 4.1, so Khmer notes are shaped correctly too).
+            _notes = new ModernRichTextBox
             {
-                AutoSize = true, Text = "Open release page", Margin = new Padding(12, 0, 0, 6), Visible = false,
-                LinkColor = Theme.Accent, ActiveLinkColor = Theme.Accent, VisitedLinkColor = Theme.Accent
+                Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, DetectUrls = false, WordWrap = true,
+                ScrollBars = RichTextBoxScrollBars.Vertical, HideSelection = true,
+                BackColor = Theme.SurfaceAlt, ForeColor = Theme.TextMain, TabStop = false
             };
-            _lnkPage.LinkClicked += (s, e) => OpenReleasePage();
-            var notesHeader = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0), Dock = DockStyle.Fill };
-            notesHeader.Controls.Add(_lblNotesTitle);
-            notesHeader.Controls.Add(_lnkPage);
-
-            _txtNotes = new TextBox
-            {
-                Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, WordWrap = true,
-                BorderStyle = BorderStyle.None, BackColor = Theme.SurfaceAlt, ForeColor = Theme.TextMain, TabStop = false,
-                Margin = new Padding(0, 0, 0, 10)
-            };
-            var notesHost = new Panel { Dock = DockStyle.Fill, BackColor = Theme.SurfaceAlt, Padding = new Padding(12, 10, 6, 10), Margin = new Padding(0, 0, 0, 10) };
-            notesHost.Controls.Add(_txtNotes);
+            var notesHost = new Panel { Dock = DockStyle.Fill, BackColor = Theme.SurfaceAlt, Padding = new Padding(14, 12, 6, 10), Margin = new Padding(0, 0, 0, 10) };
+            notesHost.Controls.Add(_notes);
 
             _bar = new DownloadBar { Dock = DockStyle.Fill, Height = 8, Margin = new Padding(0, 0, 0, 10), Visible = false };
 
@@ -141,7 +102,7 @@ namespace NPIC_CARD_APP
             body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             body.Controls.Add(_lblHeadline, 0, 0);
             body.Controls.Add(_lblVersions, 0, 1);
-            body.Controls.Add(notesHeader, 0, 2);
+            body.Controls.Add(_lblNotesTitle, 0, 2);
             body.Controls.Add(notesHost, 0, 3);
             body.Controls.Add(_bar, 0, 4);
             body.Controls.Add(_chkStartup, 0, 5);
@@ -161,31 +122,31 @@ namespace NPIC_CARD_APP
             });
             _btnInstall = ModalUi.Button("Install Update", PillKind.Primary, async (s, e) => await InstallAsync());
             _btnSkip = ModalUi.Button("Skip This Version", PillKind.Secondary, (s, e) => SkipVersion());
+            _btnCheck = ModalUi.Button("Check Again (F5)", PillKind.Secondary, async (s, e) => await CheckAsync());
             footer.Controls.Add(_btnClose);
             footer.Controls.Add(_btnInstall);
             footer.Controls.Add(_btnSkip);
+            footer.Controls.Add(_btnCheck);
 
             // Docking runs in reverse add order: the fill control first, the edges last.
             Controls.Add(body);
-            Controls.Add(addressBar);
             Controls.Add(_lblStatus);
             Controls.Add(footer);
             CancelButton = _btnClose;
 
             var tip = new ToolTip();
-            tip.SetToolTip(_btnCheck, "Look for a newer version at the update address");
+            tip.SetToolTip(_btnCheck, "Look for a newer release on GitHub");
             tip.SetToolTip(_btnInstall, "Download the new version, check it, and update Card Studio. Settings, print history and card images are kept.");
-            tip.SetToolTip(_btnSkip, "Don't announce this version again when Card Studio starts. Check Now still shows it.");
+            tip.SetToolTip(_btnSkip, "Don't announce this version again when Card Studio starts. Check Again still shows it.");
 
             if (_found != null) ShowAvailable(_found);
-            else if (UpdateService.SourceOf(settings).Length == 0) ShowNoSource();
             else SetState(State.Checking, "Checking for updates…", Theme.TextMain);
         }
 
         protected override async void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            if (_state == State.NoSource) { _txtSource.Focus(); return; }
+            ScrollNotesToTop();   // notes written in the constructor (update found at start-up), before the layout settled
             if (_state == State.Available) { _btnInstall.Focus(); return; }
             _btnCheck.Focus();
             await CheckAsync();
@@ -195,7 +156,6 @@ namespace NPIC_CARD_APP
         {
             base.OnKeyDown(e);
             if (e.KeyCode == Keys.F5) { BeginCheck(); e.Handled = true; }
-            else if (e.KeyCode == Keys.Enter && _txtSource.Focused) { BeginCheck(); e.Handled = e.SuppressKeyPress = true; }
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
@@ -220,18 +180,13 @@ namespace NPIC_CARD_APP
         {
             if (_cts != null) return;
 
-            string typed = _txtSource.Text.Trim();
-            string source = typed.Length > 0 ? typed : UpdateService.DefaultSource;
-            if (source.Length == 0) { ShowNoSource(); _txtSource.Focus(); return; }
-
             _cts = new CancellationTokenSource();
             _found = null;
             SetState(State.Checking, "Checking for updates…", Theme.TextMain);
-            ShowStatus("Reading " + source + " …", Theme.TextSoft);
+            ShowStatus("Reading the latest release from GitHub…", Theme.TextSoft);
             try
             {
-                UpdateInfo info = await UpdateService.CheckAsync(source, _cts.Token);
-                _settings.UpdateUrl = typed;   // remembered once it worked ("" = the default source)
+                UpdateInfo info = await UpdateService.CheckAsync(UpdateService.Source, _cts.Token);
                 UpdateService.RememberLatest(_settings, info);   // last check time + the version for the main window's title
                 if (info.IsNewerThanRunning) ShowAvailable(info);
                 else ShowUpToDate(info);
@@ -239,6 +194,7 @@ namespace NPIC_CARD_APP
             catch (OperationCanceledException)
             {
                 SetState(State.Failed, "Check cancelled", Theme.TextMain);
+                ShowFailureNotes("The check was cancelled.");
                 ShowStatus("Cancelled.", Theme.TextSoft);
             }
             catch (Exception ex)
@@ -255,21 +211,12 @@ namespace NPIC_CARD_APP
             if (_closeWhenDone) DialogResult = DialogResult.Cancel;
         }
 
-        private void ShowNoSource()
-        {
-            SetState(State.NoSource, "Set where updates are published", Theme.TextMain);
-            _lblVersions.Text = "Installed version: " + UpdateService.CurrentVersionText;
-            _txtNotes.Text = ToWindowsLines(SourceHelp);
-            ShowStatus("No update address yet.", Theme.TextSoft);
-        }
-
         private void ShowUpToDate(UpdateInfo latest)
         {
             SetState(State.UpToDate, "✔  Card Studio is up to date", Theme.Success);
-            _lblVersions.Text = "Installed " + UpdateService.CurrentVersionText + "   ·   Latest published " + latest.VersionText +
+            _lblVersions.Text = "Installed " + UpdateService.CurrentVersionText + "   ·   Latest release " + latest.VersionText +
                                 (latest.ReleaseDate.HasValue ? "  (" + latest.ReleaseDate.Value.ToString("d MMM yyyy") + ")" : "");
-            _txtNotes.Text = ToWindowsLines(latest.Notes.Length > 0 ? latest.Notes : "No release notes were published for this version.");
-            _lnkPage.Visible = !string.IsNullOrEmpty(latest.PageUrl);
+            ShowReleaseNotes(latest);
             ShowStatus(string.Format("Checked {0:HH:mm} — you have the newest version.", DateTime.Now), Theme.Success);
         }
 
@@ -280,8 +227,7 @@ namespace NPIC_CARD_APP
             _lblVersions.Text = "Installed " + UpdateService.CurrentVersionText + "   →   New " + info.VersionText +
                                 (info.ReleaseDate.HasValue ? "   ·   Released " + info.ReleaseDate.Value.ToString("d MMM yyyy") : "") +
                                 (info.Size > 0 ? "   ·   " + Megabytes(info.Size) : "");
-            _txtNotes.Text = ToWindowsLines(info.Notes.Length > 0 ? info.Notes : "No release notes were published for this version.");
-            _lnkPage.Visible = !string.IsNullOrEmpty(info.PageUrl);
+            ShowReleaseNotes(info);
 
             if (info.Sha256 == null)
                 ShowStatus("⚠  No SHA-256 checksum is published, so the download cannot be verified.", Theme.Warning);
@@ -295,7 +241,7 @@ namespace NPIC_CARD_APP
         {
             SetState(State.Failed, headline, Theme.Danger);
             _lblVersions.Text = "Installed version: " + UpdateService.CurrentVersionText;
-            _txtNotes.Text = ToWindowsLines(Describe(ex) + "\n\n" + SourceHelp);
+            ShowFailureNotes(Describe(ex));
             ShowStatus(FirstLine(Describe(ex)), Theme.Danger);
         }
 
@@ -383,17 +329,6 @@ namespace NPIC_CARD_APP
             DialogResult = DialogResult.OK;   // the main window closes now; the setup waits for it, then updates
         }
 
-        private void OpenReleasePage()
-        {
-            string url = _found != null ? _found.PageUrl : null;
-            if (string.IsNullOrEmpty(url)) return;
-            try { Process.Start(url); }
-            catch (Exception ex)
-            {
-                AppDialog.Show(this, "Could not open the browser:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-        }
-
         // ===================== UI state =====================
 
         private void SetState(State state, string headline, Color color)
@@ -401,13 +336,11 @@ namespace NPIC_CARD_APP
             _state = state;
             _lblHeadline.Text = headline;
             _lblHeadline.ForeColor = color;
-            if (state != State.UpToDate && state != State.Available) _lnkPage.Visible = false;
-            _lblNotesTitle.Text = state == State.Available || state == State.UpToDate || state == State.Downloading ? "WHAT'S NEW" :
-                                  state == State.Failed ? "DETAILS" : "HOW TO SET IT UP";
+            _lblNotesTitle.Text = state == State.Failed ? "DETAILS" : "WHAT'S NEW";
             if (state == State.Checking)
             {
                 _lblVersions.Text = "Installed version: " + UpdateService.CurrentVersionText;
-                _txtNotes.Text = "";
+                ClearNotes();
             }
             UpdateButtons();
         }
@@ -416,7 +349,6 @@ namespace NPIC_CARD_APP
         {
             bool busy = _cts != null;
             _btnCheck.Enabled = !busy;
-            _txtSource.ReadOnly = busy;
             _btnInstall.Visible = _btnSkip.Visible = _found != null;
             _btnInstall.Enabled = _btnSkip.Enabled = !busy && _found != null;
             _btnClose.Text = busy ? "Cancel" : "Close";
@@ -443,23 +375,71 @@ namespace NPIC_CARD_APP
             return (text ?? "").Split('\n')[0].Trim();
         }
 
-        private static string ToWindowsLines(string text)
+        // ===================== Notes box =====================
+
+        /// <summary>The release's description (Markdown written on GitHub), formatted like the user guide.</summary>
+        private void ShowReleaseNotes(UpdateInfo info)
         {
-            return (text ?? "").Replace("\r\n", "\n").Replace("\n", "\r\n");
+            string markdown = (info.Notes ?? "").Trim();
+            if (markdown.Length == 0) markdown = "No release notes were published for this version.";
+            WriteNotes(markdown, w => MarkdownWriter.Write(markdown, w));
         }
+
+        /// <summary>An error message (plain text, line by line) followed by what to do about it.</summary>
+        private void ShowFailureNotes(string message)
+        {
+            WriteNotes(message, w =>
+            {
+                foreach (string line in (message ?? "").Replace("\r\n", "\n").Split('\n'))
+                    if (line.Trim().Length > 0) w.Para(line.Trim());
+                MarkdownWriter.Write(FailureHelp, w);
+            });
+        }
+
+        private void ClearNotes()
+        {
+            _notes.Clear();
+        }
+
+        private void WriteNotes(string sample, Action<GuideWriter> write)
+        {
+            bool pause = _notes.IsHandleCreated;
+            if (pause) SendMessage(_notes.Handle, WM_SETREDRAW, IntPtr.Zero, IntPtr.Zero);   // one repaint instead of one per line
+            try
+            {
+                _notes.Clear();
+                write(new GuideWriter(_notes, DeviceDpi / 96f, MarkdownWriter.HasKhmer(sample)));
+                _notes.SelectionStart = 0;
+                _notes.SelectionLength = 0;
+            }
+            finally
+            {
+                if (pause)
+                {
+                    SendMessage(_notes.Handle, WM_SETREDRAW, (IntPtr)1, IntPtr.Zero);
+                    _notes.Invalidate();
+                }
+            }
+            ScrollNotesToTop();
+        }
+
+        /// <summary>Appending text leaves the box scrolled to the end: show the start of the notes.</summary>
+        private void ScrollNotesToTop()
+        {
+            if (_notes.IsHandleCreated) SendMessage(_notes.Handle, WM_VSCROLL, (IntPtr)SB_TOP, IntPtr.Zero);
+        }
+
+        private const int WM_SETREDRAW = 0x000B, WM_VSCROLL = 0x0115, SB_TOP = 6;
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
         private static string Megabytes(long bytes)
         {
             return (bytes / 1048576.0).ToString("0.0") + " MB";
         }
 
-        // ===================== Win32 =====================
-        private const int EM_SETCUEBANNER = 0x1501;
-
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, string lParam);
-
-        /// <summary>Thin rounded progress bar in the accent colour. <see cref="Fraction"/> &lt; 0 = size unknown (striped).</summary>
+        /// <summary>Thin rounded progress bar in the accent colour. <see cref="Fraction"/> &lt; 0 = size unknown (soft fill).</summary>
         private sealed class DownloadBar : Control
         {
             private float _fraction;

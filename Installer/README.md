@@ -224,9 +224,18 @@ Run silent commands from an elevated prompt. Exit codes:
 ## 8. Releasing a new version
 
 1. Change the app as usual.
-2. Run `Installer\build.ps1 -Version X.Y.Z -Notes "…"` (or edit `AssemblyVersion` in `Version.cs`).
-3. Commit the version bump.
-4. **Publish it** by copying **both** `dist\CardStudio-Setup.exe` and `dist\update.json` to the update folder (below).
+2. Run `Installer\build.ps1 -Version X.Y.Z` (or a 4-part `X.Y.Z.W`, e.g. `1.0.0.1`; or edit `AssemblyVersion` in `Version.cs`).
+3. Commit and push the version bump.
+4. **Publish it as a GitHub release** on https://github.com/sannsovichika99/NPIC_CARD_APP/releases:
+   - tag **`vX.Y.Z`**, the same number as in `Version.cs` (the app reads the version from the tag)
+   - attach **`dist\CardStudio-Setup.exe`** (keep that file name; it must contain "Setup" and end in `.exe`)
+   - write the changes in the description: the app shows them under "What's new"
+   - publish it as a normal release, not a draft or pre-release (those are ignored)
+
+   ```powershell
+   gh release create vX.Y.Z dist\CardStudio-Setup.exe --title "Card Studio X.Y.Z" --notes "What changed…"
+   ```
+
    Every PC then finds it with **Check for Updates**, or by itself at the next start. You can still hand out the setup by
    hand: users run it over the old version, and no uninstall is needed.
 
@@ -234,36 +243,19 @@ To rename the product, publisher, install folder or registry key, edit only `Pro
 
 ### Check for Updates (in the app)
 
-*Settings & Help… → Check for Updates*, or **Ctrl+U**. The app reads `update.json` from the **update address**, compares
-its `version` with its own (`Version.cs`), downloads the setup to `%TEMP%\CardStudio-Update`, checks the SHA-256, starts
-`CardStudio-Setup.exe /WaitForApp` (UAC prompt) and closes. The setup upgrades in place as usual. The app also checks
-quietly at start-up, at most once a day (it can be switched off), and opens the page only when there is a version the user
-did not skip.
+*Settings & Help… → Check for Updates*, or **Ctrl+U**. There is nothing to set up: the app always reads the **latest GitHub
+release** of this repository (`UpdateService.Source` in `NPIC_CARD_APP\Services\UpdateService.cs`). It compares the
+release tag with its own version (`Version.cs`), downloads the attached setup to `%TEMP%\CardStudio-Update`, checks it
+against the SHA-256 digest GitHub publishes for the file, starts `CardStudio-Setup.exe /WaitForApp` (UAC prompt) and
+closes. The setup upgrades in place as usual. The app also checks quietly at start-up, at most once a day (it can be
+switched off). It opens the page only when there is a version the user did not skip, and the main window's title shows
+"Update X.Y.Z available" until it is installed.
 
-The update address can be:
+The repository must stay **public**: the app reads the releases without signing in. A private repository answers 404,
+and the page then shows "No published release was found on GitHub".
 
-| Address | Example |
-|---|---|
-| A network folder holding the two files (the usual choice at school) | `\\server\Software\CardStudio` |
-| An https:// folder or `update.json` URL | `https://example.org/cardstudio/` |
-| A GitHub repository with releases (must be public); attach `CardStudio-Setup.exe` to the release and tag it `v1.2.0` | `https://github.com/owner/repo` |
-
-Plain `http://` is refused, because the setup runs as administrator. The address is saved per Windows user in
-`settings.xml`. Set it once on a PC and spread it with **All Settings… → Export / Import**, or build it in for every PC by
-setting `UpdateService.DefaultSource` in `NPIC_CARD_APP\Services\UpdateService.cs`.
-
-`update.json` format (`url` may be relative to the file; `sha256` is optional, but without it the download cannot be verified):
-
-```json
-{
-  "version": "1.2.0",
-  "url": "CardStudio-Setup.exe",
-  "sha256": "C1A7D042…",
-  "size": 1468006,
-  "date": "2026-10-17",
-  "notes": "Faster printing.\nNew RFID page."
-}
-```
+`build.ps1` still writes `dist\update.json` (version, SHA-256, notes). The GitHub flow does not need it, so attaching it
+to the release is optional.
 
 ---
 

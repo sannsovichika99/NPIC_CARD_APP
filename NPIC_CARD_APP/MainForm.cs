@@ -1979,7 +1979,7 @@ namespace NPIC_CARD_APP
             UpdateInfo info;
             try
             {
-                info = await UpdateService.CheckAsync(UpdateService.SourceOf(_settings), CancellationToken.None);
+                info = await UpdateService.CheckAsync(UpdateService.Source, CancellationToken.None);
             }
             catch (Exception)
             {

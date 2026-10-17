@@ -32,15 +32,17 @@ if (-not $msbuild) { throw "MSBuild.exe not found." }
 Write-Host "MSBuild: $msbuild"
 
 if ($Version) {
-    if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version must look like 1.2.0" }
+    if ($Version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') { throw "Version must look like 1.2.0 or 1.2.0.1" }
+    $full = if ($Version.Split('.').Count -eq 3) { "$Version.0" } else { $Version }
     $text = [IO.File]::ReadAllText($versionFile)
-    $text = $text -replace 'AssemblyVersion\("[\d\.]+"\)', "AssemblyVersion(`"$Version.0`")"
-    $text = $text -replace 'AssemblyFileVersion\("[\d\.]+"\)', "AssemblyFileVersion(`"$Version.0`")"
+    $text = $text -replace 'AssemblyVersion\("[\d\.]+"\)', "AssemblyVersion(`"$full`")"
+    $text = $text -replace 'AssemblyFileVersion\("[\d\.]+"\)', "AssemblyFileVersion(`"$full`")"
     [IO.File]::WriteAllText($versionFile, $text)
 }
-$stamped = [regex]::Match([IO.File]::ReadAllText($versionFile), 'AssemblyVersion\("(\d+\.\d+\.\d+)\.\d+"\)')
-if (-not $stamped.Success) { throw "No AssemblyVersion(""x.y.z.0"") found in $versionFile" }
-$productVersion = $stamped.Groups[1].Value
+$stamped = [regex]::Match([IO.File]::ReadAllText($versionFile), 'AssemblyVersion\("(\d+\.\d+\.\d+)\.(\d+)"\)')
+if (-not $stamped.Success) { throw "No AssemblyVersion(""x.y.z.w"") found in $versionFile" }
+# 1.2.0.0 → "1.2.0"; 1.0.0.1 → "1.0.0.1" (same as the app shows it, and as the GitHub tag: v1.0.0.1)
+$productVersion = if ($stamped.Groups[2].Value -eq "0") { $stamped.Groups[1].Value } else { "$($stamped.Groups[1].Value).$($stamped.Groups[2].Value)" }
 Write-Host "Version: $productVersion"
 
 if ($NotesFile) { $Notes = [IO.File]::ReadAllText((Resolve-Path $NotesFile)) }
