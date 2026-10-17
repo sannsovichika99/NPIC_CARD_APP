@@ -434,7 +434,9 @@ namespace NPIC_CARD_APP
 
             // ---- Appearance ----
             add("Appearance", "Colour theme", s.DarkMode ? "Dark" : "Light", false,
-                "Switch with Dark Mode / Light Mode in the sidebar (restarts the app). Printed cards are not affected.", null);
+                "Switch with Settings & Help… → Dark Mode / Light Mode in the sidebar (restarts the app). Printed cards are not affected.", null);
+            add("Appearance", "Primary colour", AccentPalette.Describe(s.AccentColor), false,
+                "Change it with Settings & Help… → Theme Color… in the sidebar (restarts the app). Printed cards are not affected.", null);
 
             // ---- Files & folders ----
             const string files = "Files & folders";

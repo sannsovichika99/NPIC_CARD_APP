@@ -531,8 +531,8 @@ namespace NPIC_CARD_APP
                         "card on the reader; it is saved automatically.",
                         "**រក្សាទុកលេខ RFID** — ផ្ទាំង **RFID** បើកដោយស្វ័យប្រវត្តិក្រោយការបោះពុម្ព។ ជ្រើសរើសនិស្សិតម្នាក់ៗ " +
                         "ហើយប៉ះកាតរបស់គេលើឧបករណ៍អាន។ លេខកាតត្រូវបានរក្សាទុកដោយស្វ័យប្រវត្តិ។"));
-            w.Note(T("Not sure everything is ready? Sidebar **All Settings…** (Ctrl+,) shows every setting, with problems in orange.",
-                     "មិនច្បាស់ថាអ្វីៗរួចរាល់ឬនៅ? របារចំហៀង **All Settings…** (Ctrl+,) បង្ហាញការកំណត់ទាំងអស់ ហើយបញ្ហាត្រូវបានបង្ហាញជាពណ៌ទឹកក្រូច។"));
+            w.Note(T("Not sure everything is ready? Sidebar **Settings & Help…** → **All Settings…** (Ctrl+,) shows every setting, with problems in orange.",
+                     "មិនច្បាស់ថាអ្វីៗរួចរាល់ឬនៅ? របារចំហៀង **Settings & Help…** → **All Settings…** (Ctrl+,) បង្ហាញការកំណត់ទាំងអស់ ហើយបញ្ហាត្រូវបានបង្ហាញជាពណ៌ទឹកក្រូច។"));
         }
 
         private void WriteImport(GuideWriter w)
@@ -798,10 +798,20 @@ namespace NPIC_CARD_APP
                        "**Import…** ជំនួសការកំណត់ទាំងអស់ដោយឯកសារដែលបាន export។ ការកំណត់បច្ចុប្បន្នត្រូវបានបម្រុងទុកជាមុន (settings.backup.xml)។"));
 
             w.Heading(T("Other", "ផ្សេងៗ"));
+            w.Bullet(T("**Settings & Help…** — one page with **Dark Mode / Light Mode**, **Theme Color…**, **Folders…**, **All Settings…**, " +
+                       "**System Info** and **Help & About**. " +
+                       "Their shortcuts (Ctrl+Shift+F, Ctrl+,, Ctrl+Shift+I, F1) still open each one directly.",
+                       "**Settings & Help…** — ទំព័រតែមួយដែលមាន **Dark Mode / Light Mode** **Theme Color…** **Folders…** **All Settings…** " +
+                       "**System Info** និង **Help & About**។ " +
+                       "ផ្លូវកាត់ (Ctrl+Shift+F, Ctrl+,, Ctrl+Shift+I, F1) នៅតែបើកនីមួយៗដោយផ្ទាល់។"));
             w.Bullet(T("**Folders…** (Ctrl+Shift+F) — every folder the app uses: open, change or create them.",
                        "**Folders…** (Ctrl+Shift+F) — ថតទាំងអស់ដែលកម្មវិធីប្រើ៖ បើក ប្តូរ ឬបង្កើតថត។"));
             w.Bullet(T("**Dark Mode / Light Mode** — changes the app's colours and restarts it. Printed cards are not affected.",
                        "**Dark Mode / Light Mode** — ប្តូរពណ៌កម្មវិធី ហើយចាប់ផ្តើមកម្មវិធីឡើងវិញ។ កាតដែលបោះពុម្ពមិនរងផលប៉ះពាល់ទេ។"));
+            w.Bullet(T("**Theme Color…** — choose the main colour of buttons, tabs and highlights (10 colours or any custom colour), " +
+                       "with a live preview. The app restarts to apply it. Printed cards are not affected.",
+                       "**Theme Color…** — ជ្រើសរើសពណ៌ចម្បងរបស់ប៊ូតុង ផ្ទាំង និងការរំលេច (ពណ៌ ១០ ឬពណ៌ផ្ទាល់ខ្លួន) " +
+                       "ដោយមានការមើលជាមុនភ្លាមៗ។ កម្មវិធីនឹងចាប់ផ្តើមឡើងវិញដើម្បីអនុវត្ត។ កាតដែលបោះពុម្ពមិនរងផលប៉ះពាល់ទេ។"));
             w.Bullet(T("**Card images** (logos, stamp, QR and social icons) live in the **Assets** folder next to the app.",
                        "**រូបភាពកាត** (ឡូហ្គោ ត្រា QR និងរូបតំណាងបណ្តាញសង្គម) ស្ថិតនៅក្នុងថត **Assets** ជាប់នឹងកម្មវិធី។"));
             w.Bullet(T("**This guide** is available in English and Khmer — use the switch at the top. The choice is remembered.",
@@ -897,9 +907,9 @@ namespace NPIC_CARD_APP
         private void WriteSystemInfo(GuideWriter w)
         {
             w.Title(T("System info", "ព័ត៌មានប្រព័ន្ធ"));
-            w.Lead(T("Live details of this installation. Open it any time with **System Info** in the sidebar (Ctrl+Shift+I). " +
+            w.Lead(T("Live details of this installation. Open it any time with **Settings & Help…** → **System Info** in the sidebar (Ctrl+Shift+I). " +
                      "**Copy System Info** puts all of it on the clipboard.",
-                     "ព័ត៌មានផ្ទាល់នៃការដំឡើងនេះ។ បើកវាបានគ្រប់ពេលតាម **System Info** នៅរបារចំហៀង (Ctrl+Shift+I)។ " +
+                     "ព័ត៌មានផ្ទាល់នៃការដំឡើងនេះ។ បើកវាបានគ្រប់ពេលតាម **Settings & Help…** → **System Info** នៅរបារចំហៀង (Ctrl+Shift+I)។ " +
                      "ប៊ូតុង **ចម្លងព័ត៌មានប្រព័ន្ធ** ចម្លងទាំងអស់ទៅ clipboard។"));
 
             w.Heading(T("Application", "កម្មវិធី"));

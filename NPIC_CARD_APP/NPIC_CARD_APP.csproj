@@ -93,6 +93,13 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="UiKit.cs" />
+    <Compile Include="AccentPalette.cs" />
+    <Compile Include="ThemeColorForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="SettingsHubForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Branding.cs" />
     <Compile Include="SlimScroll.cs" />
     <Compile Include="CardTextForm.cs">

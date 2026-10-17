@@ -225,20 +225,10 @@ namespace NPIC_CARD_APP
                     "Edit the fixed text printed on the cards and choose the director signature"),
 
                 Section("APP"),
-                Theme.Dark
-                    ? Nav("Light Mode", Theme.IcoSun, ToggleDarkMode, "Switch back to the light colours (restarts the app)")
-                    : Nav("Dark Mode", Theme.IcoMoon, ToggleDarkMode,
-                        "Switch to dark colours, easier on the eyes in a dim room (restarts the app)"),
                 Nav("Full Screen", Theme.IcoFullScreen, () => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"),
-                Nav("Folders…", Theme.IcoFolder, ShowFolders,
-                    "Every folder the app uses: photos, backups, app data, card images — open, change or create them (Ctrl+Shift+F)"),
-                Nav("All Settings…", Theme.IcoSettings, ShowAllSettings,
-                    "Show every setting of the app and this PC: printer, tray, files, API, card text, fonts (Ctrl+,)"),
-                Nav("System Info", Theme.IcoInfo, () => ShowHelp(HelpForm.Page.SystemInfo),
-                    "Version, students loaded, cards printed, RFID cards, data files, printer, fonts and card images of this PC (Ctrl+Shift+I)"),
-                Nav("Help & About", Theme.IcoQuestion, () => ShowHelp(HelpForm.Page.Overview),
-                    "What Card Studio does, step-by-step user guide, keyboard shortcuts, troubleshooting and system info, " +
-                    "in English or Khmer · ការណែនាំប្រើប្រាស់ជាភាសាខ្មែរ (F1)"),
+                Nav("Settings & Help…", Theme.IcoSettings, ShowSettingsHub,
+                    (Theme.Dark ? "Light Mode" : "Dark Mode") + ", Theme Color, Folders (Ctrl+Shift+F), All Settings (Ctrl+,), " +
+                    "System Info (Ctrl+Shift+I) and Help & About (F1) in one page · ការណែនាំប្រើប្រាស់ជាភាសាខ្មែរ"),
                 Spacer(10)
             };
 
@@ -1880,6 +1870,62 @@ namespace NPIC_CARD_APP
                 return;
             }
             Application.Restart();
+        }
+
+        /// <summary>
+        /// Theme Color…: picks the primary colour, saves it and restarts the app (every window reads the theme colours
+        /// once at start-up, like Dark Mode).
+        /// </summary>
+        private void ChangeThemeColor()
+        {
+            string chosen;
+            using (var form = new ThemeColorForm(_settings.AccentColor))
+            {
+                if (form.ShowDialog(this) != DialogResult.OK) return;
+                chosen = form.SelectedHex;
+            }
+            if (string.Equals(chosen, AccentPalette.ToHex(Theme.Palette.Base), StringComparison.OrdinalIgnoreCase)) return;
+
+            string old = _settings.AccentColor;
+            ReadUiToSettings();
+            // The default violet is saved as "not set", so it follows the app's default if that ever changes.
+            _settings.AccentColor = string.Equals(chosen, AccentPalette.ToHex(AccentPalette.DefaultBase), StringComparison.OrdinalIgnoreCase)
+                ? null : chosen;
+            try
+            {
+                _settings.Save();
+            }
+            catch (Exception ex)
+            {
+                _settings.AccentColor = old;
+                ShowError(ex);
+                return;
+            }
+            Application.Restart();
+        }
+
+        /// <summary>
+        /// Settings &amp; Help page: Dark / Light Mode, Theme Color, Folders, All Settings, System Info, Help &amp; About.
+        /// Runs the command picked there.
+        /// </summary>
+        private void ShowSettingsHub()
+        {
+            SettingsHubChoice choice;
+            using (var form = new SettingsHubForm(_settings.AccentColor))
+            {
+                if (form.ShowDialog(this) != DialogResult.OK) return;
+                choice = form.Choice;
+            }
+
+            switch (choice)
+            {
+                case SettingsHubChoice.DarkMode: ToggleDarkMode(); break;
+                case SettingsHubChoice.ThemeColor: ChangeThemeColor(); break;
+                case SettingsHubChoice.Folders: ShowFolders(); break;
+                case SettingsHubChoice.AllSettings: ShowAllSettings(); break;
+                case SettingsHubChoice.SystemInfo: ShowHelp(HelpForm.Page.SystemInfo); break;
+                case SettingsHubChoice.HelpAbout: ShowHelp(HelpForm.Page.Overview); break;
+            }
         }
 
         private void ShowAllSettings()

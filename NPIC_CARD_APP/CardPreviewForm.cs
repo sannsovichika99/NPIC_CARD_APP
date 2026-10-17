@@ -34,8 +34,8 @@ namespace NPIC_CARD_APP
 
         private static readonly Color ButtonBack = Color.FromArgb(52, 52, 60);
         private static readonly Color ButtonHover = Color.FromArgb(72, 72, 84);
-        private static readonly Color ButtonOn = Color.FromArgb(108, 99, 245);       // Theme.Accent
-        private static readonly Color ButtonOnHover = Color.FromArgb(124, 115, 250);
+        private static readonly Color ButtonOn = Theme.ButtonA;            // the chosen primary colour
+        private static readonly Color ButtonOnHover = Theme.ButtonHover;
         private static readonly Color ButtonDisabledText = Color.FromArgb(110, 110, 118);
 
         private enum ToolAction { Front, Back, Both, Grid, Close }

@@ -11,13 +11,19 @@ namespace NPIC_CARD_APP
     /// <summary>
     /// Dashboard look shared by the main window: soft lavender accent, white rounded cards with
     /// a faint coloured shadow, gradient stat tiles and line icons (Segoe Fluent Icons / MDL2 Assets).
-    /// Light or dark is chosen once at start-up from <see cref="AppSettings.DarkMode"/>: every form copies these
-    /// tokens into its own static fields, so switching theme restarts the app.
+    /// Light or dark (<see cref="AppSettings.DarkMode"/>) and the primary colour (<see cref="AppSettings.AccentColor"/>)
+    /// are read once at start-up: every form copies these tokens into its own static fields, so changing either restarts the app.
     /// </summary>
     internal static class Theme
     {
         /// <summary>True when the dark palette is in use. Must stay the first field: the colours below read it.</summary>
         public static readonly bool Dark = LoadDarkSetting();
+
+        /// <summary>
+        /// Accent tokens for the primary colour chosen with Theme Color… (<see cref="AppSettings.AccentColor"/>).
+        /// Must stay right after <see cref="Dark"/>: the accent colours below read it.
+        /// </summary>
+        public static readonly AccentPalette Palette = LoadPalette();
 
         private static bool LoadDarkSetting()
         {
@@ -25,22 +31,32 @@ namespace NPIC_CARD_APP
             catch (Exception) { return false; }
         }
 
+        private static AccentPalette LoadPalette()
+        {
+            string hex = null;
+            try { hex = AppSettings.Load().AccentColor; }
+            catch (Exception) { }
+            return AccentPalette.FromSetting(hex, Dark);
+        }
+
         private static Color Pick(int lr, int lg, int lb, int dr, int dg, int db)
         {
             return Dark ? Color.FromArgb(dr, dg, db) : Color.FromArgb(lr, lg, lb);
         }
 
+        // ---- Accent tokens: from the chosen primary colour (default violet), see AccentPalette ----
+        // In dark mode Accent is lighter so it stays readable as text / icons on dark surfaces (≥ 5.5:1);
+        // filled buttons use the Button* tokens below, which keep white text readable in both themes.
+        public static readonly Color Accent         = Palette.Accent;
+        public static readonly Color AccentLight    = Palette.AccentLight;
+        public static readonly Color AccentHover    = Palette.AccentHover;
+        public static readonly Color AccentPressed  = Palette.AccentPressed;
+        public static readonly Color AccentSoft     = Palette.AccentSoft;
+        public static readonly Color AccentSoftDown = Palette.AccentSoftDown;   // pressed soft-accent fill
+        public static readonly Color AccentOutline  = Palette.AccentOutline;    // hover outline of outlined pills
+
         // ---- Colour tokens (light value, dark value) ----
-        // In dark mode Accent is lighter so it stays readable as text / icons on dark surfaces (≈ 6:1);
-        // filled buttons use the Button* tokens below, which keep the brand violet under white text in both themes.
-        public static readonly Color Accent        = Pick(108, 99, 245,   150, 141, 255);
-        public static readonly Color AccentLight   = Pick(150, 132, 250,  176, 164, 255);
-        public static readonly Color AccentHover   = Pick(124, 115, 250,  165, 156, 255);
-        public static readonly Color AccentPressed = Pick(86, 78, 220,    124, 115, 240);
-        public static readonly Color AccentSoft    = Pick(239, 238, 254,  49, 45, 92);
-        public static readonly Color AccentSoftDown = Pick(226, 224, 252, 62, 57, 118);   // pressed soft-accent fill
-        public static readonly Color AccentOutline = Pick(200, 198, 248,  98, 90, 180);   // hover outline of outlined pills
-        public static readonly Color AppBack       = Pick(245, 246, 250,  17, 18, 27);
+        public static readonly Color AppBack      = Pick(245, 246, 250,  17, 18, 27);
         public static readonly Color Surface       = Pick(255, 255, 255,  28, 29, 42);
         public static readonly Color SurfaceAlt    = Pick(250, 250, 253,  33, 34, 49);
         public static readonly Color SurfaceHover  = Pick(246, 246, 251,  40, 41, 58);
@@ -57,11 +73,11 @@ namespace NPIC_CARD_APP
         public static readonly Color DangerSoftDown = Pick(250, 212, 219, 96, 40, 54);
         public static readonly Color Success       = Pick(34, 160, 100,   72, 199, 132);
 
-        // Filled (primary) buttons and selections with white text: the brand violet in both themes.
-        public static readonly Color ButtonA       = Color.FromArgb(108, 99, 245);
-        public static readonly Color ButtonB       = Color.FromArgb(150, 132, 250);
-        public static readonly Color ButtonHover   = Color.FromArgb(124, 115, 250);
-        public static readonly Color ButtonPressed = Color.FromArgb(86, 78, 220);
+        // Filled (primary) buttons and selections with white text: the primary colour in both themes.
+        public static readonly Color ButtonA       = Palette.ButtonA;
+        public static readonly Color ButtonB       = Palette.ButtonB;
+        public static readonly Color ButtonHover   = Palette.ButtonHover;
+        public static readonly Color ButtonPressed = Palette.ButtonPressed;
 
         // App logo colours (Assets\app_logo.png): navy line art and orange accents.
         public static readonly Color BrandBlue   = Color.FromArgb(31, 90, 138);    // #1F5A8A
@@ -71,8 +87,9 @@ namespace NPIC_CARD_APP
         public static readonly Color Backdrop = Pick(26, 24, 58, 0, 0, 0);
         public static readonly double BackdropOpacity = Dark ? 0.5 : 0.32;
 
-        // Gradient pairs of the three stat tiles (violet, coral, pink).
-        public static readonly Color VioletA = Color.FromArgb(120, 124, 246), VioletB = Color.FromArgb(184, 156, 250);
+        // Gradient pairs of the three stat tiles (primary colour, coral, pink). The primary pair also colours the
+        // popup header strip and the fallback logo badge (names kept from when it was always violet).
+        public static readonly Color VioletA = Palette.GradientA, VioletB = Palette.GradientB;
         public static readonly Color CoralA  = Color.FromArgb(255, 132, 124), CoralB  = Color.FromArgb(255, 200, 150);
         public static readonly Color PinkA   = Color.FromArgb(255, 108, 164), PinkB   = Color.FromArgb(255, 160, 204);
 
@@ -116,6 +133,8 @@ namespace NPIC_CARD_APP
             IcoFullScreen = "", IcoSettings = "", IcoSearch = "", IcoMultiSelect = "",
             IcoPhoto = "", IcoList = "", IcoCloud = "", IcoSync = "",
             IcoMoon = "", IcoSun = "";   // QuietHours (moon) / Brightness (sun)
+
+        public const string IcoColor = "", IcoCheck = "";   // Color (palette) / CheckMark
 
         // Popup header / message icons
         public const string IcoInfo = "", IcoWarning = "", IcoError = "", IcoQuestion = "",
