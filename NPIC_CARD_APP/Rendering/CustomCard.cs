@@ -115,6 +115,13 @@ namespace NPIC_CARD_APP.Rendering
         [Category("1. Layer"), DisplayName("Locked"), Description("A locked element cannot be moved with the mouse (handy for backgrounds). Select it in the layer list to edit it.")]
         public bool Locked { get; set; }
 
+        /// <summary>
+        /// Elements with the same id on one side form a group (Card Designer → Group): a click selects all of them and they move,
+        /// line up and copy as one block. Null = not grouped. Only the designer uses it; printing ignores it.
+        /// </summary>
+        [Browsable(false)]
+        public string GroupId { get; set; }
+
         [Category("2. Position (mm)"), DisplayName("X"), Description("Distance from the left edge of the card, in mm (card is 84.6 mm wide).")]
         public float X { get; set; }
 

@@ -76,8 +76,53 @@ namespace NPIC_CARD_APP
             A("  ·  NOTHING SELECTED", "  ·  មិនទាន់ជ្រើសអ្វី");
             A("{0} PROPERTIES", "លក្ខណៈ{0}");
             A("Could not draw the card: {0}", "មិនអាចគូរកាតបានទេ៖ {0}");
-            A("Click an element to select it  ·  drag to move, handles to resize (Shift keeps the shape)  ·  arrows nudge 0.1 mm (Shift 1 mm)  ·  right-click for more",
-                "ចុចលើធាតុដើម្បីជ្រើស  ·  អូសដើម្បីផ្លាស់ទី ចំណុចជ្រុងដើម្បីប្ដូរទំហំ (Shift រក្សារាង)  ·  ព្រួញរំកិល 0.1 mm (Shift 1 mm)  ·  ចុចស្ដាំសម្រាប់ច្រើនទៀត");
+            A("Click an element to select it (Ctrl+click or drag a box for several)  ·  drag to move, handles to resize  ·  " +
+              "arrows nudge 0.1 mm (Shift 1 mm)  ·  right-click for more",
+                "ចុចលើធាតុដើម្បីជ្រើស (Ctrl+ចុច ឬអូសប្រអប់ ដើម្បីជ្រើសច្រើន)  ·  អូសដើម្បីផ្លាស់ទី ចំណុចជ្រុងដើម្បីប្ដូរទំហំ  ·  " +
+                "ព្រួញរំកិល 0.1 mm (Shift 1 mm)  ·  ចុចស្ដាំសម្រាប់ច្រើនទៀត");
+            A("{0} elements selected", "បានជ្រើស {0} ធាតុ");
+            A("   ·  drag one to move them all  ·  Ctrl+G groups them  ·  right-click → Align",
+                "   ·  អូសមួយ ដើម្បីផ្លាស់ទីទាំងអស់  ·  Ctrl+G ដាក់ជាក្រុម  ·  ចុចស្ដាំ → តម្រឹម");
+            A("Ungroup", "បំបែកក្រុម");
+            A("Group the selected elements, so they are picked and moved as one (Ctrl+G)",
+                "ដាក់ធាតុដែលបានជ្រើសជាក្រុម ដើម្បីជ្រើស និងផ្លាស់ទីវាជាមួយគ្នា (Ctrl+G)");
+            A("Take the selected elements out of their group (Ctrl+Shift+G)", "យកធាតុដែលបានជ្រើសចេញពីក្រុមរបស់វា (Ctrl+Shift+G)");
+            A("Grouped {0} elements. Click one to pick the whole group; double-click to pick one inside it.",
+                "បានដាក់ {0} ធាតុជាក្រុម។ ចុចមួយ ដើម្បីជ្រើសក្រុមទាំងមូល ចុចពីរដង ដើម្បីជ្រើសតែមួយក្នុងក្រុម។");
+            A("GROUP OF {0}  ·  SHARED PROPERTIES", "ក្រុម {0} ធាតុ  ·  លក្ខណៈរួម");
+            A("Group of {0} elements", "ក្រុម {0} ធាតុ");
+            A("   ·  double-click an element to pick it alone  ·  Ctrl+Shift+G ungroups",
+                "   ·  ចុចពីរដងលើធាតុ ដើម្បីជ្រើសតែវា  ·  Ctrl+Shift+G បំបែកក្រុម");
+            A("{0} ELEMENTS  ·  SHARED PROPERTIES", "{0} ធាតុ  ·  លក្ខណៈរួម");
+            A("{0} ELEMENTS SELECTED", "បានជ្រើស {0} ធាតុ");
+            A("Align ▾", "តម្រឹម ▾");
+            A("Line up the selected elements, space them evenly or give them the same size. " +
+              "Select several with Ctrl+click, Shift+click or by dragging a box on the card",
+                "តម្រឹមធាតុដែលបានជ្រើស ចែកចន្លោះស្មើៗ ឬឱ្យទំហំដូចគ្នា។ " +
+                "ជ្រើសច្រើនដោយ Ctrl+ចុច Shift+ចុច ឬអូសប្រអប់លើកាត");
+            A("Align", "តម្រឹម");
+            A("Centre horizontally on the card", "ដាក់កណ្ដាលផ្ដេកលើកាត");
+            A("Centre vertically on the card", "ដាក់កណ្ដាលបញ្ឈរលើកាត");
+            A("Select all", "ជ្រើសទាំងអស់");
+            A("SELECT ELEMENTS FIRST", "ជ្រើសធាតុជាមុនសិន");
+            A("LINE UP WITH THE CARD", "តម្រឹមតាមកាត");
+            A("LINE UP {0} ELEMENTS WITH EACH OTHER", "តម្រឹម {0} ធាតុ ជាមួយគ្នា");
+            A("Align left edges", "តម្រឹមគែមឆ្វេង");
+            A("Align centres (horizontally)", "តម្រឹមកណ្ដាល (ផ្ដេក)");
+            A("Align right edges", "តម្រឹមគែមស្ដាំ");
+            A("Align top edges", "តម្រឹមគែមខាងលើ");
+            A("Align middles (vertically)", "តម្រឹមកណ្ដាល (បញ្ឈរ)");
+            A("Align bottom edges", "តម្រឹមគែមខាងក្រោម");
+            A("Distribute horizontally (equal gaps)", "ចែកផ្ដេក (ចន្លោះស្មើ)");
+            A("Distribute vertically (equal gaps)", "ចែកបញ្ឈរ (ចន្លោះស្មើ)");
+            A("Same width as the key element", "ទទឹងដូចធាតុគោល");
+            A("Same height as the key element", "កម្ពស់ដូចធាតុគោល");
+            A("Same size as the key element", "ទំហំដូចធាតុគោល");
+            A("Line up with the card (not with each other)", "តម្រឹមតាមកាត (មិនមែនជាមួយគ្នា)");
+            A("Distribute horizontally (equal gaps) — 3 or more elements", "ចែកផ្ដេក (ចន្លោះស្មើ) — ៣ ធាតុ ឬច្រើនជាងនេះ");
+            A("Distribute vertically (equal gaps) — 3 or more elements", "ចែកបញ្ឈរ (ចន្លោះស្មើ) — ៣ ធាតុ ឬច្រើនជាងនេះ");
+            A("Line up with the card (not with each other). One element always lines up with the card.",
+                "តម្រឹមតាមកាត (មិនមែនជាមួយគ្នា)។ ធាតុតែមួយតែងតែតម្រឹមតាមកាត។");
             A("   ·  locked", "   ·  បានចាក់សោ");
             A("   ·  student fields print empty on the back", "   ·  វាលនិស្សិតបោះពុម្ពទទេនៅផ្នែកក្រោយ");
             A("  · locked", "  · បានចាក់សោ");
@@ -157,8 +202,6 @@ namespace NPIC_CARD_APP
             A("Change picture…", "ប្ដូររូបភាព…");
             A("Unlock", "ដោះសោ");
             A("Lock", "ចាក់សោ");
-            A("Centre horizontally", "តម្រឹមកណ្ដាលផ្ដេក");
-            A("Centre vertically", "តម្រឹមកណ្ដាលបញ្ឈរ");
             A("Delete\tDel", "លុប\tDel");
 
             // ---- Save, import, export ----

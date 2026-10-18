@@ -28,14 +28,19 @@ namespace NPIC_CARD_APP
         private CustomCardDesign _design;
         private bool _isNew;   // not saved yet (new, duplicated or imported)
         private bool _back;
+        /// <summary>Key element of the selection: handles, "Same width / height" and single-element commands use it.</summary>
         private CardElement _selected;
-        private CardElement _clipboard;
+        /// <summary>Every selected element (Ctrl / Shift + click, drag a box, Ctrl+A); contains <see cref="_selected"/>.</summary>
+        private readonly List<CardElement> _selection = new List<CardElement>();
+        private List<CardElement> _clipboard;
+        private bool _alignToCard;   // Align commands line up with the card instead of the selection
 
         private readonly DesignCanvas _canvas;
         private readonly ListBox _layers;
         private readonly PropertyGrid _grid;
         private readonly Label _status;
         private readonly Label _propsTitle;
+        private readonly AlignBar _alignBar;
         private readonly PillButton _tabFront, _tabBack, _btnUndo, _btnRedo, _btnSnap, _btnOutlines, _btnDesign;
         private readonly Timer _renderTimer = new Timer { Interval = 15 };
         private readonly ToolTip _tip = new ToolTip();
@@ -94,6 +99,11 @@ namespace NPIC_CARD_APP
             _btnSnap.Checked = true;
             _btnOutlines = Tool(toolbar, "Outlines", ToggleOutlines, "Show the outline of every element and the 1.5 mm safe margin (never printed)");
             _btnOutlines.Checked = true;
+            _btnOutlines.Margin = new Padding(0, 0, 22, 0);
+            PillButton align = Tool(toolbar, "Align ▾", null,
+                "Line up the selected elements, space them evenly or give them the same size. " +
+                "Select several with Ctrl+click, Shift+click or by dragging a box on the card");
+            align.Click += (s, e) => ShowMenu(align, AlignMenu());
 
             // ---- Left: add tools + layer list ----
             var left = new TableLayoutPanel
@@ -129,12 +139,16 @@ namespace NPIC_CARD_APP
                 BorderStyle = BorderStyle.None, BackColor = Theme.Surface, ForeColor = Theme.TextMain, Margin = new Padding(0, 4, 0, 8)
             };
             _layers.DrawItem += DrawLayerItem;
-            _layers.SelectedIndexChanged += (s, e) => { if (!_syncingLayers) SelectElement(_layers.SelectedItem as CardElement); };
+            _layers.SelectionMode = SelectionMode.MultiExtended;   // Ctrl / Shift + click select several layers
+            _layers.SelectedIndexChanged += (s, e) => { if (!_syncingLayers) SelectFromLayers(); };
             _layers.MouseDown += (s, e) =>
             {
                 if (e.Button != MouseButtons.Right) return;
                 int i = _layers.IndexFromPoint(e.Location);
-                if (i >= 0) { _layers.SelectedIndex = i; ShowElementMenu(_layers, e.Location); }
+                if (i < 0) return;
+                // Right-click on a selected layer keeps the whole selection; on another one, selects only that one
+                if (!_layers.GetSelected(i)) SelectElement((CardElement)_layers.Items[i]);
+                ShowElementMenu(_layers, e.Location);
             };
             left.Controls.Add(_layers, 0, 3);
 
@@ -143,6 +157,8 @@ namespace NPIC_CARD_APP
             SmallTool(layerButtons, "▼", SendBackward, "Send backward (Ctrl+[)");
             SmallTool(layerButtons, "Copy", DuplicateSelected, "Duplicate (Ctrl+D)");
             SmallTool(layerButtons, "Delete", DeleteSelected, "Delete (Del)");
+            SmallTool(layerButtons, "Group", GroupSelected, "Group the selected elements, so they are picked and moved as one (Ctrl+G)");
+            SmallTool(layerButtons, "Ungroup", UngroupSelected, "Take the selected elements out of their group (Ctrl+Shift+G)");
             left.Controls.Add(layerButtons, 0, 4);
 
             // ---- Right: properties ----
@@ -166,10 +182,28 @@ namespace NPIC_CARD_APP
             right.Controls.Add(_grid);
             right.Controls.Add(_propsTitle);
 
+            // Alignment icons above the properties (docked last = topmost)
+            _alignBar = new AlignBar { Dock = DockStyle.Top, Margin = new Padding(0) };
+            Func<int, bool> any = n => n >= 1, three = n => n >= 3;
+            _alignBar.Add(AlignIcon.Left, "Align left edges", () => Align(AlignEdge.Left), any);
+            _alignBar.Add(AlignIcon.CentreX, "Align centres (horizontally)", () => Align(AlignEdge.CentreX), any);
+            _alignBar.Add(AlignIcon.Right, "Align right edges", () => Align(AlignEdge.Right), any);
+            _alignBar.AddGroupGap();
+            _alignBar.Add(AlignIcon.Top, "Align top edges", () => Align(AlignEdge.Top), any);
+            _alignBar.Add(AlignIcon.Middle, "Align middles (vertically)", () => Align(AlignEdge.Middle), any);
+            _alignBar.Add(AlignIcon.Bottom, "Align bottom edges", () => Align(AlignEdge.Bottom), any);
+            _alignBar.AddGroupGap();
+            _alignBar.Add(AlignIcon.DistributeH, "Distribute horizontally (equal gaps) — 3 or more elements", () => Distribute(true), three);
+            _alignBar.Add(AlignIcon.DistributeV, "Distribute vertically (equal gaps) — 3 or more elements", () => Distribute(false), three);
+            _alignBar.AddGroupGap();
+            _alignBar.Add(AlignIcon.ToCard, "Line up with the card (not with each other). One element always lines up with the card.",
+                () => { _alignToCard = !_alignToCard; UpdateStatus(); }, n => true, () => _alignToCard);
+            right.Controls.Add(_alignBar);
+
             // ---- Centre: canvas + status line ----
             var centre = new Panel { Dock = DockStyle.Fill, BackColor = Theme.AppBack };
             _canvas = new DesignCanvas { Dock = DockStyle.Fill };
-            _canvas.SelectionChanged += (s, e) => SelectElement(_canvas.Selected);
+            _canvas.SelectionChanged += (s, e) => SetSelection(_canvas.SelectedItems, _canvas.Selected);
             _canvas.ElementMoving += (s, e) => { RequestRender(); UpdateStatus(); };
             _canvas.ElementMoved += (s, e) => { _grid.Refresh(); Commit(); };
             _canvas.ContextMenuRequested += (s, e) => ShowElementMenu(_canvas, _canvas.PointToClient(Cursor.Position));
@@ -373,32 +407,72 @@ namespace NPIC_CARD_APP
             RenderNow();
         }
 
+        /// <summary>Selects one element only (null = nothing).</summary>
         private void SelectElement(CardElement element)
         {
-            if (element != null && !Side.Elements.Contains(element)) element = null;
-            _selected = element;
-            _canvas.Selected = element;
-            _grid.SelectedObject = element ?? (object)Side;
-            _propsTitle.Text = element == null
-                ? Lang.T(_back ? "BACK OF THE CARD" : "FRONT OF THE CARD") + Lang.T("  ·  NOTHING SELECTED")
-                : Lang.F("{0} PROPERTIES", Lang.T(element.Kind).ToUpperInvariant());
+            SetSelection(element == null ? new CardElement[0] : new[] { element }, element);
+        }
 
-            _syncingLayers = true;
-            _layers.SelectedItem = element;
-            if (element == null) _layers.ClearSelected();
-            _syncingLayers = false;
+        /// <summary>
+        /// Selects several elements; <paramref name="primary"/> is the key element (null = the last one). Elements not on this side are
+        /// dropped. The property grid edits all of them at once (only the properties they share).
+        /// </summary>
+        private void SetSelection(IEnumerable<CardElement> items, CardElement primary)
+        {
+            var keep = new List<CardElement>();
+            foreach (CardElement e in items)
+                if (e != null && Side.Elements.Contains(e) && !keep.Contains(e)) keep.Add(e);
+            _selection.Clear();
+            _selection.AddRange(keep);
+            if (primary == null || !_selection.Contains(primary)) primary = _selection.Count > 0 ? _selection[_selection.Count - 1] : null;
+            _selected = primary;
+            _canvas.SetSelection(_selection, primary);
+            _alignBar.SelectionCount = SelectionUnits().Count;   // a whole group counts as one block
+
+            if (_selection.Count > 1) _grid.SelectedObjects = _selection.ToArray();
+            else _grid.SelectedObject = _selected ?? (object)Side;
+            _propsTitle.Text = _selection.Count == 0
+                ? Lang.T(_back ? "BACK OF THE CARD" : "FRONT OF THE CARD") + Lang.T("  ·  NOTHING SELECTED")
+                : _selection.Count == 1
+                    ? Lang.F("{0} PROPERTIES", Lang.T(_selected.Kind).ToUpperInvariant())
+                    : WholeGroupId() != null
+                        ? Lang.F("GROUP OF {0}  ·  SHARED PROPERTIES", _selection.Count)
+                        : Lang.F("{0} ELEMENTS  ·  SHARED PROPERTIES", _selection.Count);
+
+            SyncLayerSelection();
             UpdateStatus();
+        }
+
+        /// <summary>The layer list shows the same selection as the canvas.</summary>
+        private void SyncLayerSelection()
+        {
+            _syncingLayers = true;
+            _layers.BeginUpdate();
+            _layers.ClearSelected();
+            for (int i = 0; i < _layers.Items.Count; i++)
+                if (_selection.Contains((CardElement)_layers.Items[i])) _layers.SetSelected(i, true);
+            _layers.EndUpdate();
+            _syncingLayers = false;
+        }
+
+        /// <summary>Ctrl / Shift + click in the layer list: the newly clicked layer becomes the key element.</summary>
+        private void SelectFromLayers()
+        {
+            var picked = new List<CardElement>();
+            foreach (object o in _layers.SelectedItems) picked.Add((CardElement)o);
+            CardElement primary = picked.Find(e => !_selection.Contains(e)) ?? (picked.Contains(_selected) ? _selected : null);
+            SetSelection(picked, primary);
         }
 
         private void RefreshLayers()
         {
-            _syncingLayers = true;
             _layers.BeginUpdate();
+            _syncingLayers = true;
             _layers.Items.Clear();
             for (int i = Side.Elements.Count - 1; i >= 0; i--) _layers.Items.Add(Side.Elements[i]);
-            _layers.SelectedItem = _selected;
-            _layers.EndUpdate();
             _syncingLayers = false;
+            _layers.EndUpdate();
+            SyncLayerSelection();
         }
 
         /// <summary>Asks for a redraw; mouse moves are combined so the canvas never falls behind.</summary>
@@ -432,8 +506,19 @@ namespace NPIC_CARD_APP
             _btnRedo.Enabled = _redo.Count > 0;
             if (e == null)
             {
-                _status.Text = "Click an element to select it  ·  drag to move, handles to resize (Shift keeps the shape)  ·  " +
+                _status.Text = "Click an element to select it (Ctrl+click or drag a box for several)  ·  drag to move, handles to resize  ·  " +
                                "arrows nudge 0.1 mm (Shift 1 mm)  ·  right-click for more";
+                return;
+            }
+            if (_selection.Count > 1)
+            {
+                RectangleF all = SelectionBounds(_selection);
+                bool group = WholeGroupId() != null;
+                _status.Text = (group ? Lang.F("Group of {0} elements", _selection.Count) : Lang.F("{0} elements selected", _selection.Count)) +
+                    string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                        "      X {0:0.0}   Y {1:0.0}   W {2:0.0}   H {3:0.0} mm", all.X, all.Y, all.Width, all.Height) +
+                    (group ? Lang.T("   ·  double-click an element to pick it alone  ·  Ctrl+Shift+G ungroups")
+                           : Lang.T("   ·  drag one to move them all  ·  Ctrl+G groups them  ·  right-click → Align"));
                 return;
             }
             float angle = e is ShapeElement ? ((ShapeElement)e).Rotation : 0f;
@@ -450,6 +535,8 @@ namespace NPIC_CARD_APP
         // =====================================================================
         private void Commit()
         {
+            DissolveLoneGroups(_design.Front);
+            DissolveLoneGroups(_design.Back);
             string now = CustomCardStore.Serialize(_design);
             if (now == _committed) { UpdateStatus(); return; }
             _undo.Add(_committed);
@@ -466,20 +553,25 @@ namespace NPIC_CARD_APP
         private void StepHistory(List<string> from, List<string> to)
         {
             if (from.Count == 0) return;
-            int index = _selected == null ? -1 : Side.Elements.IndexOf(_selected);
+            // The same layer positions stay selected after the step
+            var indices = new List<int>();
+            foreach (CardElement e in _selection) indices.Add(Side.Elements.IndexOf(e));
+            int primary = _selected == null ? -1 : Side.Elements.IndexOf(_selected);
             to.Add(_committed);
             _committed = from[from.Count - 1];
             from.RemoveAt(from.Count - 1);
-            Restore(_committed, index);
+            Restore(_committed, indices, primary);
         }
 
-        private void Restore(string xml, int selectIndex)
+        private void Restore(string xml, List<int> selectIndices, int primaryIndex)
         {
             _design = CustomCardStore.Deserialize(xml);
             _canvas.Side = Side;
             RefreshLayers();
-            SelectElement(selectIndex >= 0 && selectIndex < Side.Elements.Count ? Side.Elements[selectIndex] : null);
-            RefreshLayers();
+            Func<int, CardElement> at = i => i >= 0 && i < Side.Elements.Count ? Side.Elements[i] : null;
+            var items = new List<CardElement>();
+            foreach (int i in selectIndices) items.Add(at(i));
+            SetSelection(items, at(primaryIndex));
             RenderNow();
             UpdateTitle();   // undo may bring back an old name
         }
@@ -497,12 +589,13 @@ namespace NPIC_CARD_APP
 
         private void OnPropertyChanged()
         {
-            if (_selected != null)
+            foreach (CardElement e in _selection)
             {
                 // Keep sizes usable whatever was typed
-                _selected.Width = Math.Max(0.3f, _selected.Width);
-                _selected.Height = Math.Max(0.3f, _selected.Height);
+                e.Width = Math.Max(0.3f, e.Width);
+                e.Height = Math.Max(0.3f, e.Height);
             }
+            _canvas.Invalidate();
             _layers.Invalidate();
             RenderNow();
             Commit();
@@ -869,19 +962,30 @@ namespace NPIC_CARD_APP
         // =====================================================================
         private void DeleteSelected()
         {
-            if (_selected == null) return;
+            if (_selection.Count == 0) return;
+            bool single = _selection.Count == 1;
             int i = Side.Elements.IndexOf(_selected);
-            Side.Elements.Remove(_selected);
+            foreach (CardElement e in _selection) Side.Elements.Remove(e);
+            _selection.Clear();
             RefreshLayers();
-            SelectElement(Side.Elements.Count == 0 ? null : Side.Elements[Math.Min(i, Side.Elements.Count - 1)]);
+            // One element: select its neighbour (quick deleting); several: nothing
+            SelectElement(!single || Side.Elements.Count == 0 ? null : Side.Elements[Math.Max(0, Math.Min(i, Side.Elements.Count - 1))]);
             RenderNow();
             Commit();
         }
 
+        /// <summary>The selected elements from the bottom layer up.</summary>
+        private List<CardElement> SelectionInLayerOrder()
+        {
+            return Side.Elements.FindAll(e => _selection.Contains(e));
+        }
+
         private void DuplicateSelected()
         {
-            if (_selected == null) return;
-            PasteElement(_selected.Clone(), 1.5f);
+            if (_selection.Count == 0) return;
+            var copies = new List<CardElement>();
+            foreach (CardElement e in SelectionInLayerOrder()) copies.Add(e.Clone());
+            PasteElements(copies, 1.5f);
         }
 
         /// <summary>Marks the Windows clipboard as "an element copied in Card Designer", so Ctrl+V pastes the element, not a picture.</summary>
@@ -889,26 +993,51 @@ namespace NPIC_CARD_APP
 
         private void CopySelected()
         {
-            if (_selected == null) return;
-            _clipboard = _selected.Clone();
+            if (_selection.Count == 0) return;
+            _clipboard = new List<CardElement>();
+            foreach (CardElement e in SelectionInLayerOrder()) _clipboard.Add(e.Clone());
             try { Clipboard.SetData(ElementClipboardFormat, "1"); }
             catch (System.Runtime.InteropServices.ExternalException) { }   // clipboard busy: Ctrl+V still pastes the element
         }
 
         private void Paste()
         {
-            if (_clipboard != null) PasteElement(_clipboard.Clone(), Side.Elements.Exists(e => e.Bounds == _clipboard.Bounds) ? 1.5f : 0f);
+            if (_clipboard == null || _clipboard.Count == 0) return;
+            var copies = new List<CardElement>();
+            foreach (CardElement e in _clipboard) copies.Add(e.Clone());
+            // Pasting onto the originals: shift the copies so they can be seen
+            PasteElements(copies, Side.Elements.Exists(e => e.Bounds == _clipboard[0].Bounds) ? 1.5f : 0f);
         }
 
-        private void PasteElement(CardElement copy, float offset)
+        /// <summary>Adds the copies just above the top selected layer (or on top) and selects them.</summary>
+        private void PasteElements(List<CardElement> copies, float offset)
         {
-            copy.X = Math.Min(copy.X + offset, CardRenderer.CardWidthMm - 1f);
-            copy.Y = Math.Min(copy.Y + offset, CardRenderer.CardHeightMm - 1f);
-            copy.Locked = false;
-            int at = _selected == null ? Side.Elements.Count : Side.Elements.IndexOf(_selected) + 1;
-            Side.Elements.Insert(at, copy);
+            int at = Side.Elements.Count;
+            if (_selection.Count > 0)
+            {
+                at = 0;
+                foreach (CardElement e in _selection) at = Math.Max(at, Side.Elements.IndexOf(e) + 1);
+            }
+            // Copies of a group form a new group of their own; a copy of a single member is not grouped
+            var newIds = new Dictionary<string, string>();
+            foreach (CardElement copy in copies)
+            {
+                if (string.IsNullOrEmpty(copy.GroupId)) continue;
+                string id;
+                if (!newIds.TryGetValue(copy.GroupId, out id))
+                    newIds[copy.GroupId] = id = copies.FindAll(c => c.GroupId == copy.GroupId).Count > 1
+                        ? "g" + Guid.NewGuid().ToString("N").Substring(0, 8) : null;
+                copy.GroupId = id;
+            }
+            foreach (CardElement copy in copies)
+            {
+                copy.X = Math.Min(copy.X + offset, CardRenderer.CardWidthMm - 1f);
+                copy.Y = Math.Min(copy.Y + offset, CardRenderer.CardHeightMm - 1f);
+                copy.Locked = false;
+                Side.Elements.Insert(at++, copy);
+            }
             RefreshLayers();
-            SelectElement(copy);
+            SetSelection(copies, copies[copies.Count - 1]);
             RenderNow();
             Commit();
         }
@@ -916,36 +1045,60 @@ namespace NPIC_CARD_APP
         private void BringForward() { MoveLayer(1); }
         private void SendBackward() { MoveLayer(-1); }
 
-        /// <summary>+1 / -1 = one step up / down; int.MaxValue / int.MinValue = to the top / bottom.</summary>
+        /// <summary>
+        /// +1 / -1 = one step up / down; int.MaxValue / int.MinValue = to the top / bottom.
+        /// Several selected layers move together and keep their order.
+        /// </summary>
         private void MoveLayer(int step)
         {
-            if (_selected == null) return;
+            if (_selection.Count == 0) return;
             List<CardElement> list = Side.Elements;
-            int from = list.IndexOf(_selected);
-            int to = step == int.MaxValue ? list.Count - 1 : step == int.MinValue ? 0 : from + step;
-            to = Math.Max(0, Math.Min(list.Count - 1, to));
-            if (to == from) return;
-            list.RemoveAt(from);
-            list.Insert(to, _selected);
+            bool changed = false;
+            if (step == int.MaxValue || step == int.MinValue)
+            {
+                List<CardElement> picked = SelectionInLayerOrder();
+                List<CardElement> rest = list.FindAll(e => !_selection.Contains(e));
+                var order = new List<CardElement>();
+                if (step == int.MaxValue) { order.AddRange(rest); order.AddRange(picked); }
+                else { order.AddRange(picked); order.AddRange(rest); }
+                for (int i = 0; i < order.Count && !changed; i++) changed = order[i] != list[i];
+                if (changed) { list.Clear(); list.AddRange(order); }
+            }
+            else if (step > 0)
+            {
+                for (int i = list.Count - 2; i >= 0; i--)
+                    if (_selection.Contains(list[i]) && !_selection.Contains(list[i + 1])) { Swap(list, i, i + 1); changed = true; }
+            }
+            else
+            {
+                for (int i = 1; i < list.Count; i++)
+                    if (_selection.Contains(list[i]) && !_selection.Contains(list[i - 1])) { Swap(list, i, i - 1); changed = true; }
+            }
+            if (!changed) return;
             RefreshLayers();
             RenderNow();
             Commit();
         }
 
+        private static void Swap(List<CardElement> list, int a, int b)
+        {
+            CardElement t = list[a];
+            list[a] = list[b];
+            list[b] = t;
+        }
+
         private void Nudge(float dx, float dy)
         {
-            if (_selected == null) return;
-            _selected.X = (float)Math.Round(_selected.X + dx, 2);
-            _selected.Y = (float)Math.Round(_selected.Y + dy, 2);
-            _grid.Refresh();
-            RenderNow();
-            Commit();
+            if (_selection.Count == 0) return;
+            foreach (CardElement e in _selection) MoveBy(e, dx, dy);
+            AfterArrange();
         }
 
         private void ToggleLock()
         {
-            if (_selected == null) return;
-            _selected.Locked = !_selected.Locked;
+            if (_selection.Count == 0) return;
+            bool lockAll = _selection.Exists(e => !e.Locked);
+            foreach (CardElement e in _selection) e.Locked = lockAll;
             _grid.Refresh();
             _canvas.Invalidate();
             Commit();
@@ -954,52 +1107,333 @@ namespace NPIC_CARD_APP
         private void ShowElementMenu(Control owner, Point at)
         {
             ContextMenuStrip m = NewMenu();
-            bool has = _selected != null;
+            bool has = _selection.Count > 0;
+            if (_selection.Count > 1) m.Items.Add(Header(Lang.F("{0} ELEMENTS SELECTED", _selection.Count)));
             m.Items.Add(Item("Bring to front", () => MoveLayer(int.MaxValue), has));
             m.Items.Add(Item("Bring forward\tCtrl+]", BringForward, has));
             m.Items.Add(Item("Send backward\tCtrl+[", SendBackward, has));
             m.Items.Add(Item("Send to back", () => MoveLayer(int.MinValue), has));
             m.Items.Add(new ToolStripSeparator());
+            ToolStripMenuItem align = ThemedMenu.SubMenu("Align", has);
+            align.Image = AlignIcons.MenuImage(AlignIcon.Left);
+            align.ImageScaling = ToolStripItemImageScaling.None;
+            FillAlignItems(align.DropDownItems);
+            m.Items.Add(align);
+            m.Items.Add(IconItem(AlignIcon.CentreOnCardH, "Centre horizontally on the card", () => Centre(true, false), has));
+            m.Items.Add(IconItem(AlignIcon.CentreOnCardV, "Centre vertically on the card", () => Centre(false, true), has));
+            m.ShowImageMargin = true;
+            m.Items.Add(new ToolStripSeparator());
             m.Items.Add(Item("Duplicate\tCtrl+D", DuplicateSelected, has));
             m.Items.Add(Item("Copy\tCtrl+C", CopySelected, has));
-            m.Items.Add(Item("Paste\tCtrl+V", Paste, _clipboard != null));
-            if (_selected is ImageElement) m.Items.Add(Item("Change picture…", ChangePicture));
-            m.Items.Add(Item(has && _selected.Locked ? "Unlock" : "Lock", ToggleLock, has));
-            m.Items.Add(Item("Centre horizontally", () => Centre(true, false), has));
-            m.Items.Add(Item("Centre vertically", () => Centre(false, true), has));
-            var shape = _selected as ShapeElement;
+            m.Items.Add(Item("Paste\tCtrl+V", Paste, _clipboard != null && _clipboard.Count > 0));
+            if (_selection.Count == 1 && _selected is ImageElement) m.Items.Add(Item("Change picture…", ChangePicture));
+            m.Items.Add(Item(has && !_selection.Exists(e => !e.Locked) ? "Unlock" : "Lock", ToggleLock, has));
+            m.Items.Add(new ToolStripSeparator());
+            m.Items.Add(IconItem(AlignIcon.Group, "Group\tCtrl+G", GroupSelected, _selection.Count >= 2 && WholeGroupId() == null));
+            m.Items.Add(IconItem(AlignIcon.Ungroup, "Ungroup\tCtrl+Shift+G", UngroupSelected,
+                _selection.Exists(e => !string.IsNullOrEmpty(e.GroupId))));
+            ShapeElement shape = _selection.Find(e => e is ShapeElement) as ShapeElement;
             if (shape != null)
             {
                 m.Items.Add(new ToolStripSeparator());
                 m.Items.Add(Item("Rotate 90° right", () => RotateSelected(90f)));
                 m.Items.Add(Item("Rotate 90° left", () => RotateSelected(-90f)));
-                m.Items.Add(Item("Reset rotation", () => RotateSelected(0f), shape.Rotation != 0f));
+                m.Items.Add(Item("Reset rotation", () => RotateSelected(0f),
+                    _selection.Exists(e => e is ShapeElement && ((ShapeElement)e).Rotation != 0f)));
             }
             m.Items.Add(new ToolStripSeparator());
+            m.Items.Add(Item("Select all\tCtrl+A", SelectAll, Side.Elements.Count > 0));
             m.Items.Add(Item("Delete\tDel", DeleteSelected, has));
             m.Show(owner, at);
         }
 
-        /// <summary>Turns the selected shape by <paramref name="delta"/> degrees clockwise; 0 = back to upright.</summary>
+        /// <summary>Turns the selected shapes by <paramref name="delta"/> degrees clockwise; 0 = back to upright.</summary>
         private void RotateSelected(float delta)
         {
-            var shape = _selected as ShapeElement;
-            if (shape == null) return;
-            shape.Rotation = delta == 0f ? 0f : shape.Rotation + delta;
+            bool any = false;
+            foreach (CardElement e in _selection)
+            {
+                var shape = e as ShapeElement;
+                if (shape == null) continue;
+                shape.Rotation = delta == 0f ? 0f : shape.Rotation + delta;
+                any = true;
+            }
+            if (any) AfterArrange();
+        }
+
+        /// <summary>Centres the selection on the card as one block (the elements keep their places relative to each other).</summary>
+        private void Centre(bool horizontal, bool vertical)
+        {
+            if (_selection.Count == 0) return;
+            RectangleF b = SelectionBounds(_selection);
+            float dx = horizontal ? (CardRenderer.CardWidthMm - b.Width) / 2f - b.X : 0f;
+            float dy = vertical ? (CardRenderer.CardHeightMm - b.Height) / 2f - b.Y : 0f;
+            foreach (CardElement e in _selection) MoveBy(e, dx, dy);
+            AfterArrange();
+        }
+
+        /// <summary>Every element of this side that can be clicked (visible and not locked).</summary>
+        private void SelectAll()
+        {
+            List<CardElement> all = Side.Elements.FindAll(e => e.Visible && !e.Locked);
+            SetSelection(all, _selection.Contains(_selected) ? _selected : null);
+            _canvas.Focus();
+        }
+
+        // =====================================================================
+        // GROUPS — elements sharing a GroupId are picked, moved, aligned and copied as one block
+        // =====================================================================
+
+        /// <summary>Groups the selection (Ctrl+G). Earlier groups inside it merge into the new one; the members become neighbours
+        /// in the layer list, at the place of the top-most member.</summary>
+        private void GroupSelected()
+        {
+            if (_selection.Count < 2 || WholeGroupId() != null) return;
+            string id = "g" + Guid.NewGuid().ToString("N").Substring(0, 8);
+            List<CardElement> members = SelectionInLayerOrder();
+            int top = Side.Elements.IndexOf(members[members.Count - 1]);
+            int above = top - members.Count + 1;   // index of the first member once they are side by side
+            foreach (CardElement e in members) e.GroupId = id;
+            Side.Elements.RemoveAll(e => members.Contains(e));
+            Side.Elements.InsertRange(Math.Max(0, Math.Min(above, Side.Elements.Count)), members);
+            RefreshLayers();
+            SetSelection(members, _selected);
+            RenderNow();
+            Commit();
+            _status.Text = Lang.F("Grouped {0} elements. Click one to pick the whole group; double-click to pick one inside it.", members.Count);
+        }
+
+        /// <summary>Takes the selected elements out of their groups (Ctrl+Shift+G).</summary>
+        private void UngroupSelected()
+        {
+            bool any = false;
+            foreach (CardElement e in _selection)
+                if (!string.IsNullOrEmpty(e.GroupId)) { e.GroupId = null; any = true; }
+            if (!any) return;
+            DissolveLoneGroups(Side);
+            _layers.Invalidate();
+            SetSelection(new List<CardElement>(_selection), _selected);
+            Commit();
+        }
+
+        /// <summary>A group left with one member (the others deleted or taken out) is no group any more.</summary>
+        private static void DissolveLoneGroups(CardSideDesign side)
+        {
+            if (side == null) return;
+            var count = new Dictionary<string, int>();
+            foreach (CardElement e in side.Elements)
+                if (!string.IsNullOrEmpty(e.GroupId)) count[e.GroupId] = (count.ContainsKey(e.GroupId) ? count[e.GroupId] : 0) + 1;
+            foreach (CardElement e in side.Elements)
+                if (!string.IsNullOrEmpty(e.GroupId) && count[e.GroupId] < 2) e.GroupId = null;
+        }
+
+        /// <summary>Id of the group when the selection is exactly one whole group, else null.</summary>
+        private string WholeGroupId()
+        {
+            if (_selection.Count < 2) return null;
+            string id = _selection[0].GroupId;
+            if (string.IsNullOrEmpty(id) || !_selection.TrueForAll(e => e.GroupId == id)) return null;
+            return IsWholeGroupSelected(id) ? id : null;
+        }
+
+        private bool IsWholeGroupSelected(string id)
+        {
+            return Side.Elements.TrueForAll(e => e.GroupId != id || _selection.Contains(e));
+        }
+
+        /// <summary>The selection as blocks: each fully selected group is one block, every other element its own.</summary>
+        private List<List<CardElement>> SelectionUnits()
+        {
+            var units = new List<List<CardElement>>();
+            var byGroup = new Dictionary<string, List<CardElement>>();
+            foreach (CardElement e in _selection)
+            {
+                List<CardElement> unit;
+                if (!string.IsNullOrEmpty(e.GroupId) && IsWholeGroupSelected(e.GroupId))
+                {
+                    if (!byGroup.TryGetValue(e.GroupId, out unit))
+                    {
+                        unit = new List<CardElement>();
+                        byGroup[e.GroupId] = unit;
+                        units.Add(unit);
+                    }
+                    unit.Add(e);
+                }
+                else units.Add(new List<CardElement> { e });
+            }
+            return units;
+        }
+
+        // =====================================================================
+        // ALIGN / DISTRIBUTE / SAME SIZE
+        // =====================================================================
+        private enum AlignEdge { Left, CentreX, Right, Top, Middle, Bottom }
+
+        /// <summary>Align menu (toolbar button and right-click → Align).</summary>
+        private ContextMenuStrip AlignMenu()
+        {
+            ContextMenuStrip m = NewMenu();
+            FillAlignItems(m.Items);
+            return m;
+        }
+
+        private void FillAlignItems(ToolStripItemCollection items)
+        {
+            int n = SelectionUnits().Count;   // a whole group counts as one block
+            bool toCard = _alignToCard || n == 1;
+            items.Add(Header(n == 0 ? Lang.T("SELECT ELEMENTS FIRST")
+                : toCard ? Lang.T("LINE UP WITH THE CARD")
+                : Lang.F("LINE UP {0} ELEMENTS WITH EACH OTHER", n)));
+            items.Add(IconItem(AlignIcon.Left, "Align left edges", () => Align(AlignEdge.Left), n > 0));
+            items.Add(IconItem(AlignIcon.CentreX, "Align centres (horizontally)", () => Align(AlignEdge.CentreX), n > 0));
+            items.Add(IconItem(AlignIcon.Right, "Align right edges", () => Align(AlignEdge.Right), n > 0));
+            items.Add(new ToolStripSeparator());
+            items.Add(IconItem(AlignIcon.Top, "Align top edges", () => Align(AlignEdge.Top), n > 0));
+            items.Add(IconItem(AlignIcon.Middle, "Align middles (vertically)", () => Align(AlignEdge.Middle), n > 0));
+            items.Add(IconItem(AlignIcon.Bottom, "Align bottom edges", () => Align(AlignEdge.Bottom), n > 0));
+            items.Add(new ToolStripSeparator());
+            items.Add(IconItem(AlignIcon.DistributeH, "Distribute horizontally (equal gaps)", () => Distribute(true), n >= 3));
+            items.Add(IconItem(AlignIcon.DistributeV, "Distribute vertically (equal gaps)", () => Distribute(false), n >= 3));
+            items.Add(new ToolStripSeparator());
+            string key = _selected == null ? "" : "  (" + Lang.T(_selected.DisplayName) + ")";
+            items.Add(IconItem(AlignIcon.SameWidth, Lang.T("Same width as the key element") + key, () => MatchSize(true, false), _selection.Count >= 2));
+            items.Add(IconItem(AlignIcon.SameHeight, Lang.T("Same height as the key element") + key, () => MatchSize(false, true), _selection.Count >= 2));
+            items.Add(IconItem(AlignIcon.SameSize, Lang.T("Same size as the key element") + key, () => MatchSize(true, true), _selection.Count >= 2));
+            items.Add(new ToolStripSeparator());
+            ToolStripMenuItem cardToggle = IconItem(AlignIcon.ToCard, "Line up with the card (not with each other)",
+                () => { _alignToCard = !_alignToCard; _alignBar.Invalidate(); }, n != 1);
+            cardToggle.Checked = _alignToCard;
+            items.Add(cardToggle);
+            ShowImages(items);
+        }
+
+        private static ToolStripMenuItem IconItem(AlignIcon icon, string text, Action action, bool enabled = true)
+        {
+            ToolStripMenuItem item = Item(text, action, enabled);
+            item.Image = AlignIcons.MenuImage(icon);
+            item.ImageScaling = ToolStripItemImageScaling.None;
+            return item;
+        }
+
+        /// <summary>Turns on the icon column of the menu that holds these items.</summary>
+        private static void ShowImages(ToolStripItemCollection items)
+        {
+            if (items.Count == 0) return;
+            var menu = items[0].Owner as ToolStripDropDownMenu;
+            if (menu == null) return;
+            menu.ShowImageMargin = true;
+            menu.ShowCheckMargin = false;
+        }
+
+        /// <summary>
+        /// Lines up the selection: with each other (the edge or centre of the whole selection), or with the card when only one
+        /// element is selected or "Line up with the card" is on. Turned shapes line up by what is drawn, not by their box.
+        /// </summary>
+        private void Align(AlignEdge edge)
+        {
+            if (_selection.Count == 0) return;
+            List<List<CardElement>> units = SelectionUnits();   // a selected group lines up as one block
+            bool toCard = _alignToCard || units.Count == 1;
+            RectangleF target = toCard ? new RectangleF(0f, 0f, CardRenderer.CardWidthMm, CardRenderer.CardHeightMm) : SelectionBounds(_selection);
+            foreach (List<CardElement> unit in units)
+            {
+                RectangleF v = SelectionBounds(unit);
+                float dx = 0f, dy = 0f;
+                switch (edge)
+                {
+                    case AlignEdge.Left: dx = target.Left - v.Left; break;
+                    case AlignEdge.CentreX: dx = (target.Left + target.Width / 2f) - (v.Left + v.Width / 2f); break;
+                    case AlignEdge.Right: dx = target.Right - v.Right; break;
+                    case AlignEdge.Top: dy = target.Top - v.Top; break;
+                    case AlignEdge.Middle: dy = (target.Top + target.Height / 2f) - (v.Top + v.Height / 2f); break;
+                    case AlignEdge.Bottom: dy = target.Bottom - v.Bottom; break;
+                }
+                foreach (CardElement e in unit) MoveBy(e, dx, dy);
+            }
+            AfterArrange();
+        }
+
+        /// <summary>Equal gaps between 3+ blocks (elements or whole groups); the first and the last stay where they are.</summary>
+        private void Distribute(bool horizontal)
+        {
+            List<List<CardElement>> units = SelectionUnits();
+            if (units.Count < 3) return;
+            units.Sort((a, b) =>
+            {
+                RectangleF ra = SelectionBounds(a), rb = SelectionBounds(b);
+                return horizontal ? (ra.Left + ra.Width / 2f).CompareTo(rb.Left + rb.Width / 2f)
+                                  : (ra.Top + ra.Height / 2f).CompareTo(rb.Top + rb.Height / 2f);
+            });
+            RectangleF first = SelectionBounds(units[0]), last = SelectionBounds(units[units.Count - 1]);
+            float start = horizontal ? first.Left : first.Top;
+            float end = horizontal ? last.Right : last.Bottom;
+            float total = 0f;
+            foreach (List<CardElement> u in units) total += horizontal ? SelectionBounds(u).Width : SelectionBounds(u).Height;
+            float gap = (end - start - total) / (units.Count - 1);
+
+            float pos = start;
+            foreach (List<CardElement> u in units)
+            {
+                RectangleF v = SelectionBounds(u);
+                float d = pos - (horizontal ? v.Left : v.Top);
+                foreach (CardElement e in u) MoveBy(e, horizontal ? d : 0f, horizontal ? 0f : d);
+                pos += (horizontal ? v.Width : v.Height) + gap;
+            }
+            AfterArrange();
+        }
+
+        /// <summary>Gives every selected element the width and / or height of the key element (the last one clicked).</summary>
+        private void MatchSize(bool width, bool height)
+        {
+            if (_selected == null || _selection.Count < 2) return;
+            foreach (CardElement e in _selection)
+            {
+                if (e == _selected) continue;
+                if (width) e.Width = _selected.Width;
+                if (height) e.Height = _selected.Height;
+            }
+            AfterArrange();
+        }
+
+        private static void MoveBy(CardElement e, float dx, float dy)
+        {
+            e.X = (float)Math.Round(e.X + dx, 2);
+            e.Y = (float)Math.Round(e.Y + dy, 2);
+        }
+
+        /// <summary>After moving or changing selected elements: refresh everything and make it one undo step.</summary>
+        private void AfterArrange()
+        {
             _grid.Refresh();
             _canvas.Invalidate();
             RenderNow();
             Commit();
         }
 
-        private void Centre(bool horizontal, bool vertical)
+        /// <summary>What is drawn, in mm: the box, or the box around a turned shape.</summary>
+        internal static RectangleF VisualBounds(CardElement e)
         {
-            if (_selected == null) return;
-            if (horizontal) _selected.X = (float)Math.Round((CardRenderer.CardWidthMm - _selected.Width) / 2f, 2);
-            if (vertical) _selected.Y = (float)Math.Round((CardRenderer.CardHeightMm - _selected.Height) / 2f, 2);
-            _grid.Refresh();
-            RenderNow();
-            Commit();
+            var shape = e as ShapeElement;
+            if (shape == null || shape.Rotation == 0f) return e.Bounds;
+            double a = shape.Rotation * Math.PI / 180.0;
+            float cos = (float)Math.Abs(Math.Cos(a)), sin = (float)Math.Abs(Math.Sin(a));
+            float w = e.Width * cos + e.Height * sin, h = e.Width * sin + e.Height * cos;
+            float cx = e.X + e.Width / 2f, cy = e.Y + e.Height / 2f;
+            return new RectangleF(cx - w / 2f, cy - h / 2f, w, h);
+        }
+
+        /// <summary>The box around everything drawn by the elements, in mm.</summary>
+        internal static RectangleF SelectionBounds(IEnumerable<CardElement> items)
+        {
+            bool any = false;
+            RectangleF all = RectangleF.Empty;
+            foreach (CardElement e in items)
+            {
+                RectangleF v = VisualBounds(e);
+                all = any ? RectangleF.Union(all, v) : v;
+                any = true;
+            }
+            return all;
         }
 
         private void ToggleSnap()
@@ -1113,6 +1547,9 @@ namespace NPIC_CARD_APP
                     case Keys.Control | Keys.Z: Undo(); return true;
                     case Keys.Control | Keys.Y:
                     case Keys.Control | Keys.Shift | Keys.Z: Redo(); return true;
+                    case Keys.Control | Keys.A: SelectAll(); return true;
+                    case Keys.Control | Keys.G: GroupSelected(); return true;
+                    case Keys.Control | Keys.Shift | Keys.G: UngroupSelected(); return true;
                     case Keys.Control | Keys.D: DuplicateSelected(); return true;
                     case Keys.Control | Keys.C: CopySelected(); return true;
                     case Keys.Control | Keys.V: if (!PastePictureFromClipboard()) Paste(); return true;
@@ -1265,10 +1702,20 @@ namespace NPIC_CARD_APP
             using (var back = new SolidBrush(Theme.Surface)) g.FillRectangle(back, e.Bounds);
             Theme.HighQuality(g);
             var row = new RectangleF(e.Bounds.X + 1, e.Bounds.Y + 2, e.Bounds.Width - 3, e.Bounds.Height - 4);
+            if (!string.IsNullOrEmpty(el.GroupId)) { row.X += 8f; row.Width -= 8f; }   // leave room for the group bracket
             if (selected)
                 using (GraphicsPath p = Theme.RoundRect(row, 8))
                 using (var b = new SolidBrush(Theme.AccentSoft))
                     g.FillPath(b, p);
+
+            // Group bracket: an accent bar down the left of every member, joined across neighbouring rows of the same group
+            if (!string.IsNullOrEmpty(el.GroupId))
+            {
+                Func<int, bool> same = i => i >= 0 && i < _layers.Items.Count && ((CardElement)_layers.Items[i]).GroupId == el.GroupId;
+                float top = same(e.Index - 1) ? e.Bounds.Top : e.Bounds.Top + 5f;
+                float bottom = same(e.Index + 1) ? e.Bounds.Bottom : e.Bounds.Bottom - 5f;
+                using (var b = new SolidBrush(Theme.Accent)) g.FillRectangle(b, e.Bounds.X + 2f, top, 3f, bottom - top);
+            }
 
             // Kind badge
             var badge = new RectangleF(row.X + 6, row.Y + (row.Height - 18) / 2f, 44, 18);
@@ -1323,6 +1770,18 @@ namespace NPIC_CARD_APP
         public static ToolStripLabel Header(string text)
         {
             return new ToolStripLabel(text) { Font = Theme.SmallCaps, ForeColor = Theme.TextMuted, Margin = new Padding(6, 6, 0, 2) };
+        }
+
+        /// <summary>Menu item that opens a themed submenu (the item owns and disposes it).</summary>
+        public static ToolStripMenuItem SubMenu(string text, bool enabled = true)
+        {
+            var item = new ToolStripMenuItem(text) { Enabled = enabled, ForeColor = Theme.TextMain };
+            var drop = (ToolStripDropDownMenu)item.DropDown;
+            drop.ShowImageMargin = false;
+            drop.BackColor = Theme.Surface;
+            drop.Font = new Font(CardFonts.UI, 9.25f);
+            drop.Renderer = new ToolStripProfessionalRenderer(new MenuColors());
+            return item;
         }
 
         private sealed class MenuColors : ProfessionalColorTable
@@ -1515,17 +1974,21 @@ namespace NPIC_CARD_APP
         private const int RotateHandle = 8;      // index of the rotate knob in HandlePoints
 
         private Bitmap _image;
-        private CardElement _selected, _hover;
+        private CardElement _selected, _hover;                            // _selected = key element of the selection
+        private readonly List<CardElement> _sel = new List<CardElement>();   // every selected element
         private bool _snap = true, _outlines = true;
 
         // Drag state
-        private enum Drag { None, Move, Resize, Rotate }
+        private enum Drag { None, Move, Resize, Rotate, Box }
         private Drag _drag;
         private int _handle;
         private PointF _startMm;
         private RectangleF _startBounds;
         private bool _moved;
         private float? _guideX, _guideY;
+        private readonly List<KeyValuePair<CardElement, PointF>> _moveStart = new List<KeyValuePair<CardElement, PointF>>();
+        private Point _boxStart, _boxEnd;              // selection box, client pixels
+        private bool _boxAdd;                          // Ctrl / Shift held: the box adds to the selection
 
         public event EventHandler SelectionChanged, ElementMoving, ElementMoved, ContextMenuRequested;
 
@@ -1539,10 +2002,36 @@ namespace NPIC_CARD_APP
 
         public CardSideDesign Side { get; set; }
 
-        public CardElement Selected
+        /// <summary>Key element of the selection (null = nothing selected).</summary>
+        public CardElement Selected { get { return _selected; } }
+
+        /// <summary>Every selected element.</summary>
+        public IList<CardElement> SelectedItems { get { return _sel.AsReadOnly(); } }
+
+        /// <summary>Shows the form's selection (no event).</summary>
+        public void SetSelection(IList<CardElement> items, CardElement primary)
         {
-            get { return _selected; }
-            set { _selected = value; Invalidate(); }
+            _sel.Clear();
+            _sel.AddRange(items);
+            _selected = primary;
+            Invalidate();
+        }
+
+        /// <summary>Changes the selection from the mouse and tells the form.</summary>
+        private void ChangeSelection(List<CardElement> items, CardElement primary)
+        {
+            SetSelection(items, primary);
+            SelectionChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private bool IsSelected(CardElement e) { return e != null && _sel.Contains(e); }
+
+        /// <summary>The element's whole group (every member on this side), or just the element when it is not grouped.</summary>
+        private List<CardElement> GroupOf(CardElement e)
+        {
+            if (e == null || string.IsNullOrEmpty(e.GroupId) || Side == null) return new List<CardElement> { e };
+            List<CardElement> members = Side.Elements.FindAll(x => x.GroupId == e.GroupId);
+            return members.Count > 0 ? members : new List<CardElement> { e };
         }
 
         public bool Snap { get { return _snap; } set { _snap = value; } }
@@ -1667,7 +2156,7 @@ namespace NPIC_CARD_APP
                     g.DrawRectangle(pen, safe.X, safe.Y, safe.Width, safe.Height);
                 using (var pen = new Pen(Color.FromArgb(90, 120, 120, 140)) { DashStyle = DashStyle.Dot })
                     foreach (CardElement el in Side.Elements)
-                        if (el != _selected && el.Visible)
+                        if (!IsSelected(el) && el.Visible)
                             DrawBox(g, pen, el);
             }
 
@@ -1682,9 +2171,27 @@ namespace NPIC_CARD_APP
                     Color.FromArgb(150, 150, 165), new RectangleF(hint.X, hint.Y + 30, hint.Width, 22), StringAlignment.Center);
             }
 
-            if (_hover != null && _hover != _selected && Side != null && Side.Elements.Contains(_hover))
+            if (_hover != null && !IsSelected(_hover) && _drag != Drag.Box && Side != null && Side.Elements.Contains(_hover))
             {
                 using (var pen = new Pen(Color.FromArgb(150, Theme.Accent), 1.2f)) DrawBox(g, pen, _hover);
+                if (!string.IsNullOrEmpty(_hover.GroupId))
+                {
+                    // Grouped: show the whole group that a click will pick
+                    RectangleF all = ToPx(CardDesignerForm.SelectionBounds(GroupOf(_hover)));
+                    all.Inflate(3f, 3f);
+                    using (var pen = new Pen(Color.FromArgb(150, Theme.Accent), 1f) { DashStyle = DashStyle.Dash })
+                        g.DrawRectangle(pen, all.X, all.Y, all.Width, all.Height);
+                }
+            }
+
+            // Selection box: what it touches is outlined until the mouse is released
+            if (_drag == Drag.Box && _moved)
+            {
+                using (var pen = new Pen(Color.FromArgb(150, Theme.Accent), 1.2f))
+                    foreach (CardElement el in BoxHits()) DrawBox(g, pen, el);
+                Rectangle box = BoxRect();
+                using (var fill = new SolidBrush(Color.FromArgb(40, Theme.Accent))) g.FillRectangle(fill, box);
+                using (var pen = new Pen(Theme.Accent, 1f) { DashStyle = DashStyle.Dash }) g.DrawRectangle(pen, box);
             }
 
             // Snap guides while dragging
@@ -1694,7 +2201,18 @@ namespace NPIC_CARD_APP
                 if (_guideY.HasValue) { float y = card.Y + _guideY.Value * PxPerMm; g.DrawLine(guide, card.X - 10, y, card.Right + 10, y); }
             }
 
-            if (_selected != null)
+            if (_sel.Count > 1)
+            {
+                // Several selected: each outlined (the key element a little bolder), a dashed frame around them all, no handles
+                foreach (CardElement el in _sel)
+                    using (var pen = new Pen(Theme.Accent, el == _selected ? 2.2f : 1.4f) { DashStyle = el.Locked ? DashStyle.Dash : DashStyle.Solid })
+                        DrawBox(g, pen, el);
+                RectangleF all = ToPx(CardDesignerForm.SelectionBounds(_sel));
+                all.Inflate(3f, 3f);
+                using (var pen = new Pen(Color.FromArgb(170, Theme.Accent), 1f) { DashStyle = DashStyle.Dash })
+                    g.DrawRectangle(pen, all.X, all.Y, all.Width, all.Height);
+            }
+            else if (_selected != null)
             {
                 using (var pen = new Pen(Theme.Accent, 1.6f) { DashStyle = _selected.Locked ? DashStyle.Dash : DashStyle.Solid })
                     DrawBox(g, pen, _selected);
@@ -1754,7 +2272,7 @@ namespace NPIC_CARD_APP
 
         private int HandleAt(Point p)
         {
-            if (_selected == null || _selected.Locked) return -1;
+            if (_selected == null || _selected.Locked || _sel.Count != 1) return -1;   // handles only on a single element
             PointF[] hs = HandlePoints(_selected);
             for (int i = hs.Length - 1; i >= 0; i--)   // the rotate knob first
             {
@@ -1817,18 +2335,48 @@ namespace NPIC_CARD_APP
         {
             Focus();
             base.OnMouseDown(e);
-            int handle = e.Button == MouseButtons.Left ? HandleAt(e.Location) : -1;
+            bool add = (ModifierKeys & (Keys.Control | Keys.Shift)) != 0;
+            int handle = e.Button == MouseButtons.Left && !add ? HandleAt(e.Location) : -1;
+            _moved = false;
+            _startMm = ToMm(e.Location);
+
             if (handle < 0)
             {
                 CardElement hit = ElementAt(e.Location);
-                // Clicking inside the selected (maybe locked) element keeps it selected
-                if (hit == null && _selected != null && HitBox(_selected, e.Location, 0f, 0f)) hit = _selected;
-                if (hit != _selected)
+                // Clicking inside a selected (maybe locked) element keeps the selection
+                if (hit == null) hit = _sel.FindLast(s => HitBox(s, e.Location, 0f, 0f));
+
+                if (e.Button == MouseButtons.Left && add)
                 {
-                    _selected = hit;
-                    SelectionChanged?.Invoke(this, EventArgs.Empty);
-                    Invalidate();
+                    if (hit != null)
+                    {
+                        // Ctrl / Shift + click: add the element (with its group) to the selection, or take it out
+                        var list = new List<CardElement>(_sel);
+                        List<CardElement> unit = GroupOf(hit);
+                        if (IsSelected(hit))
+                        {
+                            foreach (CardElement u in unit) list.Remove(u);
+                            ChangeSelection(list, list.Contains(_selected) ? _selected : null);
+                        }
+                        else
+                        {
+                            foreach (CardElement u in unit) if (!list.Contains(u)) list.Add(u);
+                            ChangeSelection(list, hit);
+                        }
+                    }
+                    else StartBox(e.Location, true);
+                    return;
                 }
+
+                if (hit == null)
+                {
+                    if (_sel.Count > 0) ChangeSelection(new List<CardElement>(), null);
+                    if (e.Button == MouseButtons.Left) StartBox(e.Location, false);   // drag on empty card: select with a box
+                    else if (e.Button == MouseButtons.Right) ContextMenuRequested?.Invoke(this, EventArgs.Empty);
+                    return;
+                }
+                if (!IsSelected(hit)) ChangeSelection(GroupOf(hit), hit);   // a grouped element brings its whole group
+                else if (hit != _selected) ChangeSelection(new List<CardElement>(_sel), hit);   // clicked one becomes the key element
             }
 
             if (e.Button == MouseButtons.Right)
@@ -1836,14 +2384,56 @@ namespace NPIC_CARD_APP
                 ContextMenuRequested?.Invoke(this, EventArgs.Empty);
                 return;
             }
-            if (e.Button != MouseButtons.Left || _selected == null || _selected.Locked) return;
+            if (e.Button != MouseButtons.Left || _selected == null) return;
 
-            _drag = handle == RotateHandle ? Drag.Rotate : handle >= 0 ? Drag.Resize : Drag.Move;
+            if (handle >= 0)
+            {
+                if (_selected.Locked) return;
+                _drag = handle == RotateHandle ? Drag.Rotate : Drag.Resize;
+                _startBounds = _selected.Bounds;
+            }
+            else
+            {
+                // Move every selected, unlocked element together; snapping uses the box around all of them
+                _moveStart.Clear();
+                bool any = false;
+                foreach (CardElement s in _sel)
+                {
+                    if (s.Locked) continue;
+                    _moveStart.Add(new KeyValuePair<CardElement, PointF>(s, new PointF(s.X, s.Y)));
+                    _startBounds = any ? RectangleF.Union(_startBounds, s.Bounds) : s.Bounds;
+                    any = true;
+                }
+                if (!any) return;
+                _drag = Drag.Move;
+            }
             _handle = handle;
-            _startMm = ToMm(e.Location);
-            _startBounds = _selected.Bounds;
-            _moved = false;
             Capture = true;
+        }
+
+        private void StartBox(Point at, bool add)
+        {
+            _drag = Drag.Box;
+            _boxStart = _boxEnd = at;
+            _boxAdd = add;
+            Capture = true;
+        }
+
+        private Rectangle BoxRect()
+        {
+            return Rectangle.FromLTRB(Math.Min(_boxStart.X, _boxEnd.X), Math.Min(_boxStart.Y, _boxEnd.Y),
+                                      Math.Max(_boxStart.X, _boxEnd.X), Math.Max(_boxStart.Y, _boxEnd.Y));
+        }
+
+        /// <summary>Visible, unlocked elements the selection box touches (bottom layer first).</summary>
+        private List<CardElement> BoxHits()
+        {
+            var hits = new List<CardElement>();
+            if (Side == null) return hits;
+            Rectangle box = BoxRect();
+            foreach (CardElement el in Side.Elements)
+                if (el.Visible && !el.Locked && ToPx(CardDesignerForm.VisualBounds(el)).IntersectsWith(box)) hits.Add(el);
+            return hits;
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
@@ -1866,6 +2456,27 @@ namespace NPIC_CARD_APP
             _moved = true;
             bool shift = (ModifierKeys & Keys.Shift) != 0;
 
+            if (_drag == Drag.Box)
+            {
+                _boxEnd = e.Location;
+                Invalidate();
+                return;
+            }
+
+            if (_drag == Drag.Move)
+            {
+                RectangleF moved = MoveRect(dx, dy);
+                float mx = moved.X - _startBounds.X, my = moved.Y - _startBounds.Y;
+                foreach (KeyValuePair<CardElement, PointF> s in _moveStart)
+                {
+                    s.Key.X = (float)Math.Round(s.Value.X + mx, 2);
+                    s.Key.Y = (float)Math.Round(s.Value.Y + my, 2);
+                }
+                Invalidate();
+                ElementMoving?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
             if (_drag == Drag.Rotate)
             {
                 RotateTowards(e.Location, shift);
@@ -1874,8 +2485,8 @@ namespace NPIC_CARD_APP
                 return;
             }
 
-            RectangleF r = _drag == Drag.Move ? MoveRect(dx, dy) : ResizeTurned(dx, dy, shift);
-            _selected.Bounds = new RectangleF((float)Math.Round(r.X, 2), (float)Math.Round(r.Y, 2), (float)Math.Round(r.Width, 2), (float)Math.Round(r.Height, 2));
+            RectangleF r = ResizeTurned(dx, dy, shift);
+            _selected.Bounds =new RectangleF((float)Math.Round(r.X, 2), (float)Math.Round(r.Y, 2), (float)Math.Round(r.Width, 2), (float)Math.Round(r.Height, 2));
             Invalidate();
             ElementMoving?.Invoke(this, EventArgs.Empty);
         }
@@ -1884,11 +2495,36 @@ namespace NPIC_CARD_APP
         {
             base.OnMouseUp(e);
             if (_drag == Drag.None) return;
+            Drag was = _drag;
             _drag = Drag.None;
             Capture = false;
             _guideX = _guideY = null;
+            _moveStart.Clear();
             Invalidate();
+            if (was == Drag.Box)
+            {
+                if (!_moved) return;   // a plain click on the empty card only cleared the selection
+                var list = _boxAdd ? new List<CardElement>(_sel) : new List<CardElement>();
+                foreach (CardElement el in BoxHits())
+                    foreach (CardElement u in GroupOf(el))   // touching one member picks the whole group
+                        if (!list.Contains(u)) list.Add(u);
+                ChangeSelection(list, _boxAdd ? _selected : null);
+                return;
+            }
             if (_moved) ElementMoved?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>Double-click on a grouped element: pick it alone, to move or edit it inside its group.</summary>
+        protected override void OnMouseDoubleClick(MouseEventArgs e)
+        {
+            base.OnMouseDoubleClick(e);
+            if (e.Button != MouseButtons.Left) return;
+            CardElement hit = ElementAt(e.Location);
+            if (hit == null || string.IsNullOrEmpty(hit.GroupId) || (_sel.Count == 1 && _sel[0] == hit)) return;
+            _drag = Drag.None;   // the second press started a move of the whole group: drop it
+            _moveStart.Clear();
+            Capture = false;
+            ChangeSelection(new List<CardElement> { hit }, hit);
         }
 
         protected override void OnMouseLeave(EventArgs e)
@@ -2002,6 +2638,270 @@ namespace NPIC_CARD_APP
         protected override void Dispose(bool disposing)
         {
             if (disposing && _image != null) { _image.Dispose(); _image = null; }
+            base.Dispose(disposing);
+        }
+    }
+
+    internal enum AlignIcon
+    {
+        Left, CentreX, Right, Top, Middle, Bottom, DistributeH, DistributeV,
+        SameWidth, SameHeight, SameSize, ToCard, CentreOnCardH, CentreOnCardV, Group, Ungroup
+    }
+
+    /// <summary>
+    /// Alignment icons, drawn as vectors on a 16-unit grid so they stay sharp at any size: the accent line is the edge or centre
+    /// things line up on, the bars are the elements. Vertical variants are the horizontal ones turned on their side.
+    /// </summary>
+    internal static class AlignIcons
+    {
+        private static readonly Dictionary<AlignIcon, Bitmap> MenuImages = new Dictionary<AlignIcon, Bitmap>();
+
+        /// <summary>16 x 16 picture for a menu item (made once, kept for the session).</summary>
+        public static Bitmap MenuImage(AlignIcon icon)
+        {
+            Bitmap bmp;
+            if (MenuImages.TryGetValue(icon, out bmp)) return bmp;
+            bmp = new Bitmap(16, 16);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.PixelOffsetMode = PixelOffsetMode.Half;
+                Draw(g, icon, new RectangleF(0f, 0f, 16f, 16f), Theme.Accent, Theme.TextSoft);
+            }
+            MenuImages[icon] = bmp;
+            return bmp;
+        }
+
+        public static void Draw(Graphics g, AlignIcon icon, RectangleF box, Color line, Color bar)
+        {
+            float k = Math.Min(box.Width, box.Height) / 16f;
+            float ox = box.X + (box.Width - 16f * k) / 2f, oy = box.Y + (box.Height - 16f * k) / 2f;
+            bool turn = icon == AlignIcon.Top || icon == AlignIcon.Middle || icon == AlignIcon.Bottom ||
+                        icon == AlignIcon.DistributeV || icon == AlignIcon.SameHeight || icon == AlignIcon.CentreOnCardV;
+
+            // Grid units → pixels; "turn" swaps x and y, so one drawing serves both directions
+            Func<float, float, PointF> P = (x, y) => turn ? new PointF(ox + y * k, oy + x * k) : new PointF(ox + x * k, oy + y * k);
+            Func<float, float, float, float, RectangleF> R = (x, y, w, h) =>
+            {
+                PointF a = P(x, y), b = P(x + w, y + h);
+                return RectangleF.FromLTRB(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Max(a.X, b.X), Math.Max(a.Y, b.Y));
+            };
+
+            using (var bars = new SolidBrush(bar))
+            using (var pen = new Pen(line, Math.Max(1f, 1.5f * k)) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+            using (var thin = new Pen(line, Math.Max(1f, 1.1f * k)))
+            {
+                Action<float, float, float, float> Bar = (x, y, w, h) =>
+                {
+                    using (GraphicsPath p = Theme.RoundRect(R(x, y, w, h), 1f * k)) g.FillPath(bars, p);
+                };
+                Action<float, float, float, float> Line = (x1, y1, x2, y2) => g.DrawLine(pen, P(x1, y1), P(x2, y2));
+
+                switch (icon)
+                {
+                    case AlignIcon.Left:
+                    case AlignIcon.Top:
+                        Bar(3.5f, 3f, 10f, 3.5f);
+                        Bar(3.5f, 9.5f, 6.5f, 3.5f);
+                        Line(1.75f, 1f, 1.75f, 15f);
+                        break;
+                    case AlignIcon.Right:
+                    case AlignIcon.Bottom:
+                        Bar(2.5f, 3f, 10f, 3.5f);
+                        Bar(6f, 9.5f, 6.5f, 3.5f);
+                        Line(14.25f, 1f, 14.25f, 15f);
+                        break;
+                    case AlignIcon.CentreX:
+                    case AlignIcon.Middle:
+                        Bar(2f, 3f, 12f, 3.5f);
+                        Bar(4.5f, 9.5f, 7f, 3.5f);
+                        Line(8f, 1f, 8f, 15f);
+                        break;
+                    case AlignIcon.DistributeH:
+                    case AlignIcon.DistributeV:
+                        // Three elements with equal gaps between two edge lines
+                        Bar(3.5f, 4.5f, 2.5f, 7f);
+                        Bar(6.75f, 2.5f, 2.5f, 11f);
+                        Bar(10f, 5.5f, 2.5f, 5f);
+                        Line(1.25f, 1f, 1.25f, 15f);
+                        Line(14.75f, 1f, 14.75f, 15f);
+                        break;
+                    case AlignIcon.SameWidth:
+                    case AlignIcon.SameHeight:
+                        // Two equal bars and a double arrow
+                        Bar(2.5f, 1.5f, 11f, 3.5f);
+                        Bar(2.5f, 11f, 11f, 3.5f);
+                        Line(3f, 8f, 13f, 8f);
+                        Line(3f, 8f, 5f, 6.5f); Line(3f, 8f, 5f, 9.5f);
+                        Line(13f, 8f, 11f, 6.5f); Line(13f, 8f, 11f, 9.5f);
+                        break;
+                    case AlignIcon.SameSize:
+                        Bar(6f, 6f, 8.5f, 8.5f);
+                        using (GraphicsPath p = Theme.RoundRect(R(1.75f, 1.75f, 8.5f, 8.5f), 1f * k)) g.DrawPath(thin, p);
+                        break;
+                    case AlignIcon.ToCard:
+                        using (GraphicsPath p = Theme.RoundRect(R(1f, 3f, 14f, 10f), 2f * k)) g.DrawPath(thin, p);
+                        Bar(3f, 5f, 4.5f, 6f);
+                        break;
+                    case AlignIcon.Group:
+                        // Two elements inside one dashed frame
+                        using (var frame = new Pen(line, Math.Max(1f, 1.1f * k)) { DashStyle = DashStyle.Dash })
+                        {
+                            RectangleF f = R(1f, 1f, 14f, 14f);
+                            g.DrawRectangle(frame, f.X, f.Y, f.Width, f.Height);
+                        }
+                        Bar(3.5f, 3.5f, 5f, 5f);
+                        Bar(7.5f, 7.5f, 5f, 5f);
+                        break;
+                    case AlignIcon.Ungroup:
+                        // The same two elements, each in a frame of its own
+                        Bar(2.5f, 2.5f, 5f, 5f);
+                        Bar(8.5f, 8.5f, 5f, 5f);
+                        using (var frame = new Pen(line, Math.Max(1f, 1f * k)) { DashStyle = DashStyle.Dash })
+                        {
+                            RectangleF a = R(1f, 1f, 8f, 8f), b = R(7f, 7f, 8f, 8f);
+                            g.DrawRectangle(frame, a.X, a.Y, a.Width, a.Height);
+                            g.DrawRectangle(frame, b.X, b.Y, b.Width, b.Height);
+                        }
+                        break;
+                    case AlignIcon.CentreOnCardH:
+                    case AlignIcon.CentreOnCardV:
+                        using (var card = new Pen(bar, Math.Max(1f, 1.1f * k)))
+                        using (GraphicsPath p = Theme.RoundRect(R(1f, 3f, 14f, 10f), 2f * k)) g.DrawPath(card, p);
+                        Bar(5.5f, 5.5f, 5f, 5f);
+                        using (var dash = new Pen(line, Math.Max(1f, 1.1f * k)) { DashStyle = DashStyle.Dash })
+                            g.DrawLine(dash, P(8f, 0.5f), P(8f, 15.5f));
+                        break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Row of alignment icon buttons above the properties: line up, distribute, and the "with the card" toggle.
+    /// Each button knows from the selection size whether it can be used; hover shows its name.
+    /// </summary>
+    internal sealed class AlignBar : Control
+    {
+        private const float Cell = 30f, Gap = 2f, GroupGap = 12f;
+
+        private sealed class Button
+        {
+            public AlignIcon Icon;
+            public string Tip;
+            public Action Click;
+            public Func<int, bool> Usable;
+            public Func<bool> Checked;
+            public RectangleF Bounds;
+        }
+
+        private readonly List<Button> _buttons = new List<Button>();
+        private readonly HashSet<int> _groupStarts = new HashSet<int>();
+        private readonly ToolTip _tip = new ToolTip();
+        private int _hover = -1, _count;
+
+        public AlignBar()
+        {
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.ResizeRedraw |
+                     ControlStyles.UserPaint, true);
+            BackColor = Theme.Surface;
+            Height = 40;
+            AccessibleRole = AccessibleRole.ToolBar;
+            AccessibleName = "Align";
+        }
+
+        /// <summary>Number of selected elements; decides which buttons can be used.</summary>
+        public int SelectionCount
+        {
+            get { return _count; }
+            set { if (_count == value) return; _count = value; Invalidate(); }
+        }
+
+        public void Add(AlignIcon icon, string tip, Action click, Func<int, bool> usable, Func<bool> isChecked = null)
+        {
+            _buttons.Add(new Button { Icon = icon, Tip = tip, Click = click, Usable = usable, Checked = isChecked });
+            Layout2();
+        }
+
+        /// <summary>The next button starts a new group (a little more space before it).</summary>
+        public void AddGroupGap() { _groupStarts.Add(_buttons.Count); }
+
+        private void Layout2()
+        {
+            float x = 0f, y = (Height - Cell) / 2f;
+            for (int i = 0; i < _buttons.Count; i++)
+            {
+                if (_groupStarts.Contains(i) && i > 0) x += GroupGap - Gap;
+                _buttons[i].Bounds = new RectangleF(x, y, Cell, Cell);
+                x += Cell + Gap;
+            }
+            Invalidate();
+        }
+
+        protected override void OnResize(EventArgs e) { base.OnResize(e); Layout2(); }
+
+        private bool Usable(Button b) { return Enabled && b.Usable(_count); }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.Clear(Theme.Surface);
+            Theme.HighQuality(g);
+            for (int i = 0; i < _buttons.Count; i++)
+            {
+                Button b = _buttons[i];
+                bool usable = Usable(b), on = b.Checked != null && b.Checked();
+                if ((usable && i == _hover) || on)
+                {
+                    var r = RectangleF.Inflate(b.Bounds, -1f, -1f);
+                    using (GraphicsPath p = Theme.RoundRect(r, 7))
+                    {
+                        using (var fill = new SolidBrush(on && i == _hover ? Theme.AccentSoftDown : Theme.AccentSoft)) g.FillPath(fill, p);
+                        if (on) using (var pen = new Pen(Theme.AccentLight)) g.DrawPath(pen, p);
+                    }
+                }
+                var icon = RectangleF.Inflate(b.Bounds, -6f, -6f);
+                AlignIcons.Draw(g, b.Icon, icon, usable ? Theme.Accent : Theme.TextMuted, usable ? Theme.TextSoft : Theme.Border);
+            }
+        }
+
+        private int ButtonAt(Point p)
+        {
+            for (int i = 0; i < _buttons.Count; i++) if (_buttons[i].Bounds.Contains(p)) return i;
+            return -1;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            int i = ButtonAt(e.Location);
+            if (i == _hover) return;
+            _hover = i;
+            Cursor = i >= 0 && Usable(_buttons[i]) ? Cursors.Hand : Cursors.Default;
+            _tip.Hide(this);
+            _tip.SetToolTip(this, i >= 0 ? Lang.T(_buttons[i].Tip) : null);
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _hover = -1;
+            Invalidate();
+        }
+
+        protected override void OnMouseClick(MouseEventArgs e)
+        {
+            base.OnMouseClick(e);
+            if (e.Button != MouseButtons.Left) return;
+            int i = ButtonAt(e.Location);
+            if (i >= 0 && Usable(_buttons[i])) _buttons[i].Click();
+            Invalidate();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _tip.Dispose();
             base.Dispose(disposing);
         }
     }
