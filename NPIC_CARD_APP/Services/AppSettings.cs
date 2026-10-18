@@ -239,6 +239,12 @@ namespace NPIC_CARD_APP.Services
         [XmlElement("CardTemplate")]
         public string CardTemplateText { get; set; }
 
+        /// <summary>
+        /// Id of the Card Designer design printed when <see cref="CardTemplate"/> is Custom (a file in CardDesigns).
+        /// Empty or missing = the newest saved design.
+        /// </summary>
+        public string CustomDesignId { get; set; }
+
         /// <summary>Card design used for preview and printing (Card Template…).</summary>
         [XmlIgnore]
         public CardTemplate CardTemplate
@@ -287,6 +293,7 @@ namespace NPIC_CARD_APP.Services
             CardOrientation = CardOrientation.VerticalRight;
             CardText = new CardText();
             CardTemplateText = "";
+            CustomDesignId = "";
         }
 
         public bool IsCardPrinter(string printerName)

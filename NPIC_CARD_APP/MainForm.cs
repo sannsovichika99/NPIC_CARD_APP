@@ -1523,42 +1523,97 @@ namespace NPIC_CARD_APP
         private void ChooseCardTemplate()
         {
             CardTemplate chosen;
+            string designId;
+            bool libraryChanged;
             using (var dlg = new CardTemplateForm(CurrentStudent(), _settings))
             {
-                if (dlg.ShowDialog(this) != DialogResult.OK)   // Cancel / Esc / ✕: nothing changes
+                DialogResult result = dlg.ShowDialog(this);
+                libraryChanged = dlg.DesignsChanged;
+                if (result != DialogResult.OK)   // Cancel / Esc / ✕: the template stays
                 {
-                    if (dlg.OpenDesigner) ShowCardDesigner();
+                    if (libraryChanged) AfterDesignLibraryChanged();
+                    if (dlg.OpenDesigner) ShowCardDesigner(dlg.DesignerDesignId, dlg.DesignerCreateNew, true);
                     return;
                 }
                 chosen = dlg.SelectedTemplate;
+                designId = dlg.SelectedDesignId ?? "";
             }
-            if (chosen == _settings.CardTemplate) return;
+
+            bool same = chosen == _settings.CardTemplate &&
+                        (chosen != CardTemplate.Custom || string.Equals(designId, _settings.CustomDesignId, StringComparison.OrdinalIgnoreCase));
+            if (same)
+            {
+                if (libraryChanged) AfterDesignLibraryChanged();
+                return;
+            }
             _settings.CardTemplate = chosen;
+            if (chosen == CardTemplate.Custom) _settings.CustomDesignId = designId;
             SaveSettings(false);
             UpdatePreview();
-            SetStatus("Card template: " + CardTemplates.Find(chosen).Name + ". Preview and printing now use this design.");
+            SetStatus("Card template: " + CurrentDesignName() + ". Preview and printing now use this design.");
         }
 
-        /// <summary>Card Designer…: edit the custom card. Save &amp; Use also switches printing to the Custom template.</summary>
-        private void ShowCardDesigner()
+        /// <summary>
+        /// Card Designer…: create or edit custom designs. Save &amp; Use prints with the open design.
+        /// fromPicker = opened from Card Template…, which comes back afterwards so the updated list is shown.
+        /// </summary>
+        private void ShowCardDesigner() { ShowCardDesigner(null, false, false); }
+
+        private void ShowCardDesigner(string designId, bool createNew, bool fromPicker)
         {
-            bool saved, use;
-            using (var dlg = new CardDesignerForm(CurrentStudent(), _settings))
+            bool changed, use;
+            string openId;
+            using (var dlg = new CardDesignerForm(CurrentStudent(), _settings, designId, createNew))
             {
                 dlg.ShowDialog(this);
-                saved = dlg.Saved;
+                changed = dlg.Changed;
                 use = dlg.UseDesign;
+                openId = dlg.DesignId;
             }
-            if (use && _settings.CardTemplate != CardTemplate.Custom)
+
+            if (use)
             {
                 _settings.CardTemplate = CardTemplate.Custom;
+                _settings.CustomDesignId = openId;
+                SaveSettings(false);
+                UpdatePreview();
+                SetStatus("Card design “" + CurrentDesignName() + "” saved. Preview and printing use it.");
+                return;
+            }
+            if (changed)
+            {
+                AfterDesignLibraryChanged();
+                SetStatus(_settings.CardTemplate == CardTemplate.Custom
+                    ? "Card designs saved. Printing uses “" + CurrentDesignName() + "”."
+                    : "Card designs saved. Pick one in Card Template… to print with it.");
+            }
+            if (fromPicker) ChooseCardTemplate();
+        }
+
+        /// <summary>After designs were saved or deleted: keep the printed design valid, then redraw the preview.</summary>
+        private void AfterDesignLibraryChanged()
+        {
+            if (_settings.CardTemplate == CardTemplate.Custom && CustomCardStore.Find(_settings.CustomDesignId) == null)
+            {
+                // The design in use was deleted: print the newest one left, or go back to Classic.
+                IList<CustomCardDesign> left = CustomCardStore.All();
+                if (left.Count > 0) _settings.CustomDesignId = left[0].Id;
+                else
+                {
+                    _settings.CardTemplate = CardTemplates.Default;
+                    _settings.CustomDesignId = "";
+                }
                 SaveSettings(false);
             }
-            if (!saved) return;
             UpdatePreview();
-            SetStatus(_settings.CardTemplate == CardTemplate.Custom
-                ? "Custom card design saved. Preview and printing use it."
-                : "Custom card design saved. Choose Custom in Card Template… to print with it.");
+        }
+
+        /// <summary>"Modern", or the name of the custom design in use.</summary>
+        private string CurrentDesignName()
+        {
+            return _settings.CardTemplate == CardTemplate.Custom
+                ? CustomCardStore.ForSettings(_settings).Name
+                : CardTemplates.Find(_settings.CardTemplate).Name;
         }
 
         private void EditCardText()

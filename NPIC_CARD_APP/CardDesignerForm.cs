@@ -13,10 +13,11 @@ using NPIC_CARD_APP.Services;
 namespace NPIC_CARD_APP
 {
     /// <summary>
-    /// Card Designer…: build your own card. Add text, student fields, the photo, QR codes, images and shapes to the front and the
+    /// Card Designer…: build your own cards. Add text, student fields, the photo, QR codes, images and shapes to the front and the
     /// back, move and resize them on a live preview (drawn by the same renderer that prints), and edit every detail on the right.
-    /// Works on a copy: Save writes %AppData%\NPIC_CARD_APP\custom-card.xml; Save &amp; Use also switches printing to the
-    /// "Custom" template (<see cref="UseDesign"/>). Cancel / Esc / ✕ keep the saved design.
+    /// Keeps a library of designs (+ New Design, the design menu to switch, duplicate, rename or delete). Works on a copy of one
+    /// design: Save writes it to %AppData%\NPIC_CARD_APP\CardDesigns; Save &amp; Use also prints with it (<see cref="UseDesign"/>,
+    /// <see cref="DesignId"/>). Close / Esc / ✕ ask before dropping unsaved changes.
     /// </summary>
     internal sealed class CardDesignerForm : ModalForm
     {
@@ -25,6 +26,7 @@ namespace NPIC_CARD_APP
         private readonly AppSettings _settings;
         private readonly Student _student;
         private CustomCardDesign _design;
+        private bool _isNew;   // not saved yet (new, duplicated or imported)
         private bool _back;
         private CardElement _selected;
         private CardElement _clipboard;
@@ -34,7 +36,7 @@ namespace NPIC_CARD_APP
         private readonly PropertyGrid _grid;
         private readonly Label _status;
         private readonly Label _propsTitle;
-        private readonly PillButton _tabFront, _tabBack, _btnUndo, _btnRedo, _btnSnap, _btnOutlines;
+        private readonly PillButton _tabFront, _tabBack, _btnUndo, _btnRedo, _btnSnap, _btnOutlines, _btnDesign;
         private readonly Timer _renderTimer = new Timer { Interval = 15 };
         private readonly ToolTip _tip = new ToolTip();
         private bool _syncingLayers;
@@ -42,26 +44,26 @@ namespace NPIC_CARD_APP
         private readonly List<string> _undo = new List<string>();
         private readonly List<string> _redo = new List<string>();
         private string _committed;   // design as of the last finished change
-        private string _saved;       // design as last saved (or as opened)
+        private string _saved;       // design as last saved (or as opened / created)
 
-        /// <summary>True after Save &amp; Use: the caller switches printing to the Custom template.</summary>
+        /// <summary>True after Save &amp; Use: the caller prints with <see cref="DesignId"/> (Custom template).</summary>
         public bool UseDesign { get; private set; }
 
-        /// <summary>True when Save or Save &amp; Use wrote the design at least once.</summary>
-        public bool Saved { get; private set; }
+        /// <summary>True when any design was saved or deleted (previews and the template list must be refreshed).</summary>
+        public bool Changed { get; private set; }
+
+        /// <summary>Id of the design open when the page closed ("" if it was never saved).</summary>
+        public string DesignId { get { return _design.Id ?? ""; } }
 
         /// <param name="student">Student drawn on the front; null = a sample student.</param>
-        public CardDesignerForm(Student student, AppSettings settings)
+        /// <param name="designId">Saved design to open; null = the one in use (or the newest).</param>
+        /// <param name="createNew">Start a new, blank design instead.</param>
+        public CardDesignerForm(Student student, AppSettings settings, string designId = null, bool createNew = false)
         {
             _settings = settings;
             _student = student ?? SampleStudent();
-            _design = CustomCardStore.Clone(CustomCardStore.Current);
-            _committed = _saved = CustomCardStore.Serialize(_design);
 
             Text = "Card Designer";
-            Subtitle = CustomCardStore.Exists
-                ? "Your custom card — move, resize and edit anything, front and back"
-                : "Start from this layout or a blank card — move, resize and edit anything, front and back";
             Glyph = Theme.IcoEdit;
             KeyPreview = true;
             Rectangle work = Screen.FromPoint(Cursor.Position).WorkingArea;
@@ -69,8 +71,16 @@ namespace NPIC_CARD_APP
             MinimumSize = new Size(Math.Min(1080, work.Width), Math.Min(700, work.Height));
             Font = new Font(CardFonts.UI, 9f);
 
-            // ---- Toolbar: side tabs, undo / redo, snapping, outlines, start over / import / export ----
+            // ---- Toolbar: design library, side tabs, undo / redo, snapping, outlines ----
             FlowLayoutPanel toolbar = ModalUi.Toolbar(56);
+            _btnDesign = Tool(toolbar, "Design ▾", null,
+                "Switch to another saved design, duplicate, rename or delete this one, start over, import or export");
+            _btnDesign.Click += (s, e) => ShowMenu(_btnDesign, DesignMenu());
+            PillButton newDesign = ModalUi.ToolButton("+ New Design", null);
+            newDesign.Click += (s, e) => ShowMenu(newDesign, NewDesignMenu());
+            toolbar.Controls.Add(newDesign);
+            _tip.SetToolTip(newDesign, "Create another card design (your saved designs stay as they are)");
+            newDesign.Margin = new Padding(0, 0, 22, 0);
             _tabFront = Tool(toolbar, "Front", () => ShowSide(false), "Edit the front (student side)");
             _tabBack = Tool(toolbar, "Back", () => ShowSide(true), "Edit the back (same for every student)");
             _tabBack.Margin = new Padding(0, 0, 22, 0);
@@ -81,11 +91,6 @@ namespace NPIC_CARD_APP
             _btnSnap.Checked = true;
             _btnOutlines = Tool(toolbar, "Outlines", ToggleOutlines, "Show the outline of every element and the 1.5 mm safe margin (never printed)");
             _btnOutlines.Checked = true;
-            _btnOutlines.Margin = new Padding(0, 0, 22, 0);
-            PillButton startOver = Tool(toolbar, "Start Over ▾", null, "Begin again from the starter layout or an empty side");
-            startOver.Click += (s, e) => ShowMenu(startOver, StartOverMenu());
-            Tool(toolbar, "Import…", ImportDesign, "Open a design saved with Export…");
-            Tool(toolbar, "Export…", ExportDesign, "Save this design to a file, to share it or keep a copy");
 
             // ---- Left: add tools + layer list ----
             var left = new TableLayoutPanel
@@ -192,7 +197,148 @@ namespace NPIC_CARD_APP
             Controls.Add(footer);
 
             _renderTimer.Tick += (s, e) => { _renderTimer.Stop(); RenderNow(); };
+
+            CustomCardDesign open = createNew ? null
+                : CustomCardStore.Find(designId) ?? CustomCardStore.Find(settings.CustomDesignId) ??
+                  (CustomCardStore.All().Count > 0 ? CustomCardStore.All()[0] : null);
+            if (open != null) LoadDesign(CustomCardStore.Clone(open), false);
+            else LoadDesign(CustomCardStore.CreateNew(false), true);
+        }
+
+        // =====================================================================
+        // DESIGN LIBRARY — open, new, duplicate, rename, delete
+        // =====================================================================
+        /// <summary>Shows a design in the editor; its undo history starts fresh.</summary>
+        private void LoadDesign(CustomCardDesign design, bool isNew)
+        {
+            _design = design;
+            _isNew = isNew;
+            _undo.Clear();
+            _redo.Clear();
+            _committed = _saved = CustomCardStore.Serialize(_design);
             ShowSide(false);
+            UpdateTitle();
+        }
+
+        private bool IsDirty { get { return CustomCardStore.Serialize(_design) != _saved; } }
+
+        private void UpdateTitle()
+        {
+            string name = string.IsNullOrWhiteSpace(_design.Name) ? "Untitled design" : _design.Name.Trim();
+            _btnDesign.Text = (name.Length > 26 ? name.Substring(0, 25) + "…" : name) + "  ▾";
+            Subtitle = "“" + name + "”" + (_isNew ? "  ·  new, not saved yet" : "") +
+                       "  —  move, resize and edit anything on the front and back";
+        }
+
+        /// <summary>Before leaving the open design: save, discard or stay. False = stay.</summary>
+        private bool ConfirmLeave()
+        {
+            if (!IsDirty) return true;
+            DialogResult r = AppDialog.Show(this, "Save the changes to “" + _design.Name + "” first?", Text,
+                MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1);
+            if (r == DialogResult.Cancel) return false;
+            return r == DialogResult.No || SaveDesign(false);
+        }
+
+        private void OpenDesign(string id)
+        {
+            if (string.Equals(id, _design.Id, StringComparison.OrdinalIgnoreCase) || !ConfirmLeave()) return;
+            CustomCardDesign d = CustomCardStore.Find(id);
+            if (d != null) LoadDesign(CustomCardStore.Clone(d), false);
+        }
+
+        private void NewDesign(bool starter)
+        {
+            if (!ConfirmLeave()) return;
+            LoadDesign(CustomCardStore.CreateNew(starter), true);
+            _status.Text = starter
+                ? "New design “" + _design.Name + "” from the starter layout. Change anything, then click Save."
+                : "New blank design “" + _design.Name + "”. Add text, fields, photo, QR, images and shapes from the left, then click Save.";
+        }
+
+        private void DuplicateDesign()
+        {
+            if (!ConfirmLeave()) return;
+            LoadDesign(CustomCardStore.Duplicate(_design), true);
+            _status.Text = "Copy created as “" + _design.Name + "”. Click Save to keep it.";
+        }
+
+        private void RenameDesign()
+        {
+            string name = DesignNamePrompt.Ask(this, "Rename design", "Name shown in Card Template and in this list", _design.Name);
+            if (name == null || string.IsNullOrWhiteSpace(name) || name.Trim() == _design.Name) return;
+            _design.Name = CustomCardStore.UniqueName(name.Trim(), _design.Id);
+            UpdateTitle();
+            Commit();
+        }
+
+        private void DeleteDesign()
+        {
+            bool inUse = !_isNew && _settings.CardTemplate == CardTemplate.Custom &&
+                         string.Equals(CustomCardStore.ForSettings(_settings).Id, _design.Id, StringComparison.OrdinalIgnoreCase);
+            if (!Confirm("Delete the design “" + _design.Name + "”?" +
+                         (inUse ? "\n\nIt is the design printed now; printing goes back to another design." : "") +
+                         "\n\nThis cannot be undone."))
+                return;
+            if (!_isNew)
+            {
+                try
+                {
+                    CustomCardStore.Delete(_design.Id);
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    AppDialog.Show(this, "Could not delete the design:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                Changed = true;
+            }
+            string deleted = _design.Name;
+            IList<CustomCardDesign> left = CustomCardStore.All();
+            if (left.Count > 0) LoadDesign(CustomCardStore.Clone(left[0]), false);
+            else LoadDesign(CustomCardStore.CreateNew(false), true);
+            _status.Text = "Deleted “" + deleted + "”.";
+        }
+
+        private ContextMenuStrip DesignMenu()
+        {
+            ContextMenuStrip m = NewMenu();
+            IList<CustomCardDesign> all = CustomCardStore.All();
+            m.Items.Add(Header("MY DESIGNS"));
+            if (_isNew)
+            {
+                var current = Item("✓  " + _design.Name + "  (not saved)", () => { });
+                current.Font = new Font(current.Font, FontStyle.Bold);
+                m.Items.Add(current);
+            }
+            foreach (CustomCardDesign d in all)
+            {
+                string id = d.Id;
+                bool open = !_isNew && string.Equals(id, _design.Id, StringComparison.OrdinalIgnoreCase);
+                ToolStripMenuItem item = Item((open ? "✓  " : "     ") + d.Name, () => OpenDesign(id));
+                if (open) item.Font = new Font(item.Font, FontStyle.Bold);
+                m.Items.Add(item);
+            }
+            m.Items.Add(new ToolStripSeparator());
+            m.Items.Add(Item("Rename…", RenameDesign));
+            m.Items.Add(Item("Duplicate this design", DuplicateDesign));
+            m.Items.Add(Item("Delete this design…", DeleteDesign));
+            m.Items.Add(new ToolStripSeparator());
+            m.Items.Add(Header("START OVER (undo brings it back)"));
+            foreach (ToolStripItem i in StartOverItems()) m.Items.Add(i);
+            m.Items.Add(new ToolStripSeparator());
+            m.Items.Add(Item("Import design…", ImportDesign));
+            m.Items.Add(Item("Export this design…", ExportDesign));
+            return m;
+        }
+
+        private ContextMenuStrip NewDesignMenu()
+        {
+            ContextMenuStrip m = NewMenu();
+            m.Items.Add(Item("Blank card\tCtrl+N", () => NewDesign(false)));
+            m.Items.Add(Item("From the starter layout", () => NewDesign(true)));
+            m.Items.Add(Item("Copy of “" + _design.Name + "”", DuplicateDesign));
+            return m;
         }
 
         // =====================================================================
@@ -317,6 +463,7 @@ namespace NPIC_CARD_APP
             SelectElement(selectIndex >= 0 && selectIndex < Side.Elements.Count ? Side.Elements[selectIndex] : null);
             RefreshLayers();
             RenderNow();
+            UpdateTitle();   // undo may bring back an old name
         }
 
         /// <summary>Replaces the whole design (Start Over, Import) as one undoable step.</summary>
@@ -485,15 +632,18 @@ namespace NPIC_CARD_APP
             return m;
         }
 
-        private ContextMenuStrip StartOverMenu()
+        private IEnumerable<ToolStripItem> StartOverItems()
         {
-            ContextMenuStrip m = NewMenu();
-            m.Items.Add(Item("Starter layout (front and back)", () =>
+            yield return Item("Replace both sides with the starter layout", () =>
             {
-                if (Confirm("Replace both sides with the starter layout?\n\nUndo (Ctrl+Z) brings your design back."))
-                    ReplaceDesign(CustomCardStore.CreateStarter());
-            }));
-            m.Items.Add(Item("Empty " + (_back ? "back" : "front"), () =>
+                if (!Confirm("Replace both sides of “" + _design.Name + "” with the starter layout?\n\nUndo (Ctrl+Z) brings your design back.")) return;
+                CustomCardDesign starter = CustomCardStore.CreateStarter();
+                starter.Id = _design.Id;
+                starter.Name = _design.Name;
+                starter.Modified = _design.Modified;
+                ReplaceDesign(starter);
+            });
+            yield return Item("Empty the " + (_back ? "back" : "front"), () =>
             {
                 if (!Confirm("Remove everything from the " + (_back ? "back" : "front") + "?\n\nUndo (Ctrl+Z) brings it back.")) return;
                 Side.Elements.Clear();
@@ -502,8 +652,7 @@ namespace NPIC_CARD_APP
                 RefreshLayers();
                 RenderNow();
                 Commit();
-            }));
-            return m;
+            });
         }
 
         // =====================================================================
@@ -632,37 +781,46 @@ namespace NPIC_CARD_APP
         // =====================================================================
         // SAVE / IMPORT / EXPORT / CLOSE
         // =====================================================================
-        private void SaveDesign(bool use)
+        /// <summary>Saves the open design; false when it could not be written.</summary>
+        private bool SaveDesign(bool use)
         {
             try
             {
-                CustomCardStore.Save(_design);
+                CustomCardStore.Save(_design);   // gives a new design its id
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is InvalidOperationException)
             {
                 AppDialog.Show(this, "Could not save the design:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                return false;
             }
             _saved = _committed = CustomCardStore.Serialize(_design);
-            Saved = true;
+            _isNew = false;
+            Changed = true;
+            UpdateTitle();
             if (use)
             {
                 UseDesign = true;
                 DialogResult = DialogResult.OK;   // closes
-                return;
+                return true;
             }
-            _status.Text = "Design saved.  Choose Custom in Card Template… (or click Save & Use) to print with it.";
+            _status.Text = "“" + _design.Name + "” saved.  Pick it in Card Template… (or click Save & Use) to print with it.";
+            return true;
         }
 
+        /// <summary>Opens a design file as a new design (saved designs are not touched until Save).</summary>
         private void ImportDesign()
         {
             using (var dlg = new OpenFileDialog { Title = "Import card design", Filter = "Card design (*.xml)|*.xml|All files (*.*)|*.*" })
             {
-                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                if (dlg.ShowDialog(this) != DialogResult.OK || !ConfirmLeave()) return;
                 try
                 {
-                    ReplaceDesign(CustomCardStore.ReadFile(dlg.FileName));
-                    _status.Text = "Imported " + Path.GetFileName(dlg.FileName) + ". Click Save to keep it.";
+                    CustomCardDesign imported = CustomCardStore.ReadFile(dlg.FileName);
+                    imported.Id = "";
+                    imported.Name = CustomCardStore.UniqueName(string.IsNullOrWhiteSpace(imported.Name) || imported.Name == "Custom card"
+                        ? Path.GetFileNameWithoutExtension(dlg.FileName) : imported.Name);
+                    LoadDesign(imported, true);
+                    _status.Text = "Imported " + Path.GetFileName(dlg.FileName) + " as “" + _design.Name + "”. Click Save to keep it.";
                 }
                 catch (Exception ex) when (ex is InvalidDataException || ex is IOException || ex is UnauthorizedAccessException)
                 {
@@ -675,7 +833,7 @@ namespace NPIC_CARD_APP
         {
             using (var dlg = new SaveFileDialog
             {
-                Title = "Export card design", Filter = "Card design (*.xml)|*.xml", FileName = "card-design.xml", OverwritePrompt = true
+                Title = "Export card design", Filter = "Card design (*.xml)|*.xml", FileName = SafeFileName(_design.Name) + ".xml", OverwritePrompt = true
             })
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
@@ -694,8 +852,8 @@ namespace NPIC_CARD_APP
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            if (!UseDesign && e.CloseReason == CloseReason.UserClosing && CustomCardStore.Serialize(_design) != _saved &&
-                !Confirm("Close without saving?\n\nYour changes to the design will be lost."))
+            if (!UseDesign && e.CloseReason == CloseReason.UserClosing && IsDirty &&
+                !Confirm("Close without saving?\n\nYour changes to “" + _design.Name + "” will be lost."))
             {
                 e.Cancel = true;
                 return;
@@ -710,6 +868,7 @@ namespace NPIC_CARD_APP
             switch (keyData)
             {
                 case Keys.Control | Keys.S: SaveDesign(false); return true;
+                case Keys.Control | Keys.N: NewDesign(false); return true;
             }
             if (!typing)
             {
@@ -784,6 +943,13 @@ namespace NPIC_CARD_APP
         // =====================================================================
         // SMALL UI HELPERS
         // =====================================================================
+        private static string SafeFileName(string name)
+        {
+            string s = string.IsNullOrWhiteSpace(name) ? "card-design" : name.Trim();
+            foreach (char c in Path.GetInvalidFileNameChars()) s = s.Replace(c, '_');
+            return s;
+        }
+
         private bool Confirm(string text)
         {
             return AppDialog.Show(this, text, Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
@@ -834,27 +1000,18 @@ namespace NPIC_CARD_APP
         private ContextMenuStrip NewMenu()
         {
             if (_lastMenu != null) _lastMenu.Dispose();
-            _lastMenu = new ContextMenuStrip
-            {
-                Font = new Font(CardFonts.UI, 9.25f), ShowImageMargin = false, BackColor = Theme.Surface, ForeColor = Theme.TextMain,
-                Renderer = new ToolStripProfessionalRenderer(new MenuColors())
-            };
+            _lastMenu = ThemedMenu.Create();
             return _lastMenu;
         }
 
         private static ToolStripMenuItem Item(string text, Action action, bool enabled = true)
         {
-            string shortcut = null;
-            int tab = text.IndexOf('\t');
-            if (tab >= 0) { shortcut = text.Substring(tab + 1); text = text.Substring(0, tab); }
-            var item = new ToolStripMenuItem(text) { Enabled = enabled, ForeColor = Theme.TextMain, ShortcutKeyDisplayString = shortcut };
-            item.Click += (s, e) => action();
-            return item;
+            return ThemedMenu.Item(text, action, enabled);
         }
 
         private static ToolStripLabel Header(string text)
         {
-            return new ToolStripLabel(text) { Font = Theme.SmallCaps, ForeColor = Theme.TextMuted, Margin = new Padding(6, 6, 0, 2) };
+            return ThemedMenu.Header(text);
         }
 
         private static void ShowMenu(Control under, ContextMenuStrip menu)
@@ -901,7 +1058,36 @@ namespace NPIC_CARD_APP
             };
         }
 
-        /// <summary>Menu colours that follow the light / dark theme.</summary>
+    }
+
+    /// <summary>Pop-up menus in the app's light / dark colours (Card Designer, Card Template).</summary>
+    internal static class ThemedMenu
+    {
+        public static ContextMenuStrip Create()
+        {
+            return new ContextMenuStrip
+            {
+                Font = new Font(CardFonts.UI, 9.25f), ShowImageMargin = false, BackColor = Theme.Surface, ForeColor = Theme.TextMain,
+                Renderer = new ToolStripProfessionalRenderer(new MenuColors())
+            };
+        }
+
+        /// <summary>Menu command; "Text\tCtrl+D" shows the part after the tab as its shortcut.</summary>
+        public static ToolStripMenuItem Item(string text, Action action, bool enabled = true)
+        {
+            string shortcut = null;
+            int tab = text.IndexOf('\t');
+            if (tab >= 0) { shortcut = text.Substring(tab + 1); text = text.Substring(0, tab); }
+            var item = new ToolStripMenuItem(text) { Enabled = enabled, ForeColor = Theme.TextMain, ShortcutKeyDisplayString = shortcut };
+            item.Click += (s, e) => action();
+            return item;
+        }
+
+        public static ToolStripLabel Header(string text)
+        {
+            return new ToolStripLabel(text) { Font = Theme.SmallCaps, ForeColor = Theme.TextMuted, Margin = new Padding(6, 6, 0, 2) };
+        }
+
         private sealed class MenuColors : ProfessionalColorTable
         {
             public override Color ToolStripDropDownBackground { get { return Theme.Surface; } }
@@ -912,6 +1098,54 @@ namespace NPIC_CARD_APP
             public override Color MenuItemSelectedGradientEnd { get { return Theme.AccentSoft; } }
             public override Color SeparatorDark { get { return Theme.Border; } }
             public override Color SeparatorLight { get { return Theme.Surface; } }
+        }
+    }
+
+    /// <summary>Small popup asking for a design name (Rename… in Card Designer and Card Template).</summary>
+    internal sealed class DesignNamePrompt : ModalForm
+    {
+        private readonly TextBox _txtName;
+
+        private DesignNamePrompt(string title, string subtitle, string initial)
+        {
+            Text = title;
+            Subtitle = subtitle;
+            Glyph = Theme.IcoEdit;
+            Resizable = false;
+            DimOwner = false;   // the page behind already dims the main window
+            Size = new Size(480, 228);
+            Font = new Font(CardFonts.UI, 9.75f);
+
+            var label = new Label { Dock = DockStyle.Top, Height = 24, Text = "Design name", ForeColor = Theme.TextSoft, BackColor = Theme.Surface };
+            _txtName = new TextBox { Dock = DockStyle.Top, BorderStyle = BorderStyle.FixedSingle, Text = initial ?? "", MaxLength = 80 };
+            var body = new Panel { Dock = DockStyle.Fill, Padding = new Padding(22, 16, 22, 0), BackColor = Theme.Surface };
+            body.Controls.Add(_txtName);
+            body.Controls.Add(label);   // added last = docked first = on top
+
+            var footer = ModalUi.Footer();
+            Button ok = ModalUi.Button("OK", PillKind.Primary, (s, e) => DialogResult = DialogResult.OK);
+            Button cancel = ModalUi.Button("Cancel", PillKind.Secondary, (s, e) => DialogResult = DialogResult.Cancel);
+            footer.Controls.Add(ok);
+            footer.Controls.Add(cancel);
+
+            Controls.Add(body);
+            Controls.Add(footer);
+            AcceptButton = ok;
+            CancelButton = cancel;
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            _txtName.Focus();
+            _txtName.SelectAll();
+        }
+
+        /// <summary>The typed name, or null when cancelled.</summary>
+        public static string Ask(IWin32Window owner, string title, string subtitle, string initial)
+        {
+            using (var form = new DesignNamePrompt(title, subtitle, initial))
+                return form.ShowDialog(owner) == DialogResult.OK ? form._txtName.Text : null;
         }
     }
 
@@ -1039,6 +1273,17 @@ namespace NPIC_CARD_APP
                             RectangleF r = ToPx(el.Bounds);
                             g.DrawRectangle(pen, r.X, r.Y, r.Width, r.Height);
                         }
+            }
+
+            if (Side != null && Side.Elements.Count == 0)
+            {
+                // Blank side: say how to start (never printed — the canvas only)
+                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                var hint = new RectangleF(card.X + 20, card.Y + card.Height / 2f - 30, card.Width - 40, 60);
+                Theme.DrawText(g, "Blank card", Theme.CardTitle, Color.FromArgb(150, 150, 165),
+                    new RectangleF(hint.X, hint.Y, hint.Width, 28), StringAlignment.Center);
+                Theme.DrawText(g, "Add Text, Field, Image, Photo, QR or Shape from the panel on the left", Theme.Small,
+                    Color.FromArgb(150, 150, 165), new RectangleF(hint.X, hint.Y + 30, hint.Width, 22), StringAlignment.Center);
             }
 
             if (_hover != null && _hover != _selected && Side != null && Side.Elements.Contains(_hover))

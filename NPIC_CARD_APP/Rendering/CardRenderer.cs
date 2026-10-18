@@ -79,7 +79,7 @@ namespace NPIC_CARD_APP.Rendering
                 case CardTemplate.Modern: return RenderModernFront(s, settings);
                 case CardTemplate.Minimal: return RenderMinimalFront(s, settings);
                 case CardTemplate.Ribbon: return RenderRibbonFront(s, settings);
-                case CardTemplate.Custom: return RenderCustomSide(CustomCardStore.Current.Front, s, settings);
+                case CardTemplate.Custom: return RenderCustomSide(CustomCardStore.ForSettings(settings).Front, s, settings);
                 default: return RenderClassicFront(s, settings);
             }
         }
@@ -91,7 +91,7 @@ namespace NPIC_CARD_APP.Rendering
                 case CardTemplate.Modern: return RenderModernBack(settings);
                 case CardTemplate.Minimal: return RenderMinimalBack(settings);
                 case CardTemplate.Ribbon: return RenderRibbonBack(settings);
-                case CardTemplate.Custom: return RenderCustomSide(CustomCardStore.Current.Back, null, settings);
+                case CardTemplate.Custom: return RenderCustomSide(CustomCardStore.ForSettings(settings).Back, null, settings);
                 default: return RenderClassicBack(settings);
             }
         }

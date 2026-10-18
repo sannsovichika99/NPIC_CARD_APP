@@ -342,13 +342,22 @@ namespace NPIC_CARD_APP.Rendering
         public CustomCardDesign()
         {
             Version = CurrentVersion;
+            Id = "";
             Name = "Custom card";
             Front = new CardSideDesign();
             Back = new CardSideDesign();
         }
 
         public int Version { get; set; }
+
+        /// <summary>File name of the design in the CardDesigns folder (without .xml); "" until it is first saved.</summary>
+        public string Id { get; set; }
+
         public string Name { get; set; }
+
+        /// <summary>Last save (local time); newest designs are listed first.</summary>
+        public DateTime Modified { get; set; }
+
         public CardSideDesign Front { get; set; }
         public CardSideDesign Back { get; set; }
     }
@@ -363,39 +372,184 @@ namespace NPIC_CARD_APP.Rendering
         public static readonly Color BandText = Color.FromArgb(214, 220, 250);
     }
 
-    /// <summary>Loads, saves, copies, imports and exports the custom design. <see cref="Current"/> is what the Custom template prints.</summary>
+    /// <summary>
+    /// Library of custom designs made with Card Designer…: one file per design in %AppData%\NPIC_CARD_APP\CardDesigns\{Id}.xml.
+    /// <see cref="ForSettings"/> is the design the Custom template prints (AppSettings.CustomDesignId).
+    /// Designs returned by <see cref="All"/> / <see cref="Find"/> are shared: clone before changing one.
+    /// </summary>
     public static class CustomCardStore
     {
         private static readonly XmlSerializer Serializer = new XmlSerializer(typeof(CustomCardDesign));
-        private static CustomCardDesign _current;
+        private static List<CustomCardDesign> _all;
+        private static CustomCardDesign _starter;
 
-        /// <summary>%AppData%\NPIC_CARD_APP\custom-card.xml</summary>
-        public static string FilePath
+        /// <summary>%AppData%\NPIC_CARD_APP\CardDesigns</summary>
+        public static string Folder
+        {
+            get { return Path.Combine(Path.GetDirectoryName(AppSettings.FilePath), "CardDesigns"); }
+        }
+
+        /// <summary>Single design file of the first Card Designer version; moved into <see cref="Folder"/> on first use.</summary>
+        private static string LegacyFilePath
         {
             get { return Path.Combine(Path.GetDirectoryName(AppSettings.FilePath), "custom-card.xml"); }
         }
 
-        /// <summary>True once a design has been saved with Card Designer….</summary>
-        public static bool Exists { get { return File.Exists(FilePath); } }
-
-        /// <summary>The saved design (the starter design until one is saved, or when the file cannot be read). Do not modify it.</summary>
-        public static CustomCardDesign Current
+        /// <summary>Saved designs, newest first. Unreadable files are skipped.</summary>
+        public static IList<CustomCardDesign> All()
         {
-            get
+            if (_all == null) _all = LoadAll();
+            return _all.AsReadOnly();
+        }
+
+        /// <summary>The saved design with this id, or null.</summary>
+        public static CustomCardDesign Find(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            foreach (CustomCardDesign d in All())
+                if (string.Equals(d.Id, id, StringComparison.OrdinalIgnoreCase)) return d;
+            return null;
+        }
+
+        /// <summary>
+        /// Design printed by the Custom template: the chosen one, else the newest saved one, else the starter layout.
+        /// Never null.
+        /// </summary>
+        public static CustomCardDesign ForSettings(AppSettings settings)
+        {
+            CustomCardDesign d = Find(settings == null ? null : settings.CustomDesignId);
+            if (d != null) return d;
+            IList<CustomCardDesign> all = All();
+            if (all.Count > 0) return all[0];
+            return _starter ?? (_starter = CreateStarter());
+        }
+
+        /// <summary>A new, unsaved design (starter layout or empty) with a fresh id and a name not used yet.</summary>
+        public static CustomCardDesign CreateNew(bool starter)
+        {
+            CustomCardDesign d = starter ? CreateStarter() : new CustomCardDesign();
+            d.Id = NewId();
+            d.Name = UniqueName("Card design");
+            return d;
+        }
+
+        /// <summary>Copy of a design under a new id and name (unsaved).</summary>
+        public static CustomCardDesign Duplicate(CustomCardDesign source)
+        {
+            CustomCardDesign d = Clone(source);
+            d.Id = NewId();
+            d.Name = UniqueName((source.Name ?? "Card design") + " copy");
+            return d;
+        }
+
+        /// <summary>"Card design 3": the base name with the first free number (or the base itself when free).</summary>
+        public static string UniqueName(string baseName, string exceptId = null)
+        {
+            baseName = string.IsNullOrWhiteSpace(baseName) ? "Card design" : baseName.Trim();
+            Func<string, bool> taken = n =>
             {
-                if (_current == null)
-                {
-                    try { _current = Exists ? ReadFile(FilePath) : CreateStarter(); }
-                    catch (InvalidDataException) { _current = CreateStarter(); }
-                }
-                return _current;
+                foreach (CustomCardDesign d in All())
+                    if (!string.Equals(d.Id, exceptId, StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(d.Name, n, StringComparison.CurrentCultureIgnoreCase))
+                        return true;
+                return false;
+            };
+            if (!taken(baseName) && baseName != "Card design") return baseName;
+            for (int i = baseName == "Card design" ? 1 : 2; ; i++)
+            {
+                string name = baseName + " " + i;
+                if (!taken(name)) return name;
             }
         }
 
+        /// <summary>Saves (creates or replaces) the design's file; gives it an id first if it has none.</summary>
         public static void Save(CustomCardDesign design)
         {
-            WriteFile(FilePath, design);
-            _current = Clone(design);
+            if (string.IsNullOrEmpty(design.Id)) design.Id = NewId();
+            design.Modified = DateTime.Now;
+            WriteFile(PathOf(design.Id), design);
+            CustomCardDesign copy = Clone(design);
+            List<CustomCardDesign> all = (List<CustomCardDesign>)GetList();
+            all.RemoveAll(d => string.Equals(d.Id, design.Id, StringComparison.OrdinalIgnoreCase));
+            all.Insert(0, copy);
+        }
+
+        public static void Delete(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return;
+            string path = PathOf(id);
+            if (File.Exists(path)) File.Delete(path);
+            ((List<CustomCardDesign>)GetList()).RemoveAll(d => string.Equals(d.Id, id, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static IList<CustomCardDesign> GetList()
+        {
+            if (_all == null) _all = LoadAll();
+            return _all;
+        }
+
+        private static string NewId()
+        {
+            return "design-" + Guid.NewGuid().ToString("N").Substring(0, 12);
+        }
+
+        private static string PathOf(string id)
+        {
+            // Ids come from NewId(); anything else (an edited file) is reduced to safe file-name characters.
+            var safe = new StringBuilder();
+            foreach (char c in id) safe.Append(char.IsLetterOrDigit(c) || c == '-' || c == '_' ? c : '_');
+            return Path.Combine(Folder, safe + ".xml");
+        }
+
+        private static List<CustomCardDesign> LoadAll()
+        {
+            var list = new List<CustomCardDesign>();
+            try
+            {
+                MigrateLegacyFile();
+                if (Directory.Exists(Folder))
+                {
+                    foreach (string file in Directory.GetFiles(Folder, "*.xml"))
+                    {
+                        try
+                        {
+                            CustomCardDesign d = ReadFile(file);
+                            d.Id = Path.GetFileNameWithoutExtension(file);   // the file name is the id
+                            if (string.IsNullOrWhiteSpace(d.Name)) d.Name = d.Id;
+                            list.Add(d);
+                        }
+                        catch (Exception ex) when (ex is InvalidDataException || ex is IOException || ex is UnauthorizedAccessException)
+                        {
+                            // A damaged or foreign file must not hide the other designs.
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+            }
+            list.Sort((a, b) => b.Modified.CompareTo(a.Modified));
+            return list;
+        }
+
+        /// <summary>custom-card.xml (one design) → CardDesigns\{id}.xml; the old file is kept as custom-card.migrated.xml.</summary>
+        private static void MigrateLegacyFile()
+        {
+            if (!File.Exists(LegacyFilePath)) return;
+            try
+            {
+                CustomCardDesign d = ReadFile(LegacyFilePath);
+                d.Id = NewId();
+                if (string.IsNullOrWhiteSpace(d.Name) || d.Name == "Custom card") d.Name = "Card design 1";
+                d.Modified = File.GetLastWriteTime(LegacyFilePath);
+                WriteFile(PathOf(d.Id), d);
+                string done = Path.ChangeExtension(LegacyFilePath, ".migrated.xml");
+                if (File.Exists(done)) File.Delete(done);
+                File.Move(LegacyFilePath, done);
+            }
+            catch (InvalidDataException)
+            {
+            }
         }
 
         public static CustomCardDesign Clone(CustomCardDesign design)

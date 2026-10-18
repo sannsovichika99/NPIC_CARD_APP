@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
+using System.IO;
 using System.Windows.Forms;
 using NPIC_CARD_APP.Models;
 using NPIC_CARD_APP.Rendering;
@@ -12,57 +13,125 @@ using NPIC_CARD_APP.Services;
 namespace NPIC_CARD_APP
 {
     /// <summary>
-    /// Card Template…: choose the card design used for preview and printing. Every design is drawn live with the selected
-    /// student (or a sample student) and the current Card Text, so what is shown is what prints.
-    /// Returns the choice in <see cref="SelectedTemplate"/>; the caller saves it.
+    /// Card Template…: choose the card design used for preview and printing — a built-in template or one of the designs made
+    /// with Card Designer ("My designs"). Every design is drawn live with the selected student (or a sample student) and the
+    /// current Card Text, so what is shown is what prints. My designs can be created, edited, renamed, duplicated and deleted here.
+    /// Returns the choice in <see cref="SelectedTemplate"/> / <see cref="SelectedDesignId"/>; the caller saves it.
     /// </summary>
     internal sealed class CardTemplateForm : ModalForm
     {
         private const int BodyPad = 24;
+        private const int Columns = 5;
         private const int PreviewHeight = 236;
+        private const int MaxDesignRows = 2;
 
-        private readonly List<TemplateTile> _tiles = new List<TemplateTile>();
-        private readonly Dictionary<CardTemplate, Bitmap> _fronts = new Dictionary<CardTemplate, Bitmap>();
-        private readonly Dictionary<CardTemplate, Bitmap> _backs = new Dictionary<CardTemplate, Bitmap>();
+        /// <summary>One selectable design: a built-in template, or a saved custom design (Template = Custom, DesignId set).</summary>
+        private sealed class Choice
+        {
+            public CardTemplate Template;
+            public string DesignId;      // null for built-in templates
+            public string Name;
+            public string Description;
+            public Bitmap Front, Back;
+            public TemplateTile Tile;
+        }
+
+        private readonly Student _student;
+        private readonly AppSettings _settings;
+        private readonly List<Choice> _builtIn = new List<Choice>();
+        private readonly List<Choice> _mine = new List<Choice>();
+        private readonly FlowLayoutPanel _minePanel;
+        private readonly Label _mineTitle, _mineEmpty;
         private readonly CardPairPreview _preview;
         private readonly Label _hint;
-        private readonly CardTemplate _current;
+        private readonly ToolTip _tip = new ToolTip();
+        private readonly CardTemplate _currentTemplate;
+        private readonly string _currentDesignId;
         private readonly Size _clientSize;
-        private CardTemplate _selected;
+        private Choice _selected;
+        private ContextMenuStrip _menu;
 
         /// <param name="student">Student drawn on the previews; null = a sample student.</param>
         public CardTemplateForm(Student student, AppSettings settings)
         {
             Text = "Card Template";
-            Subtitle = "Design of the printed cards, front and back";
+            Subtitle = "Design of the printed cards, front and back — a built-in template or one of your own designs";
             Glyph = Theme.IcoTemplate;
             Resizable = false;
             KeyPreview = true;
 
-            _current = settings.CardTemplate;
-            RenderAll(student ?? SampleStudent(), settings);
+            _student = student ?? SampleStudent();
+            _settings = settings;
+            _currentTemplate = settings.CardTemplate;
+            _currentDesignId = _currentTemplate == CardTemplate.Custom ? CustomCardStore.ForSettings(settings).Id : null;
+
+            Cursor oldCursor = Cursor.Current;
+            Cursor.Current = Cursors.WaitCursor;
+            try
+            {
+                foreach (CardTemplateInfo info in CardTemplates.All)
+                {
+                    if (info.Template == CardTemplate.Custom) continue;   // listed one by one under My designs
+                    CardTemplate t = info.Template;
+                    _builtIn.Add(new Choice
+                    {
+                        Template = t, Name = info.Name, Description = info.Description,
+                        Front = Shrink(() => CardRenderer.RenderFront(_student, settings, t)),
+                        Back = Shrink(() => CardRenderer.RenderBack(settings, t))
+                    });
+                }
+                foreach (CustomCardDesign d in CustomCardStore.All()) _mine.Add(MakeChoice(d));
+            }
+            finally
+            {
+                Cursor.Current = oldCursor;
+            }
 
             var body = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Surface };
-            int width = BodyPad * 2 + CardTemplates.All.Length * TemplateTile.CellWidth;
-            int y = 18;
+            int width = BodyPad * 2 + Columns * TemplateTile.CellWidth;
+            int y = 16;
 
-            body.Controls.Add(SectionLabel("TEMPLATE", BodyPad, y));
+            // ---- Built-in templates ----
+            body.Controls.Add(SectionLabel("BUILT-IN TEMPLATES", BodyPad, y));
             y += 24;
-            for (int i = 0; i < CardTemplates.All.Length; i++)
+            for (int i = 0; i < _builtIn.Count; i++)
             {
-                CardTemplateInfo info = CardTemplates.All[i];
-                var tile = new TemplateTile(info.Name, _fronts[info.Template], info.Template == _current)
-                {
-                    Location = new Point(BodyPad + i * TemplateTile.CellWidth, y),
-                    TabIndex = i
-                };
-                CardTemplate template = info.Template;
-                tile.Click += (s, e) => Choose(template);
-                _tiles.Add(tile);
-                body.Controls.Add(tile);
+                Choice c = _builtIn[i];
+                c.Tile = NewTile(c);
+                c.Tile.Location = new Point(BodyPad + i * TemplateTile.CellWidth, y);
+                c.Tile.DoubleClick += (s, e) => { Choose(c); DialogResult = DialogResult.OK; };
+                body.Controls.Add(c.Tile);
             }
-            y += TemplateTile.CellHeight + 14;
+            y += TemplateTile.CellHeight + 10;
 
+            // ---- My designs (Card Designer) ----
+            _mineTitle = SectionLabel("", BodyPad, y);
+            body.Controls.Add(_mineTitle);
+            var mineHint = new Label
+            {
+                Text = "Right-click a design to edit, rename, duplicate or delete it  ·  double-click to edit",
+                Font = Theme.Small, ForeColor = Theme.TextMuted, BackColor = Theme.Surface, AutoSize = false,
+                TextAlign = ContentAlignment.TopRight, Location = new Point(BodyPad + 200, y - 1), Size = new Size(width - 2 * BodyPad - 200, 18)
+            };
+            body.Controls.Add(mineHint);
+            y += 24;
+            int rows = Math.Max(1, Math.Min(MaxDesignRows, (_mine.Count + 1 + Columns - 1) / Columns));
+            _minePanel = new FlowLayoutPanel
+            {
+                Location = new Point(BodyPad, y), Size = new Size(width - 2 * BodyPad + 14, rows * TemplateTile.CellHeight),
+                AutoScroll = true, WrapContents = true, BackColor = Theme.Surface, Margin = new Padding(0), Padding = new Padding(0)
+            };
+            body.Controls.Add(_minePanel);
+            _mineEmpty = new Label
+            {
+                Text = "No designs yet.\nClick “New design” to make your own card with Card Designer.",
+                Font = Theme.Small, ForeColor = Theme.TextSoft, BackColor = Theme.Surface, AutoSize = false,
+                Size = new Size(width - 2 * BodyPad - TemplateTile.CellWidth - 20, 60), TextAlign = ContentAlignment.MiddleLeft,
+                Margin = new Padding(12, 40, 0, 0)
+            };
+            y += _minePanel.Height + 12;
+
+            // ---- Preview ----
             body.Controls.Add(SectionLabel("PREVIEW  ·  FRONT AND BACK", BodyPad, y));
             y += 24;
             _preview = new CardPairPreview { Location = new Point(BodyPad, y), Size = new Size(width - 2 * BodyPad, PreviewHeight) };
@@ -77,17 +146,16 @@ namespace NPIC_CARD_APP
             body.Controls.Add(_hint);
             y += _hint.Height + 8;
 
+            // ---- Footer ----
             var footer = ModalUi.Footer();
             var apply = ModalUi.Button("Use Template", PillKind.Primary);
             apply.DialogResult = DialogResult.OK;
             var cancel = ModalUi.Button("Cancel", PillKind.Secondary);
             cancel.DialogResult = DialogResult.Cancel;
             var designer = ModalUi.Button("Card Designer…", PillKind.Ghost, (s, e) =>
-            {
-                OpenDesigner = true;
-                DialogResult = DialogResult.Cancel;
-            });
+                OpenInDesigner(_selected != null ? _selected.DesignId : null, false));
             designer.Margin = new Padding(0, 0, 24, 0);
+            _tip.SetToolTip(designer, "Open Card Designer: edit the selected design of yours, or create a new one");
             footer.Controls.Add(apply);    // right-to-left flow: first added = rightmost
             footer.Controls.Add(cancel);
             footer.Controls.Add(designer);
@@ -100,33 +168,263 @@ namespace NPIC_CARD_APP
             _clientSize = new Size(width, HeaderHeight + y + ModalUi.FooterHeight);
             ClientSize = _clientSize;
 
-            Choose(_current);
+            FillMyDesigns();
+            Choose(FindCurrent() ?? _builtIn[0]);
         }
 
-        public CardTemplate SelectedTemplate { get { return _selected; } }
+        // =====================================================================
+        // RESULTS
+        // =====================================================================
+        public CardTemplate SelectedTemplate { get { return _selected.Template; } }
 
-        /// <summary>True when the user clicked Card Designer… (the form closes with Cancel; the caller opens the designer).</summary>
+        /// <summary>Id of the chosen design when <see cref="SelectedTemplate"/> is Custom, otherwise null.</summary>
+        public string SelectedDesignId { get { return _selected.DesignId; } }
+
+        /// <summary>True when the user asked for Card Designer (the form closes with Cancel; the caller opens the designer).</summary>
         public bool OpenDesigner { get; private set; }
 
-        /// <summary>Draws front + back of every design once (600 dpi) and keeps screen-size copies.</summary>
-        private void RenderAll(Student student, AppSettings settings)
+        /// <summary>Design to open in Card Designer (null = the one in use / newest).</summary>
+        public string DesignerDesignId { get; private set; }
+
+        /// <summary>Card Designer should start a new design.</summary>
+        public bool DesignerCreateNew { get; private set; }
+
+        /// <summary>A design was renamed, duplicated or deleted here.</summary>
+        public bool DesignsChanged { get; private set; }
+
+        // =====================================================================
+        // MY DESIGNS
+        // =====================================================================
+        private Choice MakeChoice(CustomCardDesign d)
         {
-            Cursor old = Cursor.Current;
-            Cursor.Current = Cursors.WaitCursor;
+            return new Choice
+            {
+                Template = CardTemplate.Custom, DesignId = d.Id, Name = string.IsNullOrWhiteSpace(d.Name) ? d.Id : d.Name,
+                Description = "Your design, made with Card Designer" +
+                              (d.Modified > DateTime.MinValue ? " · last saved " + d.Modified.ToString("d MMM yyyy, HH:mm") : "") + ".",
+                Front = Shrink(() => CardRenderer.RenderCustomSide(d.Front, _student, _settings, 300f)),
+                Back = Shrink(() => CardRenderer.RenderCustomSide(d.Back, null, _settings, 300f))
+            };
+        }
+
+        /// <summary>(Re)builds the My designs row: one tile per saved design, then the New design tile.</summary>
+        private void FillMyDesigns()
+        {
+            _minePanel.SuspendLayout();
+            var old = new Control[_minePanel.Controls.Count];
+            _minePanel.Controls.CopyTo(old, 0);   // disposing removes a control from the collection
+            _minePanel.Controls.Clear();
+            foreach (Control c in old) if (c != _mineEmpty) c.Dispose();
+
+            foreach (Choice c in _mine)
+            {
+                Choice choice = c;
+                c.Tile = NewTile(c);
+                c.Tile.Margin = new Padding(0, 0, TemplateTile.CellWidth - c.Tile.Width, TemplateTile.CellHeight - c.Tile.Height);
+                c.Tile.MouseUp += (s, e) => { if (e.Button == MouseButtons.Right) ShowDesignMenu(choice, e.Location); };
+                c.Tile.DoubleClick += (s, e) => OpenInDesigner(choice.DesignId, false);
+                _minePanel.Controls.Add(c.Tile);
+            }
+
+            var add = new NewDesignTile
+            {
+                Margin = new Padding(0, 0, TemplateTile.CellWidth - NewDesignTile.TileWidth, TemplateTile.CellHeight - NewDesignTile.TileHeight)
+            };
+            add.Click += (s, e) => OpenInDesigner(null, true);
+            _tip.SetToolTip(add, "Create a new blank card design with Card Designer");
+            _minePanel.Controls.Add(add);
+            if (_mine.Count == 0) _minePanel.Controls.Add(_mineEmpty);
+            _minePanel.ResumeLayout();
+
+            _mineTitle.Text = "MY DESIGNS  ·  " + _mine.Count;
+            if (_selected != null && _selected.DesignId != null && _selected.Tile != null) _selected.Tile.Selected = true;
+        }
+
+        private TemplateTile NewTile(Choice c)
+        {
+            bool inUse = c.DesignId == null
+                ? c.Template == _currentTemplate
+                : _currentTemplate == CardTemplate.Custom && string.Equals(c.DesignId, _currentDesignId, StringComparison.OrdinalIgnoreCase);
+            var tile = new TemplateTile(c.Name, c.Front, inUse);
+            tile.Click += (s, e) => Choose(c);
+            _tip.SetToolTip(tile, c.Name);
+            return tile;
+        }
+
+        private void ShowDesignMenu(Choice c, Point at)
+        {
+            Choose(c);
+            if (_menu != null) _menu.Dispose();
+            _menu = ThemedMenu.Create();
+            _menu.Items.Add(ThemedMenu.Item("Edit in Card Designer…", () => OpenInDesigner(c.DesignId, false)));
+            _menu.Items.Add(ThemedMenu.Item("Rename…", () => RenameDesign(c)));
+            _menu.Items.Add(ThemedMenu.Item("Duplicate", () => DuplicateDesign(c)));
+            _menu.Items.Add(new ToolStripSeparator());
+            _menu.Items.Add(ThemedMenu.Item("Delete…", () => DeleteDesign(c)));
+            _menu.Show(c.Tile, at);
+        }
+
+        private void RenameDesign(Choice c)
+        {
+            CustomCardDesign d = CustomCardStore.Find(c.DesignId);
+            if (d == null) return;
+            string name = DesignNamePrompt.Ask(this, "Rename design", "Name shown in this list and in Card Designer", d.Name);
+            if (string.IsNullOrWhiteSpace(name) || name.Trim() == d.Name) return;
+            CustomCardDesign copy = CustomCardStore.Clone(d);
+            copy.Name = CustomCardStore.UniqueName(name.Trim(), d.Id);
+            if (!TrySave(copy)) return;
+            c.Name = copy.Name;
+            AfterLibraryChange(c);
+        }
+
+        private void DuplicateDesign(Choice c)
+        {
+            CustomCardDesign d = CustomCardStore.Find(c.DesignId);
+            if (d == null) return;
+            CustomCardDesign copy = CustomCardStore.Duplicate(d);
+            if (!TrySave(copy)) return;
+            Choice added = MakeChoice(copy);
+            _mine.Insert(0, added);
+            AfterLibraryChange(added);
+        }
+
+        private void DeleteDesign(Choice c)
+        {
+            bool inUse = _currentTemplate == CardTemplate.Custom && string.Equals(c.DesignId, _currentDesignId, StringComparison.OrdinalIgnoreCase);
+            if (AppDialog.Show(this, "Delete the design “" + c.Name + "”?" +
+                    (inUse ? "\n\nIt is the design printed now; printing goes back to another design." : "") + "\n\nThis cannot be undone.",
+                    Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                return;
             try
             {
-                foreach (CardTemplateInfo info in CardTemplates.All)
-                {
-                    _fronts[info.Template] = Shrink(() => CardRenderer.RenderFront(student, settings, info.Template));
-                    _backs[info.Template] = Shrink(() => CardRenderer.RenderBack(settings, info.Template));
-                }
+                CustomCardStore.Delete(c.DesignId);
             }
-            finally
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
-                Cursor.Current = old;
+                AppDialog.Show(this, "Could not delete the design:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            _mine.Remove(c);
+            if (c.Front != null) c.Front.Dispose();
+            if (c.Back != null) c.Back.Dispose();
+            c.Front = c.Back = null;
+            AfterLibraryChange(_selected == c ? (FindCurrent() ?? _builtIn[0]) : _selected);
+        }
+
+        private bool TrySave(CustomCardDesign d)
+        {
+            try
+            {
+                CustomCardStore.Save(d);
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is InvalidOperationException)
+            {
+                AppDialog.Show(this, "Could not save the design:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
             }
         }
 
+        private void AfterLibraryChange(Choice select)
+        {
+            DesignsChanged = true;
+            _selected = null;
+            FillMyDesigns();
+            Choose(select);
+        }
+
+        private void OpenInDesigner(string designId, bool createNew)
+        {
+            OpenDesigner = true;
+            DesignerDesignId = designId;
+            DesignerCreateNew = createNew;
+            DialogResult = DialogResult.Cancel;
+        }
+
+        // =====================================================================
+        // SELECTION
+        // =====================================================================
+        private IEnumerable<Choice> AllChoices()
+        {
+            foreach (Choice c in _builtIn) yield return c;
+            foreach (Choice c in _mine) yield return c;
+        }
+
+        private Choice FindCurrent()
+        {
+            foreach (Choice c in AllChoices())
+            {
+                if (c.DesignId == null ? c.Template == _currentTemplate
+                    : _currentTemplate == CardTemplate.Custom && string.Equals(c.DesignId, _currentDesignId, StringComparison.OrdinalIgnoreCase))
+                    return c;
+            }
+            return null;
+        }
+
+        private void Choose(Choice choice)
+        {
+            if (choice == null) return;
+            _selected = choice;
+            foreach (Choice c in AllChoices())
+                if (c.Tile != null) c.Tile.Selected = c == choice;
+            if (choice.Tile != null && choice.DesignId != null) _minePanel.ScrollControlIntoView(choice.Tile);
+
+            _preview.SetImages(choice.Front, choice.Back);
+            bool inUse = choice == FindCurrent();
+            _hint.Text = choice.Name + (inUse ? "  (in use)" : "") + "  ·  " + choice.Description +
+                "\nAll designs print the same student data, Card Text, photo and QR codes. " +
+                "The slot positions from Test Print stay the same.";
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            ClientSize = _clientSize;   // again now that the real frame is known; before base.OnLoad centres the window
+            base.OnLoad(e);
+            if (_selected != null && _selected.Tile != null) ActiveControl = _selected.Tile;
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            // Left / Right move between the tiles (built-in, then my designs) and choose the design, like a radio group.
+            var list = new List<Choice>(AllChoices());
+            int at = list.FindIndex(c => c.Tile != null && c.Tile.Focused);
+            if (at >= 0 && (keyData == Keys.Left || keyData == Keys.Right))
+            {
+                int next = at + (keyData == Keys.Left ? -1 : 1);
+                if (next >= 0 && next < list.Count)
+                {
+                    list[next].Tile.Focus();
+                    Choose(list[next]);
+                }
+                return true;
+            }
+            if (at >= 0 && keyData == Keys.Delete && list[at].DesignId != null)
+            {
+                DeleteDesign(list[at]);
+                return true;
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                foreach (Choice c in AllChoices())
+                {
+                    if (c.Front != null) c.Front.Dispose();
+                    if (c.Back != null) c.Back.Dispose();
+                }
+                _tip.Dispose();
+                if (_menu != null) _menu.Dispose();
+                if (_mineEmpty.Parent == null) _mineEmpty.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
+        // =====================================================================
+        // HELPERS
+        // =====================================================================
         /// <summary>Screen copy, 2x the largest size it is shown at; null when the design could not be drawn.</summary>
         private static Bitmap Shrink(Func<Bitmap> render)
         {
@@ -165,54 +463,6 @@ namespace NPIC_CARD_APP
                 Text = text, Font = Theme.SmallCaps, ForeColor = Theme.TextMuted, BackColor = Theme.Surface,
                 AutoSize = true, Location = new Point(x, y)
             };
-        }
-
-        private void Choose(CardTemplate template)
-        {
-            _selected = template;
-            for (int i = 0; i < _tiles.Count; i++)
-                _tiles[i].Selected = CardTemplates.All[i].Template == template;
-
-            _preview.SetImages(_fronts[template], _backs[template]);
-            CardTemplateInfo info = CardTemplates.Find(template);
-            _hint.Text = info.Name + (template == _current ? "  (in use)" : "") + "  ·  " + info.Description +
-                "\nAll designs print the same student data, Card Text, photo, QR codes, stamp and signature. " +
-                "The slot positions from Test Print stay the same.";
-        }
-
-        protected override void OnLoad(EventArgs e)
-        {
-            ClientSize = _clientSize;   // again now that the real frame is known; before base.OnLoad centres the window
-            base.OnLoad(e);
-            foreach (TemplateTile t in _tiles)
-                if (t.Selected) { ActiveControl = t; break; }
-        }
-
-        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
-        {
-            // Left / Right move between the tiles and choose the design, like a radio group.
-            int at = _tiles.FindIndex(t => t.Focused);
-            if (at >= 0 && (keyData == Keys.Left || keyData == Keys.Right))
-            {
-                int next = at + (keyData == Keys.Left ? -1 : 1);
-                if (next >= 0 && next < _tiles.Count)
-                {
-                    _tiles[next].Focus();
-                    Choose(CardTemplates.All[next].Template);
-                }
-                return true;
-            }
-            return base.ProcessCmdKey(ref msg, keyData);
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                foreach (Bitmap b in _fronts.Values) if (b != null) b.Dispose();
-                foreach (Bitmap b in _backs.Values) if (b != null) b.Dispose();
-            }
-            base.Dispose(disposing);
         }
 
         /// <summary>Card corner radius (3.18 mm on an 85.6 mm CR80 card) at a given drawn width.</summary>
@@ -257,7 +507,7 @@ namespace NPIC_CARD_APP
         public TemplateTile(string name, Bitmap image, bool inUse)
         {
             SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.ResizeRedraw |
-                     ControlStyles.UserPaint | ControlStyles.Selectable, true);
+                     ControlStyles.UserPaint | ControlStyles.Selectable | ControlStyles.StandardDoubleClick, true);
             Text = name; _image = image; _inUse = inUse;
             Size = new Size(TileWidth, TileHeight);
             BackColor = Theme.Surface;
@@ -328,6 +578,66 @@ namespace NPIC_CARD_APP
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
             string label = _inUse ? Text + "  ·  in use" : Text;
             Theme.DrawText(g, label, _selected ? Theme.NavBold : Theme.Nav, _selected ? Theme.Accent : Theme.TextMain,
+                new RectangleF(4f, card.Bottom + 6f, Width - 8f, Height - card.Bottom - 10f), StringAlignment.Center);
+        }
+    }
+
+    /// <summary>"+ New design" tile at the end of My designs: dashed card outline with a plus sign.</summary>
+    internal sealed class NewDesignTile : Control
+    {
+        public const int TileWidth = 172, TileHeight = 142;
+        private bool _hover;
+
+        public NewDesignTile()
+        {
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.ResizeRedraw |
+                     ControlStyles.UserPaint | ControlStyles.Selectable, true);
+            Text = "New design";
+            Size = new Size(TileWidth, TileHeight);
+            BackColor = Theme.Surface;
+            Cursor = Cursors.Hand;
+            TabStop = true;
+            AccessibleName = "New design";
+            AccessibleRole = AccessibleRole.PushButton;
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter) { OnClick(EventArgs.Empty); e.Handled = true; }
+            base.OnKeyDown(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.Clear(Theme.Surface);
+            Theme.HighQuality(g);
+
+            float cw = Width - 24f, ch = cw * CardRenderer.CardHeightMm / CardRenderer.CardWidthMm;
+            var card = new RectangleF(12f, 12f, cw, ch);
+            bool hot = _hover || (Focused && ShowFocusCues);
+            using (GraphicsPath p = Theme.RoundRect(card, CardTemplateForm.CornerRadius(card.Width)))
+            {
+                using (var b = new SolidBrush(hot ? Theme.AccentSoft : Theme.Tile)) g.FillPath(b, p);
+                using (var pen = new Pen(hot ? Theme.Accent : Theme.Border, 1.5f) { DashStyle = DashStyle.Dash }) g.DrawPath(pen, p);
+            }
+            var circle = new RectangleF(card.X + card.Width / 2f - 17f, card.Y + card.Height / 2f - 17f, 34f, 34f);
+            using (var b = new SolidBrush(hot ? Theme.Accent : Theme.Surface)) g.FillEllipse(b, circle);
+            using (var pen = new Pen(hot ? Theme.Accent : Theme.Border, 1.5f)) g.DrawEllipse(pen, circle);
+            using (var pen = new Pen(hot ? Color.White : Theme.Accent, 2.4f))
+            {
+                float cx = circle.X + circle.Width / 2f, cy = circle.Y + circle.Height / 2f;
+                g.DrawLine(pen, cx - 7f, cy, cx + 7f, cy);
+                g.DrawLine(pen, cx, cy - 7f, cx, cy + 7f);
+            }
+
+            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+            Theme.DrawText(g, "New design", Theme.NavBold, Theme.Accent,
                 new RectangleF(4f, card.Bottom + 6f, Width - 8f, Height - card.Bottom - 10f), StringAlignment.Center);
         }
     }
