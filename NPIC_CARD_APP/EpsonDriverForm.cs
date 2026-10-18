@@ -163,8 +163,8 @@ namespace NPIC_CARD_APP
                 var item = new ListViewItem(p.Name) { Tag = p };
                 item.SubItems.Add(p.Driver);
                 item.SubItems.Add(p.Port);
-                item.SubItems.Add(p.StatusText);
-                item.SubItems.Add(IsInUse(p) ? "In use" : _settings.IsCardPrinter(p.Name) ? "Card printer" : "");
+                item.SubItems.Add(Lang.T(p.StatusText));
+                item.SubItems.Add(Lang.T(IsInUse(p) ? "In use" : _settings.IsCardPrinter(p.Name) ? "Card printer" : ""));
                 if (p.Problems.Count > 0) item.ForeColor = Theme.Danger;
                 else if (IsInUse(p)) item.ForeColor = Theme.Success;
                 _printers.Items.Add(item);
@@ -335,8 +335,8 @@ namespace NPIC_CARD_APP
                 default: mark = "·"; color = Theme.TextSoft; break;
             }
             var item = new ListViewItem(mark) { UseItemStyleForSubItems = false, ForeColor = color };
-            item.SubItems.Add(setting, Theme.TextSoft, _details.BackColor, _details.Font);
-            item.SubItems.Add(value, check == Check.Info || check == Check.Ok ? _details.ForeColor : color,
+            item.SubItems.Add(Lang.T(setting), Theme.TextSoft, _details.BackColor, _details.Font);
+            item.SubItems.Add(Lang.T(value), check == Check.Info || check == Check.Ok ? _details.ForeColor : color,
                 _details.BackColor, _details.Font);
             _details.Items.Add(item);
         }

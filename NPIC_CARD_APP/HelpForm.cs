@@ -59,100 +59,105 @@ namespace NPIC_CARD_APP
         /// <param name="studentSource">Where they came from (file name, API host, SQL server), or empty.</param>
         public HelpForm(AppSettings settings, Page start = Page.Overview, int studentCount = -1, string studentSource = null)
         {
-            _settings = settings;
-            _kh = settings.HelpKhmer;
-            _studentCount = studentCount;
-            _studentSource = studentSource ?? "";
-            ReadFacts();   // before ApplyLanguage, which writes System info for the search index
-            _startTopic = (int)start;
-            Glyph = Theme.IcoQuestion;
-            KeyPreview = true;
-            Rectangle work = Screen.FromPoint(Cursor.Position).WorkingArea;
-            Size = new Size(Math.Min(1040, work.Width), Math.Min(740, work.Height));
-            MinimumSize = new Size(Math.Min(720, work.Width), Math.Min(480, work.Height));
-
-            AddTopic("Overview", "ទិដ្ឋភាពទូទៅ", Theme.IcoHome, WriteOverview);
-            AddTopic("Quick start", "ចាប់ផ្តើមរហ័ស", Theme.IcoInfo, WriteQuickStart);
-            AddTopic("Import students", "នាំចូលនិស្សិត", Theme.IcoDownload, WriteImport);
-            AddTopic("Photos", "រូបថត", Theme.IcoPhoto, WritePhotos);
-            // The two Khmer names below are short forms of the page titles: the full ones do not fit the topic list.
-            AddTopic("Card text & preview", "អត្ថបទ និងការមើលកាត", Theme.IcoFont, WriteCardText);
-            AddTopic("Printer & tray setup", "ម៉ាស៊ីនបោះពុម្ព និងថាស", Theme.IcoSettings, WritePrinterSetup);
-            AddTopic("Printing cards", "ការបោះពុម្ពកាត", Theme.IcoPrint, WritePrinting);
-            AddTopic("RFID cards", "កាត RFID", Theme.IcoList, WriteRfid);
-            AddTopic("History & gallery", "ប្រវត្តិ និងវិចិត្រសាល", Theme.IcoHistory, WriteHistory);
-            AddTopic("Settings & folders", "ការកំណត់ និងថតឯកសារ", Theme.IcoFolder, WriteSettings);
-            AddTopic("Keyboard shortcuts", "គ្រាប់ចុចកាត់", Theme.IcoMultiSelect, WriteShortcuts);
-            AddTopic("Troubleshooting", "ដោះស្រាយបញ្ហា", Theme.IcoWarning, WriteTroubleshooting);
-            AddTopic("System info", "ព័ត៌មានប្រព័ន្ធ", Theme.IcoDatabase, WriteSystemInfo);
-
-            // ---- Toolbar: language, search ----
-            _lang = new PillTabs("English", "ខ្មែរ") { Margin = new Padding(0, 0, 14, 0) };
-            _lang.SelectedIndex = _kh ? 1 : 0;   // before the handler: the texts are applied once below
-            _lang.SelectedIndexChanged += (s, e) => SetKhmer(_lang.SelectedIndex == 1);
-            _tip.SetToolTip(_lang, "Language of the guide  ·  ភាសានៃការណែនាំ");
-
-            _txtSearch = new TextBox { Width = 260, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(0, 5, 12, 0) };
-            _txtSearch.HandleCreated += (s, e) => UpdateCueBanner();
-            _txtSearch.TextChanged += (s, e) => FindNext(true);
-            _txtSearch.KeyDown += (s, e) =>
+            // This page has its own English | ខ្មែរ switch: its texts are never translated by the app language (Lang).
+            Lang.Keep(this);
+            using (Lang.Suspend())
             {
-                if (e.KeyCode == Keys.Enter) { FindNext(false); e.Handled = e.SuppressKeyPress = true; }
-            };
-            _lblFind = new Label
-            {
-                AutoSize = true, ForeColor = Theme.TextSoft, Font = Theme.Small, Margin = new Padding(0, 9, 0, 0),
-                UseMnemonic = false   // topic names contain "&"
-            };
+                _settings = settings;
+                _kh = settings.HelpKhmer;
+                _studentCount = studentCount;
+                _studentSource = studentSource ?? "";
+                ReadFacts();   // before ApplyLanguage, which writes System info for the search index
+                _startTopic = (int)start;
+                Glyph = Theme.IcoQuestion;
+                KeyPreview = true;
+                Rectangle work = Screen.FromPoint(Cursor.Position).WorkingArea;
+                Size = new Size(Math.Min(1040, work.Width), Math.Min(740, work.Height));
+                MinimumSize = new Size(Math.Min(720, work.Width), Math.Min(480, work.Height));
 
-            var toolbar = ModalUi.Toolbar();
-            toolbar.Controls.Add(_lang);
-            toolbar.Controls.Add(_txtSearch);
-            toolbar.Controls.Add(_lblFind);
+                AddTopic("Overview", "ទិដ្ឋភាពទូទៅ", Theme.IcoHome, WriteOverview);
+                AddTopic("Quick start", "ចាប់ផ្តើមរហ័ស", Theme.IcoInfo, WriteQuickStart);
+                AddTopic("Import students", "នាំចូលនិស្សិត", Theme.IcoDownload, WriteImport);
+                AddTopic("Photos", "រូបថត", Theme.IcoPhoto, WritePhotos);
+                // The two Khmer names below are short forms of the page titles: the full ones do not fit the topic list.
+                AddTopic("Card text & preview", "អត្ថបទ និងការមើលកាត", Theme.IcoFont, WriteCardText);
+                AddTopic("Printer & tray setup", "ម៉ាស៊ីនបោះពុម្ព និងថាស", Theme.IcoSettings, WritePrinterSetup);
+                AddTopic("Printing cards", "ការបោះពុម្ពកាត", Theme.IcoPrint, WritePrinting);
+                AddTopic("RFID cards", "កាត RFID", Theme.IcoList, WriteRfid);
+                AddTopic("History & gallery", "ប្រវត្តិ និងវិចិត្រសាល", Theme.IcoHistory, WriteHistory);
+                AddTopic("Settings & folders", "ការកំណត់ និងថតឯកសារ", Theme.IcoFolder, WriteSettings);
+                AddTopic("Keyboard shortcuts", "គ្រាប់ចុចកាត់", Theme.IcoMultiSelect, WriteShortcuts);
+                AddTopic("Troubleshooting", "ដោះស្រាយបញ្ហា", Theme.IcoWarning, WriteTroubleshooting);
+                AddTopic("System info", "ព័ត៌មានប្រព័ន្ធ", Theme.IcoDatabase, WriteSystemInfo);
 
-            // ---- Topic list (left) ----
-            // 260 px: the item draws its text from x = 54 with a 14 px right margin, leaving 192 px — room for the
-            // longest title on screen (≈ 175 px, "ការកំណត់ និងថតឯកសារ" in bold) even when a short window adds a scroll bar.
-            var nav = new Panel { Dock = DockStyle.Left, Width = Scale(260), BackColor = Theme.Surface, AutoScroll = true, Padding = new Padding(0, 8, 0, 8) };
-            nav.Paint += (s, e) =>
-            {
-                using (var pen = new Pen(Theme.GridLine)) e.Graphics.DrawLine(pen, nav.Width - 1, 0, nav.Width - 1, nav.Height);
-            };
-            for (int i = _topics.Count - 1; i >= 0; i--)   // Dock = Top stacks the last added on top: add bottom-up
-            {
-                int index = i;
-                Topic t = _topics[i];
-                t.Nav = new NavItem(t.TitleEn, t.Glyph, (s, e) => ShowTopic(index)) { Dock = DockStyle.Top };
-                nav.Controls.Add(t.Nav);
+                // ---- Toolbar: language, search ----
+                _lang = new PillTabs("English", "ខ្មែរ") { Margin = new Padding(0, 0, 14, 0) };
+                _lang.SelectedIndex = _kh ? 1 : 0;   // before the handler: the texts are applied once below
+                _lang.SelectedIndexChanged += (s, e) => SetKhmer(_lang.SelectedIndex == 1);
+                _tip.SetTip(_lang, "Language of the guide  ·  ភាសានៃការណែនាំ");
+
+                _txtSearch = new TextBox { Width = 260, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(0, 5, 12, 0) };
+                _txtSearch.HandleCreated += (s, e) => UpdateCueBanner();
+                _txtSearch.TextChanged += (s, e) => FindNext(true);
+                _txtSearch.KeyDown += (s, e) =>
+                {
+                    if (e.KeyCode == Keys.Enter) { FindNext(false); e.Handled = e.SuppressKeyPress = true; }
+                };
+                _lblFind = new Label
+                {
+                    AutoSize = true, ForeColor = Theme.TextSoft, Font = Theme.Small, Margin = new Padding(0, 9, 0, 0),
+                    UseMnemonic = false   // topic names contain "&"
+                };
+
+                var toolbar = ModalUi.Toolbar();
+                toolbar.Controls.Add(_lang);
+                toolbar.Controls.Add(_txtSearch);
+                toolbar.Controls.Add(_lblFind);
+
+                // ---- Topic list (left) ----
+                // 260 px: the item draws its text from x = 54 with a 14 px right margin, leaving 192 px — room for the
+                // longest title on screen (≈ 175 px, "ការកំណត់ និងថតឯកសារ" in bold) even when a short window adds a scroll bar.
+                var nav = new Panel { Dock = DockStyle.Left, Width = Scale(260), BackColor = Theme.Surface, AutoScroll = true, Padding = new Padding(0, 8, 0, 8) };
+                nav.Paint += (s, e) =>
+                {
+                    using (var pen = new Pen(Theme.GridLine)) e.Graphics.DrawLine(pen, nav.Width - 1, 0, nav.Width - 1, nav.Height);
+                };
+                for (int i = _topics.Count - 1; i >= 0; i--)   // Dock = Top stacks the last added on top: add bottom-up
+                {
+                    int index = i;
+                    Topic t = _topics[i];
+                    t.Nav = new NavItem(t.TitleEn, t.Glyph, (s, e) => ShowTopic(index)) { Dock = DockStyle.Top };
+                    nav.Controls.Add(t.Nav);
+                }
+
+                // ---- Guide text (right) ----
+                _text = new ModernRichTextBox
+                {
+                    Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, DetectUrls = false,
+                    HideSelection = false, ScrollBars = RichTextBoxScrollBars.Vertical, WordWrap = true,
+                    BackColor = Theme.Surface, ForeColor = Theme.TextMain, TabStop = true
+                };
+                var textHost = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Surface, Padding = new Padding(Scale(30), Scale(16), Scale(8), Scale(4)) };
+                textHost.Controls.Add(_text);
+
+                // ---- Footer ----
+                var footer = ModalUi.Footer();
+                _btnClose = ModalUi.Button("Close", PillKind.Primary, (s, e) => Close());
+                _btnCopy = ModalUi.Button("Copy System Info", PillKind.Secondary, (s, e) => CopySystemInfo());
+                _btnData = ModalUi.Button("Open Data Folder", PillKind.Secondary, (s, e) => OpenDataFolder());
+                footer.Controls.Add(_btnClose);   // right-to-left: first added = rightmost
+                footer.Controls.Add(_btnCopy);
+                footer.Controls.Add(_btnData);
+
+                // Docking runs in reverse add order: the fill control first, the edges last.
+                Controls.Add(textHost);
+                Controls.Add(nav);
+                Controls.Add(toolbar);
+                Controls.Add(footer);
+                CancelButton = _btnClose;
+
+                ApplyLanguage();   // the first topic is written in OnLoad
             }
-
-            // ---- Guide text (right) ----
-            _text = new ModernRichTextBox
-            {
-                Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, DetectUrls = false,
-                HideSelection = false, ScrollBars = RichTextBoxScrollBars.Vertical, WordWrap = true,
-                BackColor = Theme.Surface, ForeColor = Theme.TextMain, TabStop = true
-            };
-            var textHost = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Surface, Padding = new Padding(Scale(30), Scale(16), Scale(8), Scale(4)) };
-            textHost.Controls.Add(_text);
-
-            // ---- Footer ----
-            var footer = ModalUi.Footer();
-            _btnClose = ModalUi.Button("Close", PillKind.Primary, (s, e) => Close());
-            _btnCopy = ModalUi.Button("Copy System Info", PillKind.Secondary, (s, e) => CopySystemInfo());
-            _btnData = ModalUi.Button("Open Data Folder", PillKind.Secondary, (s, e) => OpenDataFolder());
-            footer.Controls.Add(_btnClose);   // right-to-left: first added = rightmost
-            footer.Controls.Add(_btnCopy);
-            footer.Controls.Add(_btnData);
-
-            // Docking runs in reverse add order: the fill control first, the edges last.
-            Controls.Add(textHost);
-            Controls.Add(nav);
-            Controls.Add(toolbar);
-            Controls.Add(footer);
-            CancelButton = _btnClose;
-
-            ApplyLanguage();   // the first topic is written in OnLoad
         }
 
         private void AddTopic(string titleEn, string titleKh, string glyph, Action<GuideWriter> write)
@@ -223,33 +228,36 @@ namespace NPIC_CARD_APP
         /// <summary>Window texts, topic names, buttons and the search index in the current language.</summary>
         private void ApplyLanguage()
         {
-            Text = T("About & User Guide", "អំពី និងការណែនាំប្រើប្រាស់");
-            Subtitle = T("What Card Studio does and how to use it", "Card Studio ធ្វើអ្វីខ្លះ និងរបៀបប្រើប្រាស់");
-
-            foreach (Topic t in _topics)
+            using (Lang.Suspend())
             {
-                t.Nav.Text = TitleOf(t);
-                // Khmer titles in the Khmer card font: Segoe UI has no Khmer letters, so Windows would swap in
-                // a wider font that cuts the long titles off.
-                t.Nav.Font = _kh ? KhmerNavFont : Theme.Nav;
-                t.Nav.ActiveFont = _kh ? KhmerNavBoldFont : null;
-                t.Nav.Invalidate();
-                var plain = new GuideWriter(null, 1f, _kh);
-                t.Write(plain);
-                t.Plain = plain.PlainText;
+                Text = T("About & User Guide", "អំពី និងការណែនាំប្រើប្រាស់");
+                Subtitle = T("What Card Studio does and how to use it", "Card Studio ធ្វើអ្វីខ្លះ និងរបៀបប្រើប្រាស់");
+
+                foreach (Topic t in _topics)
+                {
+                    t.Nav.Text = TitleOf(t);
+                    // Khmer titles in the Khmer card font: Segoe UI has no Khmer letters, so Windows would swap in
+                    // a wider font that cuts the long titles off.
+                    t.Nav.Font = _kh ? KhmerNavFont : Theme.Nav;
+                    t.Nav.ActiveFont = _kh ? KhmerNavBoldFont : null;
+                    t.Nav.Invalidate();
+                    var plain = new GuideWriter(null, 1f, _kh);
+                    t.Write(plain);
+                    t.Plain = plain.PlainText;
+                }
+
+                _btnClose.Text = T("Close", "បិទ");
+                _btnCopy.Text = T("Copy System Info", "ចម្លងព័ត៌មានប្រព័ន្ធ");
+                _btnData.Text = T("Open Data Folder", "បើកថតទិន្នន័យ");
+                _tip.SetTip(_btnCopy, T(
+                    "Copy the version, file locations, printer, fonts and card images of this PC — paste it in a message to support.",
+                    "ចម្លងកំណែ ទីតាំងឯកសារ ម៉ាស៊ីនបោះពុម្ព ពុម្ពអក្សរ និងរូបភាពកាតនៃកុំព្យូទ័រនេះ — បិទភ្ជាប់វាក្នុងសារទៅអ្នកជំនួយបច្ចេកទេស។"));
+                _tip.SetTip(_btnData, T("Open ", "បើក ") + DataFolder +
+                    T(" (settings, print history, RFID file).", " (ការកំណត់ ប្រវត្តិបោះពុម្ព ឯកសារ RFID)។"));
+
+                _lblFind.Text = "";
+                UpdateCueBanner();
             }
-
-            _btnClose.Text = T("Close", "បិទ");
-            _btnCopy.Text = T("Copy System Info", "ចម្លងព័ត៌មានប្រព័ន្ធ");
-            _btnData.Text = T("Open Data Folder", "បើកថតទិន្នន័យ");
-            _tip.SetToolTip(_btnCopy, T(
-                "Copy the version, file locations, printer, fonts and card images of this PC — paste it in a message to support.",
-                "ចម្លងកំណែ ទីតាំងឯកសារ ម៉ាស៊ីនបោះពុម្ព ពុម្ពអក្សរ និងរូបភាពកាតនៃកុំព្យូទ័រនេះ — បិទភ្ជាប់វាក្នុងសារទៅអ្នកជំនួយបច្ចេកទេស។"));
-            _tip.SetToolTip(_btnData, T("Open ", "បើក ") + DataFolder +
-                T(" (settings, print history, RFID file).", " (ការកំណត់ ប្រវត្តិបោះពុម្ព ឯកសារ RFID)។"));
-
-            _lblFind.Text = "";
-            UpdateCueBanner();
         }
 
         private void UpdateCueBanner()
@@ -798,12 +806,12 @@ namespace NPIC_CARD_APP
                        "**Import…** ជំនួសការកំណត់ទាំងអស់ដោយឯកសារដែលបាន export។ ការកំណត់បច្ចុប្បន្នត្រូវបានបម្រុងទុកជាមុន (settings.backup.xml)។"));
 
             w.Heading(T("Other", "ផ្សេងៗ"));
-            w.Bullet(T("**Settings & Help…** — one page with **Dark Mode / Light Mode**, **Theme Color…**, **Folders…**, **All Settings…**, " +
-                       "**System Info**, **Check for Updates** and **Help & About**. " +
-                       "Their shortcuts (Ctrl+Shift+F, Ctrl+,, Ctrl+Shift+I, Ctrl+U, F1) still open each one directly.",
-                       "**Settings & Help…** — ទំព័រតែមួយដែលមាន **Dark Mode / Light Mode** **Theme Color…** **Folders…** **All Settings…** " +
-                       "**System Info** **Check for Updates** និង **Help & About**។ " +
-                       "ផ្លូវកាត់ (Ctrl+Shift+F, Ctrl+,, Ctrl+Shift+I, Ctrl+U, F1) នៅតែបើកនីមួយៗដោយផ្ទាល់។"));
+            w.Bullet(T("**Settings & Help…** — one page with **Dark Mode / Light Mode**, **Theme Color…**, **Language**, **Folders…**, " +
+                       "**All Settings…**, **System Info**, **Check for Updates** and **Help & About**. " +
+                       "Their shortcuts (Ctrl+Shift+L, Ctrl+Shift+F, Ctrl+,, Ctrl+Shift+I, Ctrl+U, F1) still open each one directly.",
+                       "**Settings & Help…** — ទំព័រតែមួយដែលមាន **Dark Mode / Light Mode** **Theme Color…** **Language** **Folders…** " +
+                       "**All Settings…** **System Info** **Check for Updates** និង **Help & About**។ " +
+                       "ផ្លូវកាត់ (Ctrl+Shift+L, Ctrl+Shift+F, Ctrl+,, Ctrl+Shift+I, Ctrl+U, F1) នៅតែបើកនីមួយៗដោយផ្ទាល់។"));
             w.Bullet(T("**Check for Updates** (Ctrl+U) — looks for a newer version in Card Studio's GitHub releases (needs the " +
                        "internet) and installs it. Card Studio closes, Windows asks for " +
                        "administrator approval, and your settings, print history, RFID file and card images are kept. " +
@@ -820,6 +828,12 @@ namespace NPIC_CARD_APP
                        "with a live preview. The app restarts to apply it. Printed cards are not affected.",
                        "**Theme Color…** — ជ្រើសរើសពណ៌ចម្បងរបស់ប៊ូតុង ផ្ទាំង និងការរំលេច (ពណ៌ ១០ ឬពណ៌ផ្ទាល់ខ្លួន) " +
                        "ដោយមានការមើលជាមុនភ្លាមៗ។ កម្មវិធីនឹងចាប់ផ្តើមឡើងវិញដើម្បីអនុវត្ត។ កាតដែលបោះពុម្ពមិនរងផលប៉ះពាល់ទេ។"));
+            w.Bullet(T("**Language** — **EN / KH** at the bottom of the sidebar (or **Settings & Help… → Language**, Ctrl+Shift+L) shows " +
+                       "every window of the app in English or Khmer. The app restarts to apply it, and this guide switches with it. " +
+                       "Printed cards are not affected: their text comes from **Card Text…** and the card design.",
+                       "**Language** — **EN / KH** នៅខាងក្រោមរបារចំហៀង (ឬ **Settings & Help… → Language**, Ctrl+Shift+L) បង្ហាញ" +
+                       "គ្រប់ផ្ទាំងរបស់កម្មវិធីជាភាសាអង់គ្លេស ឬភាសាខ្មែរ។ កម្មវិធីនឹងចាប់ផ្តើមឡើងវិញដើម្បីអនុវត្ត ហើយការណែនាំនេះប្តូរតាម។ " +
+                       "កាតដែលបោះពុម្ពមិនរងផលប៉ះពាល់ទេ៖ អត្ថបទរបស់វាមកពី **Card Text…** និងការរចនាកាត។"));
             w.Bullet(T("**Card images** (logos, stamp, QR and social icons) live in the **Assets** folder next to the app.",
                        "**រូបភាពកាត** (ឡូហ្គោ ត្រា QR និងរូបតំណាងបណ្តាញសង្គម) ស្ថិតនៅក្នុងថត **Assets** ជាប់នឹងកម្មវិធី។"));
             w.Bullet(T("**This guide** is available in English and Khmer — use the switch at the top. The choice is remembered.",
@@ -851,6 +865,7 @@ namespace NPIC_CARD_APP
             w.Key("Ctrl+,", T("All Settings", "ការកំណត់ទាំងអស់"));
             w.Key("Ctrl+Shift+I", T("System info", "ព័ត៌មានប្រព័ន្ធ"));
             w.Key("Ctrl+U", T("Check for updates", "ពិនិត្យរកបច្ចុប្បន្នភាព"));
+            w.Key("Ctrl+Shift+L", T("Switch the app language: English / Khmer", "ប្តូរភាសាកម្មវិធី៖ អង់គ្លេស / ខ្មែរ"));
 
             w.Heading(T("Lists and boxes", "បញ្ជី និងប្រអប់"));
             w.Key("Esc", T("In the search box: clear the search", "ក្នុងប្រអប់ស្វែងរក៖ សម្អាតការស្វែងរក"));
@@ -1080,15 +1095,15 @@ namespace NPIC_CARD_APP
                 return _english ?? (_english = new FontSet
                 {
                     Title = new Font("Segoe UI Semibold", 17f),
-                    Lead = new Font(Theme.Family, 10.5f),
+                    Lead = new Font("Segoe UI", 10.5f),
                     Heading = new Font("Segoe UI Semibold", 12.5f),
                     Sub = new Font("Segoe UI Semibold", 10.5f),
-                    Body = new Font(Theme.Family, 10f),
+                    Body = new Font("Segoe UI", 10f),
                     Bold = new Font("Segoe UI Semibold", 10f),
                     Key = new Font("Segoe UI Semibold", 9.75f),
                     Mono = new Font("Consolas", 9.75f),
-                    Gap = new Font(Theme.Family, 5f),
-                    TinyGap = new Font(Theme.Family, 2f)
+                    Gap = new Font("Segoe UI", 5f),
+                    TinyGap = new Font("Segoe UI", 2f)
                 });
             }
         }
@@ -1109,8 +1124,8 @@ namespace NPIC_CARD_APP
                     Bold = new Font(text, 10f, FontStyle.Bold),
                     Key = new Font(text, 9.75f, FontStyle.Bold),
                     Mono = new Font("Consolas", 9.75f),
-                    Gap = new Font(Theme.Family, 4f),
-                    TinyGap = new Font(Theme.Family, 1.5f)
+                    Gap = new Font("Segoe UI", 4f),
+                    TinyGap = new Font("Segoe UI", 1.5f)
                 };
             }
         }
@@ -1119,6 +1134,7 @@ namespace NPIC_CARD_APP
         private readonly float _scale;
         private readonly FontSet _f;
         private readonly StringBuilder _plain = new StringBuilder();
+        private readonly bool _uiNames;   // Khmer guide in the Khmer app: buttons and pages named as the app shows them
         private bool _started;
 
         public GuideWriter(RichTextBox box, float scale, bool khmer)
@@ -1126,6 +1142,21 @@ namespace NPIC_CARD_APP
             _box = box;
             _scale = scale;
             _f = khmer ? Khmer : English;
+            _uiNames = khmer && Lang.Khmer;
+        }
+
+        /// <summary>
+        /// Khmer guide in the Khmer app (<see cref="Lang.Khmer"/>): **Print Selected** becomes **បោះពុម្ពដែលបានជ្រើស**, the label
+        /// the app shows; each step of a path ("Print setup → Printer") is translated on its own. In the English app the Khmer
+        /// guide keeps the English names, which are then the ones on screen.
+        /// </summary>
+        private string UiNames(string text)
+        {
+            if (!_uiNames || string.IsNullOrEmpty(text) || text.IndexOf("**", StringComparison.Ordinal) < 0) return text;
+            string[] parts = text.Split(new[] { "**" }, StringSplitOptions.None);
+            for (int i = 1; i < parts.Length; i += 2)
+                parts[i] = string.Join(" → ", parts[i].Split(new[] { " → " }, StringSplitOptions.None).Select(Lang.Translate));
+            return string.Join("**", parts);
         }
 
         public string PlainText { get { return _plain.ToString(); } }
@@ -1227,6 +1258,7 @@ namespace NPIC_CARD_APP
         // ---------- Plumbing ----------
         private void Columns(string left, Font leftFont, Color leftColor, string right, Color rightColor, int column)
         {
+            right = UiNames(right);
             _started = true;
             _plain.Append(left).Append(": ").AppendLine(StripBold(right));
             if (_box == null) return;
@@ -1251,6 +1283,7 @@ namespace NPIC_CARD_APP
         /// <summary>A paragraph with **bold** runs; <paramref name="marker"/> (bullet / number + tab) hangs in the margin.</summary>
         private void Rich(string text, Font body, Font bold, Color color, int indent, int hanging, string marker)
         {
+            text = UiNames(text);
             _started = true;
             _plain.Append(marker == null ? "" : marker.Replace("\t", " ")).AppendLine(StripBold(text));
             if (_box == null) return;

@@ -5,11 +5,11 @@ using System.Windows.Forms;
 namespace NPIC_CARD_APP
 {
     /// <summary>Page picked on the <see cref="SettingsHubForm"/>.</summary>
-    public enum SettingsHubChoice { None, DarkMode, ThemeColor, Folders, AllSettings, DriverSetup, SystemInfo, Updates, HelpAbout, License }
+    public enum SettingsHubChoice { None, DarkMode, ThemeColor, Folders, AllSettings, DriverSetup, SystemInfo, Updates, HelpAbout, License, Language }
 
     /// <summary>
     /// "Settings &amp; Help" page: Dark / Light Mode, Theme Color…, Folders…, All Settings…, Epson Driver Setup…, System Info,
-    /// Check for Updates, License… and Help &amp; About
+    /// Check for Updates, License…, Language (English / Khmer) and Help &amp; About
     /// grouped in one popup, so the sidebar stays short. Picking a tile closes the page and sets <see cref="Choice"/>; the main
     /// window then runs that command, so each page itself is unchanged. Their keyboard shortcuts keep working here and in the
     /// main window.
@@ -25,7 +25,7 @@ namespace NPIC_CARD_APP
         public SettingsHubForm(string accentHex)
         {
             Text = "Settings & Help";
-            Subtitle = "Appearance, folders, settings, printer driver, system info, updates and the user guide";
+            Subtitle = "Appearance, language, folders, settings, printer driver, system info, updates and the user guide";
             Glyph = Theme.IcoSettings;
             KeyPreview = true;
             Rectangle work = Screen.FromPoint(Cursor.Position).WorkingArea;
@@ -68,7 +68,14 @@ namespace NPIC_CARD_APP
             grid.Controls.Add(updates, 1, 3);
             Services.LicenseStatus license = Services.LicenseService.Check();
             grid.Controls.Add(Card(SettingsHubChoice.License, "License…", Theme.IcoKey, "",
-                license.Describe() + ". Enter a new serial number from your administrator to renew it."), 0, 4);
+                Lang.T(license.Describe()) + Lang.T(". Enter a new serial number from your administrator to renew it.")), 0, 4);
+            // Named in the language it switches to, so it can be found without reading the other one.
+            grid.Controls.Add(Lang.Khmer
+                ? Card(SettingsHubChoice.Language, "English · អង់គ្លេស", Theme.IcoGlobe, "Ctrl+Shift+L",
+                    "Show Card Studio in English. The app restarts to apply it; printed cards are not affected.")
+                : Card(SettingsHubChoice.Language, "ភាសាខ្មែរ · Khmer", Theme.IcoGlobe, "Ctrl+Shift+L",
+                    "Show Card Studio in Khmer · បង្ហាញ Card Studio ជាភាសាខ្មែរ. The app restarts to apply it; " +
+                    "printed cards are not affected."), 1, 4);
 
             // ---- Footer ----
             var footer = ModalUi.Footer();
@@ -98,6 +105,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.Shift | Keys.I: Pick(SettingsHubChoice.SystemInfo); return true;
                 case Keys.Control | Keys.U: Pick(SettingsHubChoice.Updates); return true;
                 case Keys.F1: Pick(SettingsHubChoice.HelpAbout); return true;
+                case Keys.Control | Keys.Shift | Keys.L: Pick(SettingsHubChoice.Language); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }

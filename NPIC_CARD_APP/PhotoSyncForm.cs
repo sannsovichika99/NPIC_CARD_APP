@@ -160,7 +160,7 @@ namespace NPIC_CARD_APP
             });
 
             // ---- Settings tab: how-to ----
-            string setupSteps = source.SetupSteps;
+            string setupSteps = Lang.T(source.SetupSteps);   // translated before its height is measured
             var helpBox = new Panel { Dock = DockStyle.Top, BackColor = SurfaceAlt, Padding = new Padding(14, 12, 14, 12) };
             var help = new Label { Dock = DockStyle.Fill, Text = setupSteps, ForeColor = TextMuted, UseMnemonic = false };
             helpBox.Controls.Add(help);
@@ -168,7 +168,7 @@ namespace NPIC_CARD_APP
             {
                 // Grow to the wrapped text so nothing is cut off at narrow widths.
                 int w = Math.Max(100, helpBox.ClientSize.Width - helpBox.Padding.Horizontal);
-                int h = TextRenderer.MeasureText(setupSteps, help.Font, new Size(w, int.MaxValue), TextFormatFlags.WordBreak).Height;
+                int h = Lang.WrappedHeight(help, setupSteps, help.Font, w);
                 int want = h + helpBox.Padding.Vertical + 4;
                 if (helpBox.Height != want) helpBox.Height = want;
             };
@@ -278,11 +278,11 @@ namespace NPIC_CARD_APP
             CancelButton = _btnClose;
 
             var tip = new ToolTip();
-            tip.SetToolTip(_tabs, "Ctrl+Tab switches between the photo list and the " + source.ShortName + " settings");
-            tip.SetToolTip(_btnScan, "List the photos in the " + source.Name + " folder and compare them with the Photo Folder. " +
+            tip.SetTip(_tabs, "Ctrl+Tab switches between the photo list and the " + source.ShortName + " settings");
+            tip.SetTip(_btnScan, "List the photos in the " + source.Name + " folder and compare them with the Photo Folder. " +
                                      "Nothing is written yet.");
-            tip.SetToolTip(_btnChange, "Choose the Photo Folder the cards read photos from");
-            tip.SetToolTip(_chkReplace, "Ticked: a photo that differs from the one on " + source.ShortName + " is replaced by the " +
+            tip.SetTip(_btnChange, "Choose the Photo Folder the cards read photos from");
+            tip.SetTip(_chkReplace, "Ticked: a photo that differs from the one on " + source.ShortName + " is replaced by the " +
                                         source.ShortName + " copy.\nPhotos edited with Remove Background are always kept.");
             _source.AddTips(tip);
 
@@ -472,9 +472,9 @@ namespace NPIC_CARD_APP
             UpdateButtons();
             ShowSaveTo();
             if (error != null) ShowStatus(error, Danger);
-            else ShowStatus(string.Format("{0}{1} photo(s) downloaded to {2}{3}",
-                    cancelled ? "Stopped — " : "✔  ", ok, _settings.PhotoFolder,
-                    failed > 0 ? "  ·  " + failed + " failed (see Result)" : ""),
+            else ShowStatus(Lang.F("{0}{1} photo(s) downloaded to {2}{3}",
+                    cancelled ? Lang.T("Stopped — ") : "✔  ", ok, _settings.PhotoFolder,
+                    failed > 0 ? Lang.F("  ·  {0} failed (see Result)", failed) : ""),
                 failed > 0 || cancelled ? Warning : Success);
 
             if (_closeWhenDone) DialogResult = DialogResult.Cancel;
@@ -580,8 +580,8 @@ namespace NPIC_CARD_APP
             Func<PhotoSyncStatus, int> count = st => group.Items.Count(i => i.Status == st);
             int toDownload = group.Items.Count(i => i.WillDownload(_chkReplace.Checked));
             int problems = count(PhotoSyncStatus.NotMatched) + count(PhotoSyncStatus.Unsupported) + count(PhotoSyncStatus.Failed);
-            var parts = new List<string> { group.Items.Count + (group.Items.Count == 1 ? " photo" : " photos") };
-            Action<int, string> part = (n, text) => { if (n > 0) parts.Add(n + " " + text); };
+            var parts = new List<string> { Lang.T(group.Items.Count + (group.Items.Count == 1 ? " photo" : " photos")) };
+            Action<int, string> part = (n, text) => { if (n > 0) parts.Add(Lang.T(n + " " + text)); };
             part(count(PhotoSyncStatus.New), "new");
             part(count(PhotoSyncStatus.Changed), "changed");
             part(count(PhotoSyncStatus.Downloaded), "downloaded");
@@ -594,6 +594,7 @@ namespace NPIC_CARD_APP
             if (toDownload > 0) { state = toDownload + " to download"; stateColor = Accent; }
             else if (problems > 0) { state = problems + " need attention"; stateColor = Warning; }
             else { state = "All up to date"; stateColor = Success; }
+            state = Lang.T(state);
 
             const TextFormatFlags Flags = TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix |
                                           TextFormatFlags.EndEllipsis;
@@ -638,7 +639,7 @@ namespace NPIC_CARD_APP
                 if (item == null) continue;
                 Color color;
                 DataGridViewCell cell = row.Cells[4];
-                cell.Value = Describe(item, _chkReplace.Checked, out color);
+                cell.Value = Lang.T(Describe(item, _chkReplace.Checked, out color));
                 cell.Style.ForeColor = cell.Style.SelectionForeColor = color;
                 cell.ToolTipText = item.Error ?? "";
             }
@@ -681,8 +682,11 @@ namespace NPIC_CARD_APP
         {
             Func<PhotoSyncStatus, int> count = st => _items.Count(i => i.Status == st);
             int folders = _items.Select(i => i.File.Folder ?? "").Distinct(StringComparer.OrdinalIgnoreCase).Count();
-            var parts = new List<string> { _items.Count + " picture(s) on " + _source.ShortName + (folders > 1 ? " in " + folders + " folders" : "") };
-            Action<int, string> part = (n, text) => { if (n > 0) parts.Add(n + " " + text); };
+            var parts = new List<string>
+            {
+                Lang.F("{0} picture(s) on {1}", _items.Count, _source.ShortName) + (folders > 1 ? Lang.F(" in {0} folders", folders) : "")
+            };
+            Action<int, string> part = (n, text) => { if (n > 0) parts.Add(Lang.T(n + " " + text)); };
             part(count(PhotoSyncStatus.New), "new");
             part(count(PhotoSyncStatus.Changed), "changed");
             part(count(PhotoSyncStatus.UpToDate), "up to date");
@@ -692,7 +696,7 @@ namespace NPIC_CARD_APP
             part(count(PhotoSyncStatus.Duplicate), "older copies");
 
             bool problems = count(PhotoSyncStatus.NotMatched) + count(PhotoSyncStatus.Unsupported) > 0;
-            ShowStatus(string.Format("Scanned {0:HH:mm} — {1}", DateTime.Now, string.Join("  ·  ", parts)), problems ? Warning : Success);
+            ShowStatus(Lang.F("Scanned {0:HH:mm} — {1}", DateTime.Now, string.Join("  ·  ", parts)), problems ? Warning : Success);
         }
 
         // ===================== Folders =====================
@@ -702,7 +706,7 @@ namespace NPIC_CARD_APP
         {
             using (var dlg = new FolderBrowserDialog
             {
-                Description = "Photo Folder — the " + _source.ShortName + " photos are saved here as {StudentId}.jpg / .png",
+                Description = Lang.F("Photo Folder — the {0} photos are saved here as {{StudentId}}.jpg / .png", _source.ShortName),
                 SelectedPath = _settings.PhotoFolder ?? ""
             })
             {
@@ -791,7 +795,7 @@ namespace NPIC_CARD_APP
         {
             return new Label
             {
-                Text = text.ToUpperInvariant(), Font = Theme.SmallCaps, ForeColor = TextMuted, BackColor = Surface,
+                Text = Lang.T(text).ToUpperInvariant(), Font = Theme.SmallCaps, ForeColor = TextMuted, BackColor = Surface,
                 Dock = DockStyle.Top, Height = 30, TextAlign = ContentAlignment.BottomLeft, Padding = new Padding(0, 0, 0, 6),
                 UseMnemonic = false
             };
@@ -879,7 +883,7 @@ namespace NPIC_CARD_APP
         public static TextBox MakeText(string text, string cue)
         {
             var box = new TextBox { Dock = DockStyle.Fill, Text = text ?? "", Margin = new Padding(0, 9, 10, 0) };
-            box.HandleCreated += (s, e) => SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, cue);
+            box.HandleCreated += (s, e) => SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, Lang.T(cue));
             return box;
         }
 

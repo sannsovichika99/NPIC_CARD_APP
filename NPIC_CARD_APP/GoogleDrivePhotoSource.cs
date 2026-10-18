@@ -75,7 +75,7 @@ namespace NPIC_CARD_APP
 
         public override void AddTips(ToolTip tip)
         {
-            tip.SetToolTip(_btnGetKey, "Google Cloud Console → Create credentials → API key, then APIs & Services → Library → " +
+            tip.SetTip(_btnGetKey, "Google Cloud Console → Create credentials → API key, then APIs & Services → Library → " +
                                        "Google Drive API → Enable. The key is saved encrypted for this Windows user.");
         }
 

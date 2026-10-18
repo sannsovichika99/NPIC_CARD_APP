@@ -78,24 +78,27 @@ namespace NPIC_CARD_APP
             body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
             body.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
+            string introEn = renew
+                ? "To renew, send the Machine ID below to your administrator, then paste the new serial number you " +
+                  "receive and click Activate. It replaces the current one."
+                : "Each PC needs its own serial number. Send the Machine ID below to your administrator, " +
+                  "then paste the serial number you receive and click Activate.";
+            string introKhmer = renew
+                ? "ដើម្បីបន្តសុពលភាព សូមផ្ញើ Machine ID ខាងក្រោមទៅអ្នកគ្រប់គ្រង " +
+                  "បន្ទាប់មកបិទភ្ជាប់លេខសៀរៀលថ្មីដែលទទួលបាន ហើយចុច Activate។"
+                : "កុំព្យូទ័រនីមួយៗត្រូវការលេខសៀរៀលផ្ទាល់ខ្លួន។ សូមផ្ញើ Machine ID ខាងក្រោមទៅអ្នកគ្រប់គ្រង " +
+                  "បន្ទាប់មកបិទភ្ជាប់លេខសៀរៀលដែលទទួលបាន ហើយចុច Activate។";
+            // Both languages: the app's language first, the other one muted underneath (the administrator may read only one).
             var intro = new Label
             {
                 AutoSize = true, MaximumSize = new Size(BodyWidth, 0), ForeColor = Theme.TextMain, Margin = new Padding(0, 0, 0, 4),
-                Text = renew
-                    ? "To renew, send the Machine ID below to your administrator, then paste the new serial number you " +
-                      "receive and click Activate. It replaces the current one."
-                    : "Each PC needs its own serial number. Send the Machine ID below to your administrator, " +
-                      "then paste the serial number you receive and click Activate."
+                Text = Lang.Khmer ? introKhmer : introEn
             };
-            var introKh = new Label
+            var introKh = Lang.Keep(new Label
             {
                 AutoSize = true, MaximumSize = new Size(BodyWidth, 0), ForeColor = Theme.TextSoft, Margin = new Padding(0, 0, 0, 14),
-                Text = renew
-                    ? "ដើម្បីបន្តសុពលភាព សូមផ្ញើ Machine ID ខាងក្រោមទៅអ្នកគ្រប់គ្រង " +
-                      "បន្ទាប់មកបិទភ្ជាប់លេខសៀរៀលថ្មីដែលទទួលបាន ហើយចុច Activate។"
-                    : "កុំព្យូទ័រនីមួយៗត្រូវការលេខសៀរៀលផ្ទាល់ខ្លួន។ សូមផ្ញើ Machine ID ខាងក្រោមទៅអ្នកគ្រប់គ្រង " +
-                      "បន្ទាប់មកបិទភ្ជាប់លេខសៀរៀលដែលទទួលបាន ហើយចុច Activate។"
-            };
+                Text = Lang.Khmer ? introEn : introKhmer
+            });
             body.Controls.Add(intro, 0, 0);
             body.SetColumnSpan(intro, 2);
             body.Controls.Add(introKh, 0, 1);

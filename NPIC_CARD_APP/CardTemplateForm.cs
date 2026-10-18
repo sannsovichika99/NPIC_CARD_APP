@@ -75,7 +75,7 @@ namespace NPIC_CARD_APP
                     CardTemplate t = info.Template;
                     _builtIn.Add(new Choice
                     {
-                        Template = t, Name = info.Name, Description = info.Description,
+                        Template = t, Name = Lang.T(info.Name), Description = Lang.T(info.Description),
                         Front = Shrink(() => CardRenderer.RenderFront(_student, settings, t)),
                         Back = Shrink(() => CardRenderer.RenderBack(settings, t))
                     });
@@ -155,7 +155,7 @@ namespace NPIC_CARD_APP
             var designer = ModalUi.Button("Card Designer…", PillKind.Ghost, (s, e) =>
                 OpenInDesigner(_selected != null ? _selected.DesignId : null, false));
             designer.Margin = new Padding(0, 0, 24, 0);
-            _tip.SetToolTip(designer, "Open Card Designer: edit the selected design of yours, or create a new one");
+            _tip.SetTip(designer, "Open Card Designer: edit the selected design of yours, or create a new one");
             footer.Controls.Add(apply);    // right-to-left flow: first added = rightmost
             footer.Controls.Add(cancel);
             footer.Controls.Add(designer);
@@ -200,8 +200,9 @@ namespace NPIC_CARD_APP
             return new Choice
             {
                 Template = CardTemplate.Custom, DesignId = d.Id, Name = string.IsNullOrWhiteSpace(d.Name) ? d.Id : d.Name,
-                Description = "Your design, made with Card Designer" +
-                              (d.Modified > DateTime.MinValue ? " · last saved " + d.Modified.ToString("d MMM yyyy, HH:mm") : "") + ".",
+                Description = d.Modified > DateTime.MinValue
+                    ? Lang.F("Your design, made with Card Designer · last saved {0}.", d.Modified.ToString("d MMM yyyy, HH:mm"))
+                    : Lang.T("Your design, made with Card Designer."),
                 Front = Shrink(() => CardRenderer.RenderCustomSide(d.Front, _student, _settings, 300f)),
                 Back = Shrink(() => CardRenderer.RenderCustomSide(d.Back, null, _settings, 300f))
             };
@@ -231,7 +232,7 @@ namespace NPIC_CARD_APP
                 Margin = new Padding(0, 0, TemplateTile.CellWidth - NewDesignTile.TileWidth, TemplateTile.CellHeight - NewDesignTile.TileHeight)
             };
             add.Click += (s, e) => OpenInDesigner(null, true);
-            _tip.SetToolTip(add, "Create a new blank card design with Card Designer");
+            _tip.SetTip(add, "Create a new blank card design with Card Designer");
             _minePanel.Controls.Add(add);
             if (_mine.Count == 0) _minePanel.Controls.Add(_mineEmpty);
             _minePanel.ResumeLayout();
@@ -247,7 +248,7 @@ namespace NPIC_CARD_APP
                 : _currentTemplate == CardTemplate.Custom && string.Equals(c.DesignId, _currentDesignId, StringComparison.OrdinalIgnoreCase);
             var tile = new TemplateTile(c.Name, c.Front, inUse);
             tile.Click += (s, e) => Choose(c);
-            _tip.SetToolTip(tile, c.Name);
+            _tip.SetTip(tile, c.Name);
             return tile;
         }
 
@@ -371,7 +372,7 @@ namespace NPIC_CARD_APP
 
             _preview.SetImages(choice.Front, choice.Back);
             bool inUse = choice == FindCurrent();
-            _hint.Text = choice.Name + (inUse ? "  (in use)" : "") + "  ·  " + choice.Description +
+            _hint.Text = choice.Name + (inUse ? Lang.T("  (in use)") : "") + "  ·  " + choice.Description +
                 "\nAll designs print the same student data, Card Text, photo and QR codes. " +
                 "The slot positions from Test Print stay the same.";
         }
@@ -576,7 +577,7 @@ namespace NPIC_CARD_APP
             }
 
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-            string label = _inUse ? Text + "  ·  in use" : Text;
+            string label = _inUse ? Text + Lang.T("  ·  in use") : Text;
             Theme.DrawText(g, label, _selected ? Theme.NavBold : Theme.Nav, _selected ? Theme.Accent : Theme.TextMain,
                 new RectangleF(4f, card.Bottom + 6f, Width - 8f, Height - card.Bottom - 10f), StringAlignment.Center);
         }
@@ -637,7 +638,7 @@ namespace NPIC_CARD_APP
             }
 
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-            Theme.DrawText(g, "New design", Theme.NavBold, Theme.Accent,
+            Theme.DrawText(g, Lang.T("New design"), Theme.NavBold, Theme.Accent,
                 new RectangleF(4f, card.Bottom + 6f, Width - 8f, Height - card.Bottom - 10f), StringAlignment.Center);
         }
     }
@@ -697,7 +698,7 @@ namespace NPIC_CARD_APP
             CardTemplateForm.DrawCard(g, image, r);
 
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-            Theme.DrawText(g, label, Theme.Small, Theme.TextMuted, new RectangleF(r.X, r.Bottom + 2f, r.Width, labelH), StringAlignment.Center);
+            Theme.DrawText(g, Lang.T(label), Theme.Small, Theme.TextMuted, new RectangleF(r.X, r.Bottom + 2f, r.Width, labelH), StringAlignment.Center);
         }
     }
 }

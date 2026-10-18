@@ -134,13 +134,13 @@ namespace NPIC_CARD_APP
             }
 
             ok = true;
-            string text = "Current folder: " + folder + "\n" + photos + " photo" + (photos == 1 ? "" : "s");
+            string text = Lang.F("Current folder: {0}", folder) + "\n" + Lang.T(photos + " photo" + (photos == 1 ? "" : "s"));
             if (students != null && students.Count > 0)
             {
                 int missing = students.Count(s => s != null && CardRenderer.FindPhoto(folder, s.StudentId) == null);
                 text += missing == 0
-                    ? "  ·  every loaded student has a photo"
-                    : "  ·  " + missing + " of " + students.Count + " loaded students have no photo";
+                    ? Lang.T("  ·  every loaded student has a photo")
+                    : Lang.F("  ·  {0} of {1} loaded students have no photo", missing, students.Count);
             }
             return text;
         }

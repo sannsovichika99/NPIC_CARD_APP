@@ -60,6 +60,9 @@ namespace NPIC_CARD_APP
         /// <param name="createNew">Start a new, blank design instead.</param>
         public CardDesignerForm(Student student, AppSettings settings, string designId = null, bool createNew = false)
         {
+            // Khmer only: property names, help and choices of the elements in Khmer (saved designs stay unchanged).
+            LocalizedProperties.Register(typeof(TextElement), typeof(FieldElement), typeof(ImageElement), typeof(PhotoElement),
+                typeof(QrElement), typeof(ShapeElement), typeof(CardSideDesign));
             _settings = settings;
             _student = student ?? SampleStudent();
 
@@ -79,7 +82,7 @@ namespace NPIC_CARD_APP
             PillButton newDesign = ModalUi.ToolButton("+ New Design", null);
             newDesign.Click += (s, e) => ShowMenu(newDesign, NewDesignMenu());
             toolbar.Controls.Add(newDesign);
-            _tip.SetToolTip(newDesign, "Create another card design (your saved designs stay as they are)");
+            _tip.SetTip(newDesign, "Create another card design (your saved designs stay as they are)");
             newDesign.Margin = new Padding(0, 0, 22, 0);
             _tabFront = Tool(toolbar, "Front", () => ShowSide(false), "Edit the front (student side)");
             _tabBack = Tool(toolbar, "Back", () => ShowSide(true), "Edit the back (same for every student)");
@@ -191,8 +194,8 @@ namespace NPIC_CARD_APP
             footer.Controls.Add(saveUse);   // right-to-left flow: first added = rightmost
             footer.Controls.Add(save);
             footer.Controls.Add(cancel);
-            _tip.SetToolTip(saveUse, "Save the design and print with it from now on (Card Template → Custom)");
-            _tip.SetToolTip(save, "Save the design (Ctrl+S); printing keeps the current template");
+            _tip.SetTip(saveUse, "Save the design and print with it from now on (Card Template → Custom)");
+            _tip.SetTip(save, "Save the design (Ctrl+S); printing keeps the current template");
             CancelButton = cancel;
 
             // Docking runs in reverse add order: the fill control first, the edges last.
@@ -237,7 +240,7 @@ namespace NPIC_CARD_APP
 
         private void UpdateTitle()
         {
-            string name = string.IsNullOrWhiteSpace(_design.Name) ? "Untitled design" : _design.Name.Trim();
+            string name = string.IsNullOrWhiteSpace(_design.Name) ? Lang.T("Untitled design") : _design.Name.Trim();
             _btnDesign.Text = (name.Length > 26 ? name.Substring(0, 25) + "…" : name) + "  ▾";
             Subtitle = "“" + name + "”" + (_isNew ? "  ·  new, not saved yet" : "") +
                        "  —  move, resize and edit anything on the front and back";
@@ -377,8 +380,8 @@ namespace NPIC_CARD_APP
             _canvas.Selected = element;
             _grid.SelectedObject = element ?? (object)Side;
             _propsTitle.Text = element == null
-                ? (_back ? "BACK OF THE CARD" : "FRONT OF THE CARD") + "  ·  NOTHING SELECTED"
-                : element.Kind.ToUpperInvariant() + " PROPERTIES";
+                ? Lang.T(_back ? "BACK OF THE CARD" : "FRONT OF THE CARD") + Lang.T("  ·  NOTHING SELECTED")
+                : Lang.F("{0} PROPERTIES", Lang.T(element.Kind).ToUpperInvariant());
 
             _syncingLayers = true;
             _layers.SelectedItem = element;
@@ -435,9 +438,9 @@ namespace NPIC_CARD_APP
             }
             _status.Text = string.Format(System.Globalization.CultureInfo.InvariantCulture,
                 "{0}  ·  {1}      X {2:0.0}   Y {3:0.0}   W {4:0.0}   H {5:0.0} mm{6}",
-                e.Kind, e.DisplayName, e.X, e.Y, e.Width, e.Height,
-                e.Locked ? "   ·  locked" : "") + (_back && e is FieldElement && ((FieldElement)e).IsStudentField
-                    ? "   ·  student fields print empty on the back" : "");
+                Lang.T(e.Kind), Lang.T(e.DisplayName), e.X, e.Y, e.Width, e.Height,
+                e.Locked ? Lang.T("   ·  locked") : "") + (_back && e is FieldElement && ((FieldElement)e).IsStudentField
+                    ? Lang.T("   ·  student fields print empty on the back") : "");
         }
 
         // =====================================================================
@@ -1153,7 +1156,7 @@ namespace NPIC_CARD_APP
         {
             PillButton b = ModalUi.ToolButton(text, action == null ? null : (EventHandler)((s, e) => action()));
             parent.Controls.Add(b);
-            _tip.SetToolTip(b, tip);
+            _tip.SetTip(b, tip);
             return b;
         }
 
@@ -1172,7 +1175,7 @@ namespace NPIC_CARD_APP
                 Text = text, Dock = DockStyle.Fill, Height = 34, Margin = new Padding(0, 0, 6, 6), MinimumSize = new Size(0, 34)
             };
             b.Click += (s, e) => action(b);
-            _tip.SetToolTip(b, tip);
+            _tip.SetTip(b, tip);
             return b;
         }
 
@@ -1195,6 +1198,7 @@ namespace NPIC_CARD_APP
         {
             if (_lastMenu != null) _lastMenu.Dispose();
             _lastMenu = ThemedMenu.Create();
+            Lang.Hook(_lastMenu);   // Khmer only: items are translated when the menu opens
             return _lastMenu;
         }
 
@@ -1233,11 +1237,11 @@ namespace NPIC_CARD_APP
             using (var b = new SolidBrush(selected ? Theme.Surface : Theme.Tile))
                 g.FillPath(b, p);
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-            Theme.DrawText(g, el.Kind, Theme.SmallCaps, selected ? Theme.Accent : Theme.TextSoft, badge, StringAlignment.Center);
+            Theme.DrawText(g, Lang.T(el.Kind), Theme.SmallCaps, selected ? Theme.Accent : Theme.TextSoft, badge, StringAlignment.Center);
 
-            string flags = (el.Locked ? "  · locked" : "") + (el.Visible ? "" : "  hidden");
+            string flags = (el.Locked ? Lang.T("  · locked") : "") + (el.Visible ? "" : Lang.T("  hidden"));
             Color fore = !el.Visible ? Theme.TextMuted : selected ? Theme.Accent : Theme.TextMain;
-            TextRenderer.DrawText(g, el.DisplayName + flags, _layers.Font,
+            TextRenderer.DrawText(g, Lang.T(el.DisplayName) + flags, _layers.Font,
                 Rectangle.Round(new RectangleF(badge.Right + 8, row.Y, row.Right - badge.Right - 12, row.Height)), fore,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
         }
@@ -1592,9 +1596,9 @@ namespace NPIC_CARD_APP
                 // Blank side: say how to start (never printed — the canvas only)
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
                 var hint = new RectangleF(card.X + 20, card.Y + card.Height / 2f - 30, card.Width - 40, 60);
-                Theme.DrawText(g, "Blank card", Theme.CardTitle, Color.FromArgb(150, 150, 165),
+                Theme.DrawText(g, Lang.T("Blank card"), Theme.CardTitle, Color.FromArgb(150, 150, 165),
                     new RectangleF(hint.X, hint.Y, hint.Width, 28), StringAlignment.Center);
-                Theme.DrawText(g, "Add Text, Field, Image, Photo, QR or Shape from the panel on the left", Theme.Small,
+                Theme.DrawText(g, Lang.T("Add Text, Field, Image, Photo, QR or Shape from the panel on the left"), Theme.Small,
                     Color.FromArgb(150, 150, 165), new RectangleF(hint.X, hint.Y + 30, hint.Width, 22), StringAlignment.Center);
             }
 

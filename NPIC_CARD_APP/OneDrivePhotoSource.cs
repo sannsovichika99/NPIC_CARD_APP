@@ -105,10 +105,10 @@ namespace NPIC_CARD_APP
 
         public override void AddTips(ToolTip tip)
         {
-            tip.SetToolTip(_btnBrowse, "Choose a OneDrive folder synced to this PC instead of a link (no sign-in needed)");
-            tip.SetToolTip(_btnOpen, "Open the folder in the browser (link) or in Windows Explorer (synced folder)");
-            tip.SetToolTip(_btnRegister, "Microsoft Entra → App registrations → New registration. Free; done once per school.");
-            tip.SetToolTip(_btnSignIn, "Sign in with the Microsoft account that can open the folder. The app never sees the password; " +
+            tip.SetTip(_btnBrowse, "Choose a OneDrive folder synced to this PC instead of a link (no sign-in needed)");
+            tip.SetTip(_btnOpen, "Open the folder in the browser (link) or in Windows Explorer (synced folder)");
+            tip.SetTip(_btnRegister, "Microsoft Entra → App registrations → New registration. Free; done once per school.");
+            tip.SetTip(_btnSignIn, "Sign in with the Microsoft account that can open the folder. The app never sees the password; " +
                                        "the sign-in is saved encrypted for this Windows user.");
         }
 

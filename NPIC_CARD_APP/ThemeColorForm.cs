@@ -47,16 +47,16 @@ namespace NPIC_CARD_APP
             int index = 0;
             foreach (AccentPreset preset in AccentPalette.Presets)
             {
-                var sw = new ColorSwatch(preset.Name, preset.Base, false);
+                var sw = new ColorSwatch(Lang.T(preset.Name), preset.Base, false);
                 AddSwatch(body, sw, index++, y);
                 bool isDefault = preset.Base.ToArgb() == AccentPalette.DefaultBase.ToArgb();
-                _tip.SetToolTip(sw, preset.Name + "  " + preset.Hex + (isDefault ? "  (default)" : ""));
+                _tip.SetTip(sw, Lang.T(preset.Name) + "  " + preset.Hex + (isDefault ? Lang.T("  (default)") : ""));
                 Color c = preset.Base;
                 sw.Click += (s, e) => SelectColor(c);
             }
-            _custom = new ColorSwatch("Custom…", Color.Empty, true);
+            _custom = new ColorSwatch(Lang.T("Custom…"), Color.Empty, true);
             AddSwatch(body, _custom, index++, y);
-            _tip.SetToolTip(_custom, "Choose any colour");
+            _tip.SetTip(_custom, "Choose any colour");
             _custom.Click += (s, e) => PickCustom();
             int rows = (index + Columns - 1) / Columns;
             y += rows * ColorSwatch.CellHeight + 12;
@@ -128,11 +128,11 @@ namespace NPIC_CARD_APP
             _preview.Palette = palette;
 
             AccentPreset preset = AccentPalette.FindPreset(_selected);
-            string name = preset != null ? preset.Name : "Custom colour";
+            string name = Lang.T(preset != null ? preset.Name : "Custom colour");
             string text = name + "  " + AccentPalette.ToHex(_selected) +
-                "  ·  white text on buttons " + AccentPalette.Contrast(palette.ButtonA, Color.White).ToString("0.0") + ":1";
+                Lang.F("  ·  white text on buttons {0}:1", AccentPalette.Contrast(palette.ButtonA, Color.White).ToString("0.0"));
             if (palette.ButtonA.ToArgb() != _selected.ToArgb())
-                text += "  ·  darkened to " + AccentPalette.ToHex(palette.ButtonA) + " so button text stays readable";
+                text += Lang.F("  ·  darkened to {0} so button text stays readable", AccentPalette.ToHex(palette.ButtonA));
             text += "\nThe app restarts to apply it. A student list opened from a file comes back by itself; " +
                     "students imported from the API or SQL Server must be loaded again. Printed cards are not affected.";
             _hint.Text = text;
@@ -298,7 +298,7 @@ namespace NPIC_CARD_APP
     /// <summary>Miniature of the main window drawn with a candidate palette: sidebar, stat tile, tabs, buttons.</summary>
     internal sealed class ThemePreview : Control
     {
-        private static readonly Font ValueFont = new Font("Segoe UI Semibold", 15f);
+        private static readonly Font ValueFont = new Font("Segoe UI Semibold", 15f);   // digits only
         private AccentPalette _palette = Theme.Palette;
 
         public ThemePreview()
@@ -333,10 +333,10 @@ namespace NPIC_CARD_APP
                 using (var b = new SolidBrush(Theme.Surface)) g.FillRectangle(b, side);
                 using (var pen = new Pen(Theme.GridLine)) g.DrawLine(pen, side.Right, side.Y, side.Right, side.Bottom);
                 float ny = side.Y + 14;
-                NavRow(g, p, side, ny, Theme.IcoHome, "Dashboard", true);
-                NavRow(g, p, side, ny + 34, Theme.IcoPhoto, "Gallery", false);
-                NavRow(g, p, side, ny + 68, Theme.IcoHistory, "Print History", false);
-                NavRow(g, p, side, ny + 102, Theme.IcoPrint, "Print Queue", false);
+                NavRow(g, p, side, ny, Theme.IcoHome, Lang.T("Dashboard"), true);
+                NavRow(g, p, side, ny + 34, Theme.IcoPhoto, Lang.T("Gallery"), false);
+                NavRow(g, p, side, ny + 68, Theme.IcoHistory, Lang.T("Print History"), false);
+                NavRow(g, p, side, ny + 102, Theme.IcoPrint, Lang.T("Print Queue"), false);
 
                 // Content: stat tile on the left, card with tabs and buttons on the right
                 float x0 = side.Right + 14, top = frame.Y + 18;
@@ -345,7 +345,7 @@ namespace NPIC_CARD_APP
                 using (var b = new LinearGradientBrush(tile, p.GradientA, p.GradientB, 20f))
                     g.FillPath(b, tp);
                 g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
-                Theme.DrawText(g, "Total students", Theme.Small, Color.FromArgb(225, Color.White), new RectangleF(tile.X + 12, tile.Y + 8, tile.Width - 16, 18));
+                Theme.DrawText(g, Lang.T("Total students"), Theme.Small, Color.FromArgb(225, Color.White), new RectangleF(tile.X + 12, tile.Y + 8, tile.Width - 16, 18));
                 Theme.DrawText(g, "248", ValueFont, Color.White, new RectangleF(tile.X + 10, tile.Y + 26, tile.Width - 16, 34));
 
                 var card = new RectangleF(tile.Right + 12, top, frame.Right - tile.Right - 26, frame.Bottom - top - 14);
@@ -360,15 +360,15 @@ namespace NPIC_CARD_APP
                 using (var soft = new SolidBrush(p.AccentSoft)) g.FillEllipse(soft, card.X + 12, cy - 8, 16, 16);
                 using (var pen = new Pen(p.Accent, 2.2f)) g.DrawEllipse(pen, card.X + 16, cy - 4, 8, 8);
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-                Theme.DrawText(g, "Card preview", Theme.NavBold, Theme.TextMain, new RectangleF(card.X + 34, cy - 10, 120, 20));
+                Theme.DrawText(g, Lang.T("Card preview"), Theme.NavBold, Theme.TextMain, new RectangleF(card.X + 34, cy - 10, 120, 20));
 
                 // Pill tabs
                 var front = new RectangleF(card.X + 12, card.Y + 40, 64, 26);
                 using (GraphicsPath fp = Theme.RoundRect(front, 13))
                 using (var b = new SolidBrush(p.AccentSoft))
                     g.FillPath(b, fp);
-                Theme.DrawText(g, "Front", Theme.NavBold, p.Accent, front, StringAlignment.Center);
-                Theme.DrawText(g, "Back", Theme.Nav, Theme.TextMuted, new RectangleF(front.Right + 4, front.Y, 56, front.Height), StringAlignment.Center);
+                Theme.DrawText(g, Lang.T("Front"), Theme.NavBold, p.Accent, front, StringAlignment.Center);
+                Theme.DrawText(g, Lang.T("Back"), Theme.Nav, Theme.TextMuted, new RectangleF(front.Right + 4, front.Y, 56, front.Height), StringAlignment.Center);
 
                 // Buttons: primary, secondary, ghost
                 float by = card.Bottom - 46;
@@ -376,7 +376,7 @@ namespace NPIC_CARD_APP
                 using (GraphicsPath bp = Theme.RoundRect(primary, 9))
                 using (var b = new LinearGradientBrush(primary, p.ButtonA, p.ButtonB, 0f))
                     g.FillPath(b, bp);
-                TextRenderer.DrawText(g, "Print Selected", Theme.Button, Rectangle.Round(primary), Color.White,
+                TextRenderer.DrawText(g, Lang.T("Print Selected", "បោះពុម្ព"), Theme.Button, Rectangle.Round(primary), Color.White,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
 
                 var secondary = new RectangleF(primary.Right + 8, by, 72, 32);
@@ -385,7 +385,7 @@ namespace NPIC_CARD_APP
                     using (var b = new SolidBrush(Theme.Surface)) g.FillPath(b, sp);
                     using (var pen = new Pen(p.AccentOutline)) g.DrawPath(pen, sp);
                 }
-                TextRenderer.DrawText(g, "Preview", Theme.Button, Rectangle.Round(secondary), Theme.TextMain,
+                TextRenderer.DrawText(g, Lang.T("Preview"), Theme.Button, Rectangle.Round(secondary), Theme.TextMain,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
 
                 var ghost = new RectangleF(secondary.Right + 8, by, 56, 32);
@@ -394,7 +394,7 @@ namespace NPIC_CARD_APP
                     using (GraphicsPath gp = Theme.RoundRect(ghost, 9))
                     using (var b = new SolidBrush(p.AccentSoft))
                         g.FillPath(b, gp);
-                    TextRenderer.DrawText(g, "Grid", Theme.Button, Rectangle.Round(ghost), p.Accent,
+                    TextRenderer.DrawText(g, Lang.T("Grid"), Theme.Button, Rectangle.Round(ghost), p.Accent,
                         TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
                 }
 

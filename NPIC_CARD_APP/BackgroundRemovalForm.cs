@@ -94,10 +94,10 @@ namespace NPIC_CARD_APP
             _rdoBlue = MakeChoice("Blue", false);
             _rdoTransparent = MakeChoice("Transparent", false);
             _rdoKeep = MakeChoice("Keep", false);
-            _tip.SetToolTip(_rdoKeep, "Crop only: leave the background as it is");
+            _tip.SetTip(_rdoKeep, "Crop only: leave the background as it is");
 
             _chkCardShape = new CheckBox { Text = "Card photo shape", AutoSize = true, Checked = true, Margin = new Padding(0, 7, 10, 0) };
-            _tip.SetToolTip(_chkCardShape, string.Format("Keep the frame at {0} x {1} mm, the size of the photo box on the card",
+            _tip.SetTip(_chkCardShape, string.Format("Keep the frame at {0} x {1} mm, the size of the photo box on the card",
                 CardRenderer.PhotoWidthMm, CardRenderer.PhotoHeightMm));
             _chkCardShape.CheckedChanged += (s, e) => _cropView.AspectRatio = _chkCardShape.Checked ? CardShape : 0f;
             PillButton btnResetCrop = ModalUi.ToolButton("Reset Crop", null);

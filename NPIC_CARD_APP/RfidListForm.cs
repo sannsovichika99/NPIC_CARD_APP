@@ -135,11 +135,11 @@ namespace NPIC_CARD_APP
             Controls.Add(_lblSummary);
 
             var tip = new ToolTip();
-            tip.SetToolTip(_cboView, "Saved cards = every card number in the RFID file.\n" +
+            tip.SetTip(_cboView, "Saved cards = every card number in the RFID file.\n" +
                                      "Loaded students without a card = students in the main list whose card has not been tapped yet.");
-            tip.SetToolTip(_btnCopy, "Copy the card numbers of the selected rows (Ctrl+C)");
-            tip.SetToolTip(_btnDelete, "Remove the selected cards from the RFID file (Del) — e.g. a lost card. Tap a new card on the RFID tab.");
-            tip.SetToolTip(_btnExport, "Save the rows shown now as a CSV file for Excel");
+            tip.SetTip(_btnCopy, "Copy the card numbers of the selected rows (Ctrl+C)");
+            tip.SetTip(_btnDelete, "Remove the selected cards from the RFID file (Del) — e.g. a lost card. Tap a new card on the RFID tab.");
+            tip.SetTip(_btnExport, "Save the rows shown now as a CSV file for Excel");
         }
 
         protected override void OnShown(EventArgs e)
@@ -197,14 +197,14 @@ namespace NPIC_CARD_APP
 
             // ---- Summary ----
             int loadedWithCard = loaded.Count(saved.Contains);
-            string coverage = loaded.Count == 0 ? "No student list loaded"
-                : string.Format("{0} of {1} loaded students have a card", loadedWithCard, loaded.Count);
+            string coverage = loaded.Count == 0 ? Lang.T("No student list loaded")
+                : Lang.F("{0} of {1} loaded students have a card", loadedWithCard, loaded.Count);
             int duplicates = _all.GroupBy(r => r.RfidUid, StringComparer.OrdinalIgnoreCase).Count(g => g.Key.Length > 0 && g.Count() > 1);
             _lblSummary.ForeColor = duplicates > 0 ? Theme.Danger : Theme.TextSoft;
-            _lblSummary.Text = string.Format("{0} card(s) saved  ·  {1}{2}{3}\nDouble-click a row to select the student in the main list.",
+            _lblSummary.Text = Lang.F("{0} card(s) saved  ·  {1}{2}{3}\nDouble-click a row to select the student in the main list.",
                 _all.Count, coverage,
-                shown == (MissingView ? loaded.Count - loadedWithCard : _all.Count) ? "" : "  ·  " + shown + " match the search",
-                duplicates > 0 ? "  ·  " + duplicates + " card number(s) saved for more than one student (red) — fix them in Excel" : "");
+                shown == (MissingView ? loaded.Count - loadedWithCard : _all.Count) ? "" : Lang.F("  ·  {0} match the search", shown),
+                duplicates > 0 ? Lang.F("  ·  {0} card number(s) saved for more than one student (red) — fix them in Excel", duplicates) : "");
 
             if (MissingView)
                 _lblEmpty.Text = loaded.Count == 0
@@ -470,7 +470,7 @@ namespace NPIC_CARD_APP
 
         private static void SetCueBanner(TextBox box, string text)
         {
-            SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, text);
+            SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, Lang.T(text));
         }
     }
 }

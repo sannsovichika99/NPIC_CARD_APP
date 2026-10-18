@@ -128,14 +128,14 @@ namespace NPIC_CARD_APP
             toolbar.Controls.Add(ModalUi.ToolButton("Refresh", (s, e) => Reload()));
 
             var tip = new ToolTip();
-            tip.SetToolTip(_btnNew, "Create an empty student CSV with the standard columns (Ctrl+N)");
-            tip.SetToolTip(_btnAdd, "Copy CSV files from elsewhere into this folder (you can also drop them on the list)");
-            tip.SetToolTip(_btnEdit, "Open the file in Excel, or the program Windows uses for .csv, to edit it (Ctrl+E)");
-            tip.SetToolTip(_btnRename, "Rename the selected file (F2)");
-            tip.SetToolTip(_btnDuplicate, "Make a copy of the selected file in this folder");
-            tip.SetToolTip(_btnDelete, "Move the selected file to the Recycle Bin (Del)");
-            tip.SetToolTip(btnFolder, "Choose the folder this page lists");
-            tip.SetToolTip(_btnExplorer, "Open the folder in Windows Explorer with the selected file highlighted");
+            tip.SetTip(_btnNew, "Create an empty student CSV with the standard columns (Ctrl+N)");
+            tip.SetTip(_btnAdd, "Copy CSV files from elsewhere into this folder (you can also drop them on the list)");
+            tip.SetTip(_btnEdit, "Open the file in Excel, or the program Windows uses for .csv, to edit it (Ctrl+E)");
+            tip.SetTip(_btnRename, "Rename the selected file (F2)");
+            tip.SetTip(_btnDuplicate, "Make a copy of the selected file in this folder");
+            tip.SetTip(_btnDelete, "Move the selected file to the Recycle Bin (Del)");
+            tip.SetTip(btnFolder, "Choose the folder this page lists");
+            tip.SetTip(_btnExplorer, "Open the folder in Windows Explorer with the selected file highlighted");
 
             // ---- File list ----
             _grid = NewGrid();
@@ -186,7 +186,7 @@ namespace NPIC_CARD_APP
                 Padding = new Padding(16, 0, 16, 0), BackColor = SurfaceAlt, ForeColor = TextMuted, UseMnemonic = false,
                 Font = BoldFont
             };
-            _preview = NewGrid();
+            _preview = Lang.Keep(NewGrid());   // the file's own column names: never translated
             _preview.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
             _preview.RowTemplate.Height = 28;
             _preview.SelectionMode = DataGridViewSelectionMode.CellSelect;
@@ -306,12 +306,12 @@ namespace NPIC_CARD_APP
             foreach (CsvInfo x in shown)
             {
                 bool loaded = IsLoaded(x);
-                int i = _grid.Rows.Add(x.Name + (loaded ? "   · loaded" : ""), x.Students, StatusText(x), x.Modified, x.Size);
+                int i = _grid.Rows.Add(x.Name + (loaded ? Lang.T("   · loaded") : ""), x.Students, StatusText(x), x.Modified, x.Size);
                 DataGridViewRow row = _grid.Rows[i];
                 row.Tag = x;
 
-                string tip = x.Path + (loaded ? "\nThe student list in the main window was loaded from this file." : "") +
-                    (x.Error != null ? "\n" + x.Error : "");
+                string tip = Lang.T(x.Path + (loaded ? "\nThe student list in the main window was loaded from this file." : "") +
+                    (x.Error != null ? "\n" + x.Error : ""));
                 foreach (DataGridViewCell cell in row.Cells) cell.ToolTipText = tip;
 
                 Color color = StatusColor(x);
@@ -351,10 +351,10 @@ namespace NPIC_CARD_APP
             }
             bool exists = Directory.Exists(_folder);
             int ready = _all.Count(x => x.Loadable);
-            _lblFolder.Text = "Folder: " + _folder + (exists
-                ? "     " + Plural(_all.Count, "CSV file") + (_all.Count > 0 ? ", " + ready + " ready to load" : "")
-                : "     (not found)") +
-                (string.IsNullOrEmpty(_settings.CsvFolder) ? "     · folder of the last student file" : "");
+            _lblFolder.Text = Lang.F("Folder: {0}", _folder) + (exists
+                ? "     " + Plural(_all.Count, "CSV file") + (_all.Count > 0 ? Lang.F(", {0} ready to load", ready) : "")
+                : Lang.T("     (not found)")) +
+                (string.IsNullOrEmpty(_settings.CsvFolder) ? Lang.T("     · folder of the last student file") : "");
             _lblFolder.ForeColor = exists ? TextMuted : Warning;
         }
 
@@ -390,14 +390,14 @@ namespace NPIC_CARD_APP
             if (x == null)
             {
                 int problems = _all.Count(f => !f.Loadable);
-                _lblDetails.Text = (folderOk ? Plural(_all.Count, "CSV file") : "No folder") +
-                    (problems > 0 ? "  ·  " + problems + " cannot be loaded (red)" : "") + Environment.NewLine +
-                    "Select a file to preview it. Header row: " + CsvStudentLoader.Header;
+                _lblDetails.Text = (folderOk ? Plural(_all.Count, "CSV file") : Lang.T("No folder")) +
+                    (problems > 0 ? Lang.F("  ·  {0} cannot be loaded (red)", problems) : "") + Environment.NewLine +
+                    Lang.F("Select a file to preview it. Header row: {0}", CsvStudentLoader.Header);
                 _lblDetails.ForeColor = TextMuted;
                 return;
             }
 
-            string line1 = x.Name + "  ·  " + FormatSize(x.Size) + "  ·  modified " + x.Modified.ToString("dd/MM/yyyy HH:mm");
+            string line1 = x.Name + "  ·  " + FormatSize(x.Size) + Lang.F("  ·  modified {0}", x.Modified.ToString("dd/MM/yyyy HH:mm"));
             if (x.HasHeader) line1 += "  ·  " + Plural(x.Columns, "column") + "  ·  " + Plural(x.Students, "student");
             _lblDetails.Text = line1 + Environment.NewLine + Explain(x);
             _lblDetails.ForeColor = x.Error != null || (x.HasHeader && !x.HasId) ? Danger : HasWarnings(x) ? Warning : TextMuted;
@@ -428,20 +428,20 @@ namespace NPIC_CARD_APP
             {
                 if (x == null)
                 {
-                    _lblPreview.Text = "Preview";
+                    _lblPreview.Text = Lang.T("Preview");
                     return;
                 }
-                if (x.Error != null) { _lblPreview.Text = "Preview — cannot read " + x.Name + ": " + x.Error; return; }
-                if (!x.HasHeader) { _lblPreview.Text = "Preview — " + x.Name + " is empty"; return; }
+                if (x.Error != null) { _lblPreview.Text = Lang.F("Preview — cannot read {0}: {1}", x.Name, Lang.T(x.Error)); return; }
+                if (!x.HasHeader) { _lblPreview.Text = Lang.F("Preview — {0} is empty", x.Name); return; }
 
                 List<List<string>> rows;
                 try { rows = ReadRows(x.Path); }
                 catch (Exception ex) when (IsFileError(ex))
                 {
-                    _lblPreview.Text = "Preview — cannot read " + x.Name + ": " + ex.Message;
+                    _lblPreview.Text = Lang.F("Preview — cannot read {0}: {1}", x.Name, Lang.T(ex.Message));
                     return;
                 }
-                if (rows.Count == 0) { _lblPreview.Text = "Preview — " + x.Name + " is empty"; return; }   // emptied since the scan
+                if (rows.Count == 0) { _lblPreview.Text = Lang.F("Preview — {0} is empty", x.Name); return; }   // emptied since the scan
                 List<string> header = rows[0];
                 int idIndex = IndexOf(header, "StudentId");
                 int width = Math.Max(header.Count, rows.Take(PreviewRows + 1).Max(r => r.Count));
@@ -455,7 +455,7 @@ namespace NPIC_CARD_APP
                     string name = c < header.Count ? Clean(header[c]) : "";
                     var col = new DataGridViewTextBoxColumn
                     {
-                        HeaderText = name.Length > 0 ? name : "(no name)", SortMode = DataGridViewColumnSortMode.NotSortable,
+                        HeaderText = name.Length > 0 ? name : Lang.T("(no name)"), SortMode = DataGridViewColumnSortMode.NotSortable,
                         Width = name == "NameKh" || name == "Faculty" || name == "Level" || name == "QrData" ? 170 : 110
                     };
                     if (c == idIndex) col.HeaderCell.Style.ForeColor = Accent;
@@ -479,14 +479,14 @@ namespace NPIC_CARD_APP
                         DataGridViewCell cell = _preview.Rows[i].Cells[idIndex + 1];
                         cell.Style.BackColor = Theme.WarningSoft;
                         cell.Style.ForeColor = Warning;
-                        cell.ToolTipText = id.Length == 0 ? "No StudentId: this card has no photo or ID" : "This StudentId appears more than once";
+                        cell.ToolTipText = Lang.T(id.Length == 0 ? "No StudentId: this card has no photo or ID" : "This StudentId appears more than once");
                     }
                 }
 
                 int total = rows.Count - 1;
-                _lblPreview.Text = "Preview — " + x.Name + "  ·  " +
-                    (total > shown ? "first " + shown + " of " + total.ToString("N0") + " rows" : Plural(total, "row")) +
-                    (idIndex < 0 ? "  ·  no StudentId column" : "");
+                _lblPreview.Text = Lang.F("Preview — {0}", x.Name) + "  ·  " +
+                    (total > shown ? Lang.F("first {0} of {1} rows", shown, total.ToString("N0")) : Plural(total, "row")) +
+                    (idIndex < 0 ? Lang.T("  ·  no StudentId column") : "");
             }
             finally
             {
@@ -535,7 +535,7 @@ namespace NPIC_CARD_APP
             if (!FolderReady()) return;
             using (var dlg = new OpenFileDialog
             {
-                Filter = "CSV UTF-8 (*.csv)|*.csv", Title = "Add CSV files to " + _folder, Multiselect = true
+                Filter = "CSV UTF-8 (*.csv)|*.csv", Title = Lang.F("Add CSV files to {0}", _folder), Multiselect = true
             })
             {
                 if (dlg.ShowDialog(this) == DialogResult.OK) AddFiles(dlg.FileNames);
@@ -663,7 +663,7 @@ namespace NPIC_CARD_APP
         {
             using (var dlg = new FolderBrowserDialog
             {
-                Description = "Folder with the student CSV files",
+                Description = Lang.T("Folder with the student CSV files"),
                 SelectedPath = _folder != null && Directory.Exists(_folder) ? _folder : "",
                 ShowNewFolderButton = true
             })
@@ -700,7 +700,7 @@ namespace NPIC_CARD_APP
             try
             {
                 Clipboard.SetText(x.Path);
-                _lblDetails.Text = "Copied to the clipboard:" + Environment.NewLine + x.Path;
+                _lblDetails.Text = Lang.T("Copied to the clipboard:") + Environment.NewLine + x.Path;
                 _lblDetails.ForeColor = TextMuted;
             }
             catch (ExternalException ex)
@@ -888,14 +888,14 @@ namespace NPIC_CARD_APP
 
         private static string StatusText(CsvInfo x)
         {
-            if (x.Error != null) return "✖ Cannot read";
-            if (!x.HasHeader) return "Empty file";
-            if (!x.HasId) return "✖ No StudentId column";
-            if (x.Students == 0) return "No students yet";
+            if (x.Error != null) return Lang.T("✖ Cannot read");
+            if (!x.HasHeader) return Lang.T("Empty file");
+            if (!x.HasId) return Lang.T("✖ No StudentId column");
+            if (x.Students == 0) return Lang.T("No students yet");
             var issues = new List<string>();
-            if (x.MissingIds > 0) issues.Add(x.MissingIds + " without ID");
-            if (x.DuplicateIds > 0) issues.Add(x.DuplicateIds + " duplicate ID" + (x.DuplicateIds == 1 ? "" : "s"));
-            return issues.Count > 0 ? "⚠ " + string.Join(" · ", issues) : "✔ Ready";
+            if (x.MissingIds > 0) issues.Add(Lang.F("{0} without ID", x.MissingIds));
+            if (x.DuplicateIds > 0) issues.Add(Lang.T(x.DuplicateIds + " duplicate ID" + (x.DuplicateIds == 1 ? "" : "s")));
+            return issues.Count > 0 ? "⚠ " + string.Join(" · ", issues) : Lang.T("✔ Ready");
         }
 
         private static Color StatusColor(CsvInfo x)
@@ -910,18 +910,19 @@ namespace NPIC_CARD_APP
         /// <summary>One line on what Load Students would do with the file, or why it cannot.</summary>
         private static string Explain(CsvInfo x)
         {
-            if (x.Error != null) return "Cannot read the file: " + x.Error;
-            if (!x.HasHeader) return "The file is empty. Click Edit to add the header row: " + CsvStudentLoader.Header;
-            if (!x.HasId) return "The first row has no 'StudentId' column, so the students cannot be loaded. Click Edit to fix the header.";
-            if (x.Students == 0) return "Only the header row is there. Click Edit to add students (one per row).";
+            if (x.Error != null) return Lang.F("Cannot read the file: {0}", Lang.T(x.Error));
+            if (!x.HasHeader) return Lang.F("The file is empty. Click Edit to add the header row: {0}", CsvStudentLoader.Header);
+            if (!x.HasId) return Lang.T("The first row has no 'StudentId' column, so the students cannot be loaded. Click Edit to fix the header.");
+            if (x.Students == 0) return Lang.T("Only the header row is there. Click Edit to add students (one per row).");
 
             var notes = new List<string>();
-            if (x.MissingIds > 0) notes.Add(Plural(x.MissingIds, "row") + " without a StudentId (highlighted in the preview)");
-            if (x.DuplicateIds > 0) notes.Add(Plural(x.DuplicateIds, "StudentId") + " used more than once");
+            if (x.MissingIds > 0) notes.Add(Lang.F("{0} without a StudentId (highlighted in the preview)", Plural(x.MissingIds, "row")));
+            if (x.DuplicateIds > 0) notes.Add(Lang.F("{0} used more than once", Plural(x.DuplicateIds, "StudentId")));
             if (x.MissingColumns.Count > 0)
-                notes.Add("missing columns: " + string.Join(", ", x.MissingColumns.Take(4)) +
-                          (x.MissingColumns.Count > 4 ? " and " + (x.MissingColumns.Count - 4) + " more" : ""));
-            return notes.Count == 0 ? "Ready to load — press Enter or double-click." : "Can be loaded, but: " + string.Join("; ", notes) + ".";
+                notes.Add(Lang.F("missing columns: {0}", string.Join(", ", x.MissingColumns.Take(4)) +
+                          (x.MissingColumns.Count > 4 ? Lang.F(" and {0} more", x.MissingColumns.Count - 4) : "")));
+            return notes.Count == 0 ? Lang.T("Ready to load — press Enter or double-click.")
+                : Lang.F("Can be loaded, but: {0}.", string.Join("; ", notes));
         }
 
         // ===================== Helpers =====================
@@ -990,7 +991,8 @@ namespace NPIC_CARD_APP
                    ex is ArgumentException || ex is NotSupportedException;
         }
 
-        private static string Plural(int n, string word) { return n.ToString("N0") + " " + word + (n == 1 ? "" : "s"); }
+        /// <summary>"3 CSV files" in the app's language (the Khmer table has "{0} CSV files", "{0} rows"…).</summary>
+        private static string Plural(int n, string word) { return Lang.T(n.ToString("N0") + " " + word + (n == 1 ? "" : "s")); }
 
         private static string FormatSize(long bytes)
         {
@@ -1006,7 +1008,7 @@ namespace NPIC_CARD_APP
 
         private static void SetCueBanner(TextBox box, string text)
         {
-            SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, text);
+            SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, Lang.T(text));
         }
     }
 

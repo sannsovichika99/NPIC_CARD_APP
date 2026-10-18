@@ -44,8 +44,8 @@ namespace NPIC_CARD_APP
 
         private static readonly Font IdFont    = new Font("Segoe UI", 10f, FontStyle.Bold);
         private static readonly Font LatinFont = new Font("Segoe UI", 9f);
-        private static readonly Font SmallFont = new Font("Segoe UI", 8f);
-        private static readonly Font BadgeFont = new Font("Segoe UI", 7.5f, FontStyle.Bold);
+        private static readonly Font SmallFont = Theme.UiFont(8f);
+        private static readonly Font BadgeFont = Theme.UiFont(7.5f, false, FontStyle.Bold);
         private static readonly Font KhmerFont = new Font(CardFonts.KhmerSiemreap, 9f);
         private static readonly Font KhmerSmallFont = new Font(CardFonts.KhmerSiemreap, 7.5f);   // faculty / level are Khmer
 
@@ -155,7 +155,7 @@ namespace NPIC_CARD_APP
             _picPhoto.Paint += (s, e) =>
             {
                 if (_picPhoto.Image != null) return;
-                TextRenderer.DrawText(e.Graphics, _list.SelectedItems.Count == 0 ? "" : "No photo", LatinFont,
+                TextRenderer.DrawText(e.Graphics, _list.SelectedItems.Count == 0 ? "" : Lang.T("No photo"), Lang.Khmer ? KhmerFont : LatinFont,
                     _picPhoto.ClientRectangle, TextMuted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             };
 
@@ -483,7 +483,7 @@ namespace NPIC_CARD_APP
             else
             {
                 using (var ph = new SolidBrush(Placeholder)) g.FillRectangle(ph, photo);
-                TextRenderer.DrawText(g, photoPath == null ? "No photo" : "Loading…", SmallFont, photo,
+                TextRenderer.DrawText(g, Lang.T(photoPath == null ? "No photo" : "Loading…"), SmallFont, photo,
                     photoPath == null ? Danger : TextMuted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             }
             using (var pen = new Pen(Border)) g.DrawRectangle(pen, photo.X, photo.Y, photo.Width - 1, photo.Height - 1);
@@ -494,20 +494,20 @@ namespace NPIC_CARD_APP
             y = Line(g, s.StudentId, IdFont, main, x, y, w);
             y = Line(g, s.NameKh, KhmerFont, main, x, y - 2, w) - 2;
             y = Line(g, s.NameEn, LatinFont, main, x, y, w);
-            string meta = string.Join("  ·  ", new[] { s.Faculty, s.Level, string.IsNullOrEmpty(s.Generation) ? null : "Gen " + s.Generation }
+            string meta = string.Join("  ·  ", new[] { s.Faculty, s.Level, string.IsNullOrEmpty(s.Generation) ? null : Lang.T("Gen " + s.Generation) }
                 .Where(t => !string.IsNullOrEmpty(t)));
             y = Line(g, meta, KhmerSmallFont, TextMuted, x, y - 2, w);
 
             // Badges under the text (never past the tile edge)
             int bx = x, by = Math.Min(y + 2, tile.Bottom - 22);
             PrintCount c = Printed(s);
-            if (photoPath == null) bx = Badge(g, "NO PHOTO", Danger, bx, by);
-            if (c == null || (c.Front == 0 && c.Back == 0)) Badge(g, "NOT PRINTED", TextMuted, bx, by);
+            if (photoPath == null) bx = Badge(g, Lang.T("NO PHOTO"), Danger, bx, by);
+            if (c == null || (c.Front == 0 && c.Back == 0)) Badge(g, Lang.T("NOT PRINTED"), TextMuted, bx, by);
             else
             {
-                bx = Badge(g, c.Front > 0 ? "FRONT ✓" : "FRONT –", c.Front > 0 ? Success : Danger, bx, by);
-                bx = Badge(g, c.Back > 0 ? "BACK ✓" : "BACK –", c.Back > 0 ? Success : Danger, bx, by);
-                if (c.Front > 1 || c.Back > 1) Badge(g, "REPRINTED", Warning, bx, by);
+                bx = Badge(g, Lang.T(c.Front > 0 ? "FRONT ✓" : "FRONT –"), c.Front > 0 ? Success : Danger, bx, by);
+                bx = Badge(g, Lang.T(c.Back > 0 ? "BACK ✓" : "BACK –"), c.Back > 0 ? Success : Danger, bx, by);
+                if (c.Front > 1 || c.Back > 1) Badge(g, Lang.T("REPRINTED"), Warning, bx, by);
             }
         }
 
@@ -584,14 +584,14 @@ namespace NPIC_CARD_APP
             AddField("Generation", s.Generation);
             AddField("Valid until", s.ValidUntil);
             if (!string.IsNullOrEmpty(s.QrData)) AddField("QR data", s.QrData);
-            AddField("Photo", photo == null ? "Missing — expected " + s.StudentId + ".jpg / .png" : Path.GetFileName(photo),
+            AddField("Photo", photo == null ? Lang.F("Missing — expected {0}.jpg / .png", s.StudentId) : Path.GetFileName(photo),
                 photo == null ? Danger : TextMain);
 
             PrintCount c = Printed(s);
-            if (c == null || (c.Front == 0 && c.Back == 0)) AddField("Printed", "Not printed yet", TextMuted);
+            if (c == null || (c.Front == 0 && c.Back == 0)) AddField("Printed", Lang.T("Not printed yet"), TextMuted);
             else
                 AddField("Printed",
-                    string.Format("Front {0}×, Back {1}×\nLast {2:yyyy-MM-dd HH:mm}", c.Front, c.Back, c.Last),
+                    Lang.F("Front {0}×, Back {1}×\nLast {2:yyyy-MM-dd HH:mm}", c.Front, c.Back, c.Last),
                     c.Front > 0 && c.Back > 0 ? Success : Warning);
 
             _fields.ResumeLayout(true);
@@ -615,11 +615,11 @@ namespace NPIC_CARD_APP
             {
                 Text = label, AutoSize = true, ForeColor = TextMuted, Margin = new Padding(0, 3, 6, 3)
             }, 0, row);
-            _fields.Controls.Add(new Label
+            _fields.Controls.Add(Lang.Keep(new Label   // student data: shown as it is
             {
                 Text = string.IsNullOrEmpty(value) ? "—" : value, AutoSize = true, MaximumSize = new Size(190, 0),
                 ForeColor = color ?? TextMain, UseMnemonic = false, Margin = new Padding(0, 3, 0, 3)
-            }, 1, row);
+            }), 1, row);
         }
 
         /// <summary>Copy of the photo that does not keep the file locked (so Remove Background can still save it).</summary>
@@ -735,7 +735,7 @@ namespace NPIC_CARD_APP
 
         private static void SetCueBanner(TextBox box, string text)
         {
-            SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, text);
+            SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, Lang.T(text));
         }
 
         /// <summary>Double-buffered list so tiles don't flicker while thumbnails arrive.</summary>

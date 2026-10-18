@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Text;
 using System.Windows.Forms;
 using NPIC_CARD_APP.Rendering;
 
@@ -74,7 +75,7 @@ namespace NPIC_CARD_APP
             Button btnTemplate = ModalUi.Button("Save Excel Template…", PillKind.Secondary, (s, e) => Pick(ImportSource.ExcelTemplate));
             footer.Controls.Add(btnClose);
             footer.Controls.Add(btnTemplate);
-            new ToolTip().SetToolTip(btnTemplate,
+            new ToolTip().SetTip(btnTemplate,
                 "No list yet? Save an empty Excel file with the right columns, fill it in, then use From Excel…");
 
             // Docking runs in reverse add order: the fill control first, the edges last.
@@ -121,7 +122,7 @@ namespace NPIC_CARD_APP
     /// <summary>Large clickable tile of the Import Students page: icon badge, title, shortcut and a short description.</summary>
     internal sealed class ImportOptionCard : Control
     {
-        private static readonly Font DescriptionFont = new Font(Theme.Family, 9f);
+        private static readonly Font DescriptionFont = Theme.UiFont(9f);
         private const int Radius = 12;
 
         private readonly string _glyph, _shortcut, _description;
@@ -131,6 +132,8 @@ namespace NPIC_CARD_APP
         {
             SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.ResizeRedraw |
                      ControlStyles.UserPaint | ControlStyles.Selectable, true);
+            title = Lang.T(title);
+            description = Lang.T(description);
             Text = title;
             _glyph = glyph;
             _shortcut = shortcut;
@@ -203,8 +206,19 @@ namespace NPIC_CARD_APP
                 new RectangleF(textX, 16, Math.Max(10, right - chipW - 8 - textX), 24));
 
             var desc = Rectangle.Round(new RectangleF(textX, 44, Math.Max(10, right - textX), Math.Max(10, Height - 44 - 14)));
-            TextRenderer.DrawText(g, _description, DescriptionFont, desc, Theme.TextSoft,
-                TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.TextBoxControl);
+            if (Lang.Khmer && KhmerBreaks.Available)
+            {
+                // GDI+ wraps Khmer between words (at the zero-width spaces of KhmerBreaks); GDI would cut words anywhere.
+                using (var brush = new SolidBrush(Theme.TextSoft))
+                using (var sf = new StringFormat { Trimming = StringTrimming.EllipsisWord, FormatFlags = StringFormatFlags.LineLimit })
+                {
+                    g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                    g.DrawString(_description, DescriptionFont, brush, desc, sf);
+                }
+            }
+            else
+                TextRenderer.DrawText(g, _description, DescriptionFont, desc, Theme.TextSoft,
+                    TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.TextBoxControl);
         }
     }
 }

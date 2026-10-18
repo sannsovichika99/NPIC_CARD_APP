@@ -64,7 +64,7 @@ namespace NPIC_CARD_APP
             _txtDatabase = MakeText(settings.SqlDatabase, "Database name, e.g. NPIC");
 
             _cboAuth = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill, Margin = new Padding(0, 4, 0, 4) };
-            _cboAuth.Items.AddRange(new object[] { "Windows Authentication", "SQL Server Authentication" });
+            _cboAuth.Items.AddRange(new object[] { Lang.T("Windows Authentication"), Lang.T("SQL Server Authentication") });
             _cboAuth.SelectedIndex = settings.SqlWindowsAuth ? 0 : 1;
             _cboAuth.SelectedIndexChanged += (s, e) => UpdateAuthFields();
 
@@ -268,7 +268,7 @@ namespace NPIC_CARD_APP
         private static TextBox MakeText(string text, string cue)
         {
             var box = new TextBox { Dock = DockStyle.Fill, Text = text ?? "", Margin = new Padding(0, 4, 0, 4) };
-            if (cue.Length > 0) box.HandleCreated += (s, e) => SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, cue);
+            if (cue.Length > 0) box.HandleCreated += (s, e) => SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, Lang.T(cue));
             return box;
         }
 

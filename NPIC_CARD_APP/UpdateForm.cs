@@ -24,11 +24,11 @@ namespace NPIC_CARD_APP
         private enum State { Checking, UpToDate, Available, Failed, Downloading }
 
         /// <summary>Shown under an error (Markdown, written with <see cref="MarkdownWriter"/>).</summary>
-        private static readonly string FailureHelp =
+        private static readonly string FailureHelp = Lang.T(
             "### What to do\n\n" +
             "Card Studio gets new versions from its GitHub releases: " + UpdateService.ReleasesPage + "\n\n" +
             "- Check that this PC is connected to the internet and that github.com is not blocked, then click **Check Again**.\n" +
-            "- Or open that address in a browser, download **CardStudio-Setup.exe** from the latest release and run it.";
+            "- Or open that address in a browser, download **CardStudio-Setup.exe** from the latest release and run it.");
 
         private readonly AppSettings _settings;
         private readonly RichTextBox _notes;
@@ -135,9 +135,9 @@ namespace NPIC_CARD_APP
             CancelButton = _btnClose;
 
             var tip = new ToolTip();
-            tip.SetToolTip(_btnCheck, "Look for a newer release on GitHub");
-            tip.SetToolTip(_btnInstall, "Download the new version, check it, and update Card Studio. Settings, print history and card images are kept.");
-            tip.SetToolTip(_btnSkip, "Don't announce this version again when Card Studio starts. Check Again still shows it.");
+            tip.SetTip(_btnCheck, "Look for a newer release on GitHub");
+            tip.SetTip(_btnInstall, "Download the new version, check it, and update Card Studio. Settings, print history and card images are kept.");
+            tip.SetTip(_btnSkip, "Don't announce this version again when Card Studio starts. Check Again still shows it.");
 
             if (_found != null) ShowAvailable(_found);
             else SetState(State.Checking, "Checking for updates…", Theme.TextMain);
@@ -214,18 +214,18 @@ namespace NPIC_CARD_APP
         private void ShowUpToDate(UpdateInfo latest)
         {
             SetState(State.UpToDate, "✔  Card Studio is up to date", Theme.Success);
-            _lblVersions.Text = "Installed " + UpdateService.CurrentVersionText + "   ·   Latest release " + latest.VersionText +
+            _lblVersions.Text = Lang.F("Installed {0}   ·   Latest release {1}", UpdateService.CurrentVersionText, latest.VersionText) +
                                 (latest.ReleaseDate.HasValue ? "  (" + latest.ReleaseDate.Value.ToString("d MMM yyyy") + ")" : "");
             ShowReleaseNotes(latest);
-            ShowStatus(string.Format("Checked {0:HH:mm} — you have the newest version.", DateTime.Now), Theme.Success);
+            ShowStatus(Lang.F("Checked {0:HH:mm} — you have the newest version.", DateTime.Now), Theme.Success);
         }
 
         private void ShowAvailable(UpdateInfo info)
         {
             _found = info;
             SetState(State.Available, "Card Studio " + info.VersionText + " is available", Theme.Accent);
-            _lblVersions.Text = "Installed " + UpdateService.CurrentVersionText + "   →   New " + info.VersionText +
-                                (info.ReleaseDate.HasValue ? "   ·   Released " + info.ReleaseDate.Value.ToString("d MMM yyyy") : "") +
+            _lblVersions.Text = Lang.F("Installed {0}   →   New {1}", UpdateService.CurrentVersionText, info.VersionText) +
+                                (info.ReleaseDate.HasValue ? Lang.F("   ·   Released {0}", info.ReleaseDate.Value.ToString("d MMM yyyy")) : "") +
                                 (info.Size > 0 ? "   ·   " + Megabytes(info.Size) : "");
             ShowReleaseNotes(info);
 
@@ -367,7 +367,7 @@ namespace NPIC_CARD_APP
             for (Exception inner = ex.InnerException; inner != null; inner = inner.InnerException)
                 if (inner.Message.Length > 0 && !message.Contains(inner.Message))
                     message += "\n" + inner.Message;
-            return message;
+            return Lang.T(message);
         }
 
         private static string FirstLine(string text)

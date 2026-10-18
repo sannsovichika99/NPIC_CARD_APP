@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
@@ -95,16 +96,35 @@ namespace NPIC_CARD_APP
 
         public const int ShadowPad = 12;   // space every card reserves around itself for its shadow
 
-        // ---- Fonts (chrome text is Latin: Segoe UI; data text keeps CardFonts.UI for Khmer) ----
-        public const string Family = "Segoe UI";
-        public static readonly Font Nav      = new Font(Family, 9.75f);
-        public static readonly Font NavBold  = new Font(Family, 9.75f, FontStyle.Bold);
-        public static readonly Font Small    = new Font(Family, 8.25f);
-        public static readonly Font SmallCaps = new Font(Family, 7.5f, FontStyle.Bold);
-        public static readonly Font Button   = new Font("Segoe UI Semibold", 9f);
-        public static readonly Font CardTitle = new Font("Segoe UI Semibold", 11.25f);
-        public static readonly Font Greeting = new Font(Family, 18f);
-        public static readonly Font Brand    = new Font("Segoe UI Semibold", 10.5f);
+        // ---- Fonts ----
+        // English: chrome text is Latin (Segoe UI); data text keeps CardFonts.UI for Khmer.
+        // Khmer (Lang.Khmer): the Khmer card font Khmer OS Siemreap (else Khmer UI), which also has Latin letters. Segoe UI has
+        // no Khmer letters, so Windows would swap in a wider font that cuts labels off. Khmer OS Siemreap draws larger than
+        // Segoe UI at the same size, hence the slightly smaller Khmer sizes (KhmerScale).
+        private const float KhmerScale = 0.94f;
+
+        /// <summary>Family of the app's own text: Segoe UI, or the Khmer UI font when the app is in Khmer.</summary>
+        public static readonly string Family = Lang.Khmer ? CardFonts.KhmerSiemreap : "Segoe UI";
+
+        /// <summary>
+        /// Font for the app's own text in the language in use. <paramref name="semibold"/> = Segoe UI Semibold in English,
+        /// bold in Khmer (the Khmer fonts have no semibold).
+        /// </summary>
+        public static Font UiFont(float size, bool semibold = false, FontStyle style = FontStyle.Regular)
+        {
+            if (Lang.Khmer)
+                return new Font(Family, (float)Math.Round(size * KhmerScale * 4) / 4f, semibold ? style | FontStyle.Bold : style);
+            return new Font(semibold ? "Segoe UI Semibold" : "Segoe UI", size, style);
+        }
+
+        public static readonly Font Nav      = UiFont(9.75f);
+        public static readonly Font NavBold  = UiFont(9.75f, false, FontStyle.Bold);
+        public static readonly Font Small    = UiFont(8.25f);
+        public static readonly Font SmallCaps = UiFont(Lang.Khmer ? 8f : 7.5f, false, FontStyle.Bold);
+        public static readonly Font Button   = UiFont(9f, true);
+        public static readonly Font CardTitle = UiFont(11.25f, true);
+        public static readonly Font Greeting = UiFont(18f);
+        public static readonly Font Brand    = UiFont(10.5f, true);
 
         private static string _iconFamily;
         private static bool _iconResolved;
@@ -383,18 +403,22 @@ namespace NPIC_CARD_APP
     /// <summary>Gradient KPI tile: title, big value, caption and a large line icon (Total Views / Order / Revenue in the sample).</summary>
     internal sealed class StatCard : Control
     {
-        private static readonly Font TitleFont = new Font(Theme.Family, 9.75f);
-        private static readonly Font ValueFont = new Font("Segoe UI Semibold", 20.25f);
-        private static readonly Font CaptionFont = new Font(Theme.Family, 8.25f);
+        private static readonly Font TitleFont = Theme.UiFont(9.75f);
+        private static readonly Font ValueFont = new Font("Segoe UI Semibold", 20.25f);   // digits only
+        private static readonly Font CaptionFont = Theme.UiFont(8.25f);
 
-        private string _value = "0", _caption = "";
-        public string Title { get; set; }
+        private string _value = "0", _caption = "", _title;
+        public string Title { get { return _title; } set { _title = Lang.T(value); Invalidate(); } }
         public string Glyph { get; set; }
         public Color ColorA { get; set; }
         public Color ColorB { get; set; }
 
         public string Value { get { return _value; } set { if (_value != value) { _value = value; Invalidate(); } } }
-        public string Caption { get { return _caption; } set { if (_caption != value) { _caption = value; Invalidate(); } } }
+        public string Caption
+        {
+            get { return _caption; }
+            set { value = Lang.T(value); if (_caption != value) { _caption = value; Invalidate(); } }
+        }
 
         public StatCard(string title, string glyph, Color a, Color b)
         {
@@ -459,6 +483,9 @@ namespace NPIC_CARD_APP
 
         public bool Active { get { return _active; } set { _active = value; Invalidate(); } }
         public string Badge { get { return _badge; } set { if (_badge != value) { _badge = value; Invalidate(); } } }
+
+        /// <summary>Label of the item, in the app's language.</summary>
+        public override string Text { get { return base.Text; } set { base.Text = Lang.T(value); Invalidate(); } }
 
         public NavItem(string text, string glyph, EventHandler onClick)
         {
@@ -526,7 +553,7 @@ namespace NPIC_CARD_APP
             SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.OptimizedDoubleBuffer |
                      ControlStyles.AllPaintingInWmPaint | ControlStyles.ResizeRedraw | ControlStyles.UserPaint |
                      ControlStyles.Selectable, true);
-            _items = items;
+            _items = items.Select(Lang.T).ToArray();
             BackColor = Color.Transparent;
             Font = Theme.Nav;
             Cursor = Cursors.Hand;
@@ -628,6 +655,9 @@ namespace NPIC_CARD_APP
 
         /// <summary>Toggle look: a checked Ghost / Secondary pill stays filled with the soft accent and outlined.</summary>
         public bool Checked { get { return _checked; } set { if (_checked == value) return; _checked = value; Invalidate(); } }
+
+        /// <summary>Caption, in the app's language.</summary>
+        public override string Text { get { return base.Text; } set { base.Text = Lang.T(value); } }
 
         public PillButton(PillKind kind)
         {
@@ -746,7 +776,10 @@ namespace NPIC_CARD_APP
     {
         private Image _image;
         private bool _highlight, _showGrid;
-        public string EmptyText { get; set; }
+        private string _emptyText;
+
+        /// <summary>Shown while there is no image, in the app's language.</summary>
+        public string EmptyText { get { return _emptyText; } set { _emptyText = Lang.T(value); Invalidate(); } }
 
         /// <summary>Millimetre layout grid over the card (screen only, never printed).</summary>
         public bool ShowGrid { get { return _showGrid; } set { if (_showGrid == value) return; _showGrid = value; Invalidate(); } }
@@ -816,7 +849,7 @@ namespace NPIC_CARD_APP
         {
             SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.ResizeRedraw |
                      ControlStyles.UserPaint, true);
-            Text = title; _subtitle = subtitle; _logo = logo;
+            Text = title; _subtitle = Lang.T(subtitle); _logo = logo;
             BackColor = Theme.Surface;
             Dock = DockStyle.Top;
             Height = 96;
@@ -869,7 +902,7 @@ namespace NPIC_CARD_APP
         {
             SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.ResizeRedraw |
                      ControlStyles.UserPaint, true);
-            Text = title;
+            Text = Lang.T(title);
             Dock = DockStyle.Top;
             Height = 40;
             BackColor = Theme.Surface;

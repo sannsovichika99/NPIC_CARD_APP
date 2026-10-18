@@ -170,9 +170,9 @@ namespace NPIC_CARD_APP
             CancelButton = _btnClose;
 
             var tip = new ToolTip();
-            tip.SetToolTip(_btnConnect, "Download the sheet and preview its students here. Nothing changes until you click Import.");
-            tip.SetToolTip(_btnOpen, "Open the sheet in the browser, e.g. to fix its sharing or edit the students");
-            tip.SetToolTip(_btnImport, "Replace the student list of the main window with the students shown here");
+            tip.SetTip(_btnConnect, "Download the sheet and preview its students here. Nothing changes until you click Import.");
+            tip.SetTip(_btnOpen, "Open the sheet in the browser, e.g. to fix its sharing or edit the students");
+            tip.SetTip(_btnImport, "Replace the student list of the main window with the students shown here");
 
             ShowStatus("Not connected.", TextMuted);
             UpdateButtons();
@@ -241,7 +241,7 @@ namespace NPIC_CARD_APP
             }
             catch (Exception ex)
             {
-                ShowStatus(ex.Message.Replace("\n\n", "  ").Replace("\n", "  "), Danger);
+                ShowStatus(Lang.T(ex.Message).Replace("\n\n", "  ").Replace("\n", "  "), Danger);
             }
             finally
             {
@@ -273,9 +273,9 @@ namespace NPIC_CARD_APP
             }
 
             var problems = new List<string>();
-            if (missing > 0) problems.Add(missing + " without StudentId (red)");
-            if (duplicates > 0) problems.Add(duplicates + " duplicate StudentId");
-            ShowStatus(string.Format("✔  Connected {0:HH:mm} — {1} student(s){2}",
+            if (missing > 0) problems.Add(Lang.F("{0} without StudentId (red)", missing));
+            if (duplicates > 0) problems.Add(Lang.F("{0} duplicate StudentId", duplicates));
+            ShowStatus(Lang.F("✔  Connected {0:HH:mm} — {1} student(s){2}",
                     DateTime.Now, students.Count, problems.Count == 0 ? "" : "  ·  " + string.Join("  ·  ", problems)),
                 problems.Count == 0 ? Success : Warning);
         }
@@ -298,7 +298,7 @@ namespace NPIC_CARD_APP
         {
             if (e.RowIndex < 0 || e.ColumnIndex != 0 || _preview == null || e.RowIndex >= _preview.Count) return;
             if (!string.IsNullOrEmpty(_preview[e.RowIndex].StudentId)) return;
-            e.Value = "(missing)";
+            e.Value = Lang.T("(missing)");
             e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = Danger;
             e.FormattingApplied = true;
         }

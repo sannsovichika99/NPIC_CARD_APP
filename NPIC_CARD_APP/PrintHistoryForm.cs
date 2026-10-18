@@ -152,12 +152,12 @@ namespace NPIC_CARD_APP
             Controls.Add(_lblSummary);
 
             var tip = new ToolTip();
-            tip.SetToolTip(_dtFrom, "Untick to show prints from any date");
-            tip.SetToolTip(_dtTo, "Untick to show prints up to today");
-            tip.SetToolTip(_cboView, "Every print = one row per card side sent to the printer.\n" +
+            tip.SetTip(_dtFrom, "Untick to show prints from any date");
+            tip.SetTip(_dtTo, "Untick to show prints up to today");
+            tip.SetTip(_cboView, "Every print = one row per card side sent to the printer.\n" +
                                      "Per student = one row per student with front / back counts.");
-            tip.SetToolTip(_btnDelete, "Remove the selected entries from the history (Del). The cards are not affected.");
-            tip.SetToolTip(_btnExport, "Save the rows shown now as a CSV file for Excel");
+            tip.SetTip(_btnDelete, "Remove the selected entries from the history (Del). The cards are not affected.");
+            tip.SetTip(_btnExport, "Save the rows shown now as a CSV file for Excel");
         }
 
         protected override void OnShown(EventArgs e)
@@ -231,11 +231,11 @@ namespace NPIC_CARD_APP
             int fronts = shown.Count(r => r.IsFront), backs = shown.Count(r => r.IsBack);
             string range = shown.Count == 0 ? "" : string.Format("   ·   {0:yyyy-MM-dd} → {1:yyyy-MM-dd}",
                 shown[shown.Count - 1].PrintedAt, shown[0].PrintedAt);
-            _lblSummary.Text = string.Format(
+            _lblSummary.Text = Lang.F(
                 "{0} card side(s) printed for {1} student(s)  ·  {2} front, {3} back{4}{5}\n{6}",
                 shown.Count, students, fronts, backs, range,
-                shown.Count == _all.Count ? "" : string.Format("   ·   filtered from {0} total", _all.Count),
-                "Double-click a row to select the student in the main list.   Saved in " + PrintHistory.FilePath);
+                shown.Count == _all.Count ? "" : Lang.F("   ·   filtered from {0} total", _all.Count),
+                Lang.F("Double-click a row to select the student in the main list.   Saved in {0}", PrintHistory.FilePath));
 
             _lblEmpty.Text = _all.Count == 0
                 ? "No cards printed yet.\n\nEvery card side sent with  Print Selected  is recorded here."
@@ -251,7 +251,7 @@ namespace NPIC_CARD_APP
             AddColumn("Name (KH)", 170);
             AddColumn("Name (EN)", 170);
             AddColumn("Faculty", 150);
-            AddColumn("Gen.", 50);
+            AddColumn("Gen.", Lang.Khmer ? 64 : 50);   // the Khmer word is wider
             AddColumn("Side", 60);
             AddColumn("Slot", 45, typeof(int));
             AddColumn("Printer", 150);
@@ -260,7 +260,7 @@ namespace NPIC_CARD_APP
             foreach (PrintRecord r in shown)
             {
                 int i = _grid.Rows.Add(r.PrintedAt, r.StudentId, r.NameKh, r.NameEn, r.Faculty, r.Generation,
-                    r.IsFront ? "Front" : r.IsBack ? "Back" : r.Side, r.Slot, r.Printer, r.User);
+                    r.IsFront ? Lang.T("Front") : r.IsBack ? Lang.T("Back") : r.Side, r.Slot, r.Printer, r.User);
                 _grid.Rows[i].Tag = r;
                 _grid.Rows[i].Cells[6].Style.ForeColor = r.IsFront ? Accent : Success;
             }
@@ -304,7 +304,7 @@ namespace NPIC_CARD_APP
                 else { status = "Front missing"; tone = Danger; }
 
                 int i = _grid.Rows.Add(g.Latest.StudentId, g.Latest.NameKh, g.Latest.NameEn, g.Latest.Faculty,
-                    g.Front, g.Back, status, g.First, g.Last);
+                    g.Front, g.Back, Lang.T(status), g.First, g.Last);
                 _grid.Rows[i].Tag = g.Latest;
                 _grid.Rows[i].Cells[6].Style.ForeColor = tone;
                 _grid.Rows[i].Cells[6].Style.SelectionForeColor = tone;
@@ -477,7 +477,7 @@ namespace NPIC_CARD_APP
 
         private static void SetCueBanner(TextBox box, string text)
         {
-            SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, text);
+            SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, Lang.T(text));
         }
     }
 }

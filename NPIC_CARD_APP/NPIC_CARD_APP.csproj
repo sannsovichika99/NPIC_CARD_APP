@@ -50,6 +50,20 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="Localization\Lang.cs" />
+    <Compile Include="Localization\Khmer.cs" />
+    <Compile Include="Localization\LocalizedProperties.cs" />
+    <Compile Include="Localization\KhmerBreaks.cs" />
+    <Compile Include="Localization\Khmer.Main.cs" />
+    <Compile Include="Localization\Khmer.Import.cs" />
+    <Compile Include="Localization\Khmer.Students.cs" />
+    <Compile Include="Localization\Khmer.Photos.cs" />
+    <Compile Include="Localization\Khmer.Cards.cs" />
+    <Compile Include="Localization\Khmer.Designer.cs" />
+    <Compile Include="Localization\Khmer.Printing.cs" />
+    <Compile Include="Localization\Khmer.Settings.cs" />
+    <Compile Include="Localization\Khmer.Activation.cs" />
+    <Compile Include="Localization\Khmer.Services.cs" />
     <Compile Include="..\Version.cs">
       <Link>Version.cs</Link>
     </Compile>

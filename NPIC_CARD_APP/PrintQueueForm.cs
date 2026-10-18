@@ -139,7 +139,7 @@ namespace NPIC_CARD_APP
             {
                 var item = new ListViewItem(job.JobId.ToString()) { Tag = job.JobId };
                 item.SubItems.Add(job.Document);
-                item.SubItems.Add(job.StatusText);
+                item.SubItems.Add(Lang.T(job.StatusText));
                 item.SubItems.Add(job.TotalPages > 0 ? job.PagesPrinted + " / " + job.TotalPages : "");
                 item.SubItems.Add(FormatSize(job.SizeBytes));
                 item.SubItems.Add(job.Submitted.HasValue ? job.Submitted.Value.ToString("g") : "");
@@ -161,7 +161,7 @@ namespace NPIC_CARD_APP
             if (problems.Count > 0)
             {
                 _lblInfo.ForeColor = Theme.Danger;
-                _lblInfo.Text = string.Join("  ", problems) + "\n" + summary;
+                _lblInfo.Text = string.Join("  ", problems.Select(Lang.T)) + "\n" + Lang.T(summary);
             }
             else
             {

@@ -97,10 +97,10 @@ namespace NPIC_CARD_APP
             toolbar.Controls.Add(MakeButton("Open Settings Folder", (s, e) => OpenInExplorer(AppSettings.FilePath)));
 
             var tip = new ToolTip();
-            tip.SetToolTip(btnExport, "Save all settings to a file, to back them up or copy them to another PC.\n" +
+            tip.SetTip(btnExport, "Save all settings to a file, to back them up or copy them to another PC.\n" +
                                       "The API token and SQL password are not included.");
-            tip.SetToolTip(btnSql, "Change or test the SQL Server connection, or load students from the database (Ctrl+D in the main window).");
-            tip.SetToolTip(btnImport, "Replace all settings with the ones in an exported file.\n" +
+            tip.SetTip(btnSql, "Change or test the SQL Server connection, or load students from the database (Ctrl+D in the main window).");
+            tip.SetTip(btnImport, "Replace all settings with the ones in an exported file.\n" +
                                       "The current settings are backed up first.");
 
             // ---- List ----
@@ -207,7 +207,7 @@ namespace NPIC_CARD_APP
                 row.Tag = x;
 
                 string tip = x.Note ?? "";
-                if (x.OpenPath != null) tip += (tip.Length > 0 ? "\n" : "") + "Double-click to open in Explorer.";
+                if (x.OpenPath != null) tip += (tip.Length > 0 ? "\n" : "") + Lang.T("Double-click to open in Explorer.");
                 row.Cells[1].ToolTipText = row.Cells[2].ToolTipText = tip;
 
                 if (x.Warn)
@@ -222,10 +222,10 @@ namespace NPIC_CARD_APP
             _lblEmpty.Visible = shown.Count == 0;
             int warnings = _all.Count(x => x.Warn);
             _lblSummary.Text =
-                _all.Count + " settings" + (q.Length > 0 ? "  ·  " + shown.Count + " shown" : "") +
-                (warnings > 0 ? "  ·  " + warnings + " need attention (orange)" : "  ·  nothing needs attention") +
+                Lang.F("{0} settings", _all.Count) + (q.Length > 0 ? Lang.F("  ·  {0} shown", shown.Count) : "") +
+                (warnings > 0 ? Lang.F("  ·  {0} need attention (orange)", warnings) : Lang.T("  ·  nothing needs attention")) +
                 Environment.NewLine +
-                "Read-only. Change settings in the main window.  Settings file: " + AppSettings.FilePath;
+                Lang.F("Read-only. Change settings in the main window.  Settings file: {0}", AppSettings.FilePath);
             _lblSummary.ForeColor = warnings > 0 ? Warning : TextMuted;
         }
 
@@ -398,7 +398,11 @@ namespace NPIC_CARD_APP
         {
             var list = new List<Entry>();
             Action<string, string, string, bool, string, string> add = (section, name, value, warn, note, open) =>
-                list.Add(new Entry { Section = section, Name = name, Value = value, Warn = warn, Note = note, OpenPath = open });
+                list.Add(new Entry
+                {
+                    // In the app's language; values that are data (paths, names) have no table entry and stay as they are.
+                    Section = Lang.T(section), Name = Lang.T(name), Value = Lang.T(value), Warn = warn, Note = Lang.T(note), OpenPath = open
+                });
 
             // ---- Printer ----
             const string printer = "Printer";
@@ -437,6 +441,9 @@ namespace NPIC_CARD_APP
                 "Switch with Settings & Help… → Dark Mode / Light Mode in the sidebar (restarts the app). Printed cards are not affected.", null);
             add("Appearance", "Primary colour", AccentPalette.Describe(s.AccentColor), false,
                 "Change it with Settings & Help… → Theme Color… in the sidebar (restarts the app). Printed cards are not affected.", null);
+            add("Appearance", "Language", Lang.IsKhmerCode(s.UiLanguage) ? "Khmer" : "English", false,
+                "Switch with EN / KH in the sidebar, Settings & Help… → Language or Ctrl+Shift+L (restarts the app). " +
+                "Printed cards are not affected.", null);
 
             // ---- Files & folders ----
             const string files = "Files & folders";
@@ -620,7 +627,7 @@ namespace NPIC_CARD_APP
 
         private static void SetCueBanner(TextBox box, string text)
         {
-            SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, text);
+            SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, Lang.T(text));
         }
     }
 }

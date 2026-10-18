@@ -46,6 +46,11 @@ namespace NPIC_CARD_APP.Services
         public string AccentColor { get; set; }
         /// <summary>Language of the About &amp; User Guide page: false = English, true = Khmer.</summary>
         public bool HelpKhmer { get; set; }
+        /// <summary>
+        /// Language of the app windows: "en" (or empty) = English, "km" = Khmer (<see cref="Lang"/>). Never affects the printed
+        /// cards. Read once at start-up, like <see cref="DarkMode"/>: switching restarts the app.
+        /// </summary>
+        public string UiLanguage { get; set; }
         public string DevModeBase64 { get; set; }   // Epson driver settings (Paper Source / Paper Type)
         public string PhotoFolder { get; set; }
         /// <summary>
@@ -256,6 +261,7 @@ namespace NPIC_CARD_APP.Services
         public AppSettings()
         {
             PrinterName = "";
+            UiLanguage = "";
             CardPrinterKeywords = "L8050;L8058;L18050;Card;PVC";
             ShowAllPrinters = false;
             DevModeBase64 = "";

@@ -56,11 +56,18 @@ namespace NPIC_CARD_APP
 
         // ===================== Public look =====================
 
-        /// <summary>Muted second line under the title. Null = title only.</summary>
+        /// <summary>Title in the header (and on the taskbar), in the app's language (<see cref="Lang"/>).</summary>
+        public override string Text
+        {
+            get { return base.Text; }
+            set { base.Text = Lang.T(value); }
+        }
+
+        /// <summary>Muted second line under the title, in the app's language. Null = title only.</summary>
         public string Subtitle
         {
             get { return _subtitle; }
-            set { _subtitle = value; InvalidateHeader(); }
+            set { _subtitle = Lang.T(value); InvalidateHeader(); }
         }
 
         /// <summary>Icon of the header badge (a Theme.Ico* glyph).</summary>
@@ -163,7 +170,7 @@ namespace NPIC_CARD_APP
                 x -= 4;
             }
             _btnMax.Glyph = WindowState == FormWindowState.Maximized ? CaptionGlyph.Restore : CaptionGlyph.Maximize;
-            _btnMax.AccessibleName = WindowState == FormWindowState.Maximized ? "Restore" : "Maximize";
+            _btnMax.AccessibleName = Lang.T(WindowState == FormWindowState.Maximized ? "Restore" : "Maximize");
             _captionLeft = x;
         }
 
@@ -271,6 +278,7 @@ namespace NPIC_CARD_APP
         {
             base.OnHandleCreated(e);
             Native.SetCorners(Handle, true);
+            Lang.Apply(this);           // Khmer only: every label, button, column and menu, also the ones added later
             DarkControls.Apply(this);   // before the child handles exist, so restyling recreates nothing
             SlimScroll.Apply(this);
             // Re-run WM_NCCALCSIZE so the top frame becomes client area (the header).
@@ -486,7 +494,7 @@ namespace NPIC_CARD_APP
 
         public MessageDialog(string text, string caption, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxDefaultButton defaultButton)
         {
-            _message = text ?? "";
+            _message = Lang.T(text ?? "");   // fixed messages and paragraphs in Khmer; names, paths and numbers stay
             _icon = icon;
             Text = string.IsNullOrEmpty(caption) ? "Card Studio" : caption;
             Resizable = false;
@@ -497,7 +505,9 @@ namespace NPIC_CARD_APP
             var label = new Label
             {
                 AutoSize = true, MaximumSize = new Size(MaxTextWidth, 0), Text = _message, Font = MessageFont,
-                ForeColor = Theme.TextMain, BackColor = Theme.Surface, UseMnemonic = false, Margin = new Padding(0)
+                ForeColor = Theme.TextMain, BackColor = Theme.Surface, UseMnemonic = false, Margin = new Padding(0),
+                // Measured below the way it will be drawn: Khmer wraps between words only with GDI+ (KhmerBreaks).
+                UseCompatibleTextRendering = Lang.Khmer && KhmerBreaks.Available
             };
             Size textSize = label.PreferredSize;
             int maxTextHeight = Math.Max(160, Screen.FromPoint(Cursor.Position).WorkingArea.Height / 2);
@@ -592,13 +602,13 @@ namespace NPIC_CARD_APP
         {
             switch (r)
             {
-                case DialogResult.Cancel: return "Cancel";
-                case DialogResult.Abort: return "Abort";
-                case DialogResult.Retry: return "Retry";
-                case DialogResult.Ignore: return "Ignore";
-                case DialogResult.Yes: return "Yes";
-                case DialogResult.No: return "No";
-                default: return "OK";
+                case DialogResult.Cancel: return Lang.T("Cancel");
+                case DialogResult.Abort: return Lang.T("Abort");
+                case DialogResult.Retry: return Lang.T("Retry");
+                case DialogResult.Ignore: return Lang.T("Ignore");
+                case DialogResult.Yes: return Lang.T("Yes");
+                case DialogResult.No: return Lang.T("No");
+                default: return Lang.T("OK");
             }
         }
 

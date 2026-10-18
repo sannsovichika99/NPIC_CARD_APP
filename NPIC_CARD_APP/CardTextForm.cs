@@ -24,6 +24,7 @@ namespace NPIC_CARD_APP
 
         public CardTextForm(CardText current)
         {
+            LocalizedProperties.Register(typeof(CardText));   // Khmer only: property names and help in Khmer
             _edit = Copy(current ?? new CardText());
 
             Text = "Card Text";
@@ -70,7 +71,7 @@ namespace NPIC_CARD_APP
             footer.Controls.Add(save);
             footer.Controls.Add(cancel);
             footer.Controls.Add(reset);
-            new ToolTip().SetToolTip(reset, "Put back the original NPIC texts (nothing is saved until you click Save)");
+            new ToolTip().SetTip(reset, "Put back the original NPIC texts (nothing is saved until you click Save)");
 
             Controls.Add(gridHost);
             Controls.Add(footer);
@@ -152,7 +153,7 @@ namespace NPIC_CARD_APP
             string current = CardText.ResolveAppPath(value as string);   // "Assets\npic_png.png" -> full path
             using (var dlg = new OpenFileDialog
             {
-                Title = Title,
+                Title = Lang.T(Title),
                 Filter = "Images (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp"
             })
             {

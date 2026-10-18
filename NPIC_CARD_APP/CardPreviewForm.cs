@@ -76,7 +76,7 @@ namespace NPIC_CARD_APP
             _index = _students.Count == 0 ? 0 : Math.Max(0, Math.Min(startIndex, _students.Count - 1));
             _side = _students.Count == 0 ? PreviewSide.Back : side;
             _footerFont = new Font(CardFonts.UI, 11f);
-            _buttonFont = new Font("Segoe UI Semibold", 10f);
+            _buttonFont = Theme.UiFont(10f, true);
 
             AddButton(ToolAction.Front, "Front   F");
             AddButton(ToolAction.Back, "Back   B");
@@ -242,7 +242,7 @@ namespace NPIC_CARD_APP
         // ===================== Toolbar =====================
         private void AddButton(ToolAction action, string text)
         {
-            _buttons.Add(new ToolButton { Action = action, Text = text });
+            _buttons.Add(new ToolButton { Action = action, Text = Lang.T(text) });
         }
 
         /// <summary>Side and grid buttons centred at the top of the screen; Close on the right edge.</summary>
@@ -342,7 +342,7 @@ namespace NPIC_CARD_APP
             }
             else if (_error != null)
             {
-                TextRenderer.DrawText(g, "Preview error: " + _error, _footerFont, area, Color.Salmon,
+                TextRenderer.DrawText(g, Lang.F("Preview error: {0}", _error), _footerFont, area, Color.Salmon,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak);
             }
 
@@ -409,7 +409,7 @@ namespace NPIC_CARD_APP
             string info;
             if (_students.Count == 0)
             {
-                info = "No students loaded — back side only";
+                info = Lang.T("No students loaded — back side only");
             }
             else
             {
@@ -417,8 +417,9 @@ namespace NPIC_CARD_APP
                 info = string.Format("{0} / {1}    {2}    {3}", _index + 1, _students.Count, s.StudentId, s.NameKh);
             }
 
-            string side = _side == PreviewSide.Both ? "Front + Back" : _side == PreviewSide.Front ? "Front" : "Back";
-            string help = side + (_showGrid ? " · grid" : "") + "    |    Space: switch side    G: grid    ← →: student    Esc: close";
+            string side = Lang.T(_side == PreviewSide.Both ? "Front + Back" : _side == PreviewSide.Front ? "Front" : "Back");
+            string help = side + (_showGrid ? Lang.T(" · grid") : "") +
+                          Lang.T("    |    Space: switch side    G: grid    ← →: student    Esc: close");
 
             var rect = new Rectangle(Edge, ClientSize.Height - Edge / 2 - FooterHeight, ClientSize.Width - 2 * Edge, FooterHeight);
             TextRenderer.DrawText(g, info, _footerFont, rect, Color.White,

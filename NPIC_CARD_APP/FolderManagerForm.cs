@@ -99,10 +99,10 @@ namespace NPIC_CARD_APP
             toolbar.Controls.Add(ModalUi.ToolButton("Refresh", (s, e) => Reload()));
 
             var tip = new ToolTip();
-            tip.SetToolTip(_btnOpen, "Open the selected folder in Windows Explorer (Enter or double-click)");
-            tip.SetToolTip(_btnChange, "Choose another folder for the selected row");
-            tip.SetToolTip(_btnCreate, "Create the selected folder if it does not exist");
-            tip.SetToolTip(_btnCopy, "Copy the folder path to the clipboard (Ctrl+C)");
+            tip.SetTip(_btnOpen, "Open the selected folder in Windows Explorer (Enter or double-click)");
+            tip.SetTip(_btnChange, "Choose another folder for the selected row");
+            tip.SetTip(_btnCreate, "Create the selected folder if it does not exist");
+            tip.SetTip(_btnCopy, "Copy the folder path to the clipboard (Ctrl+C)");
 
             // ---- List ----
             _grid = new DataGridView
@@ -231,7 +231,7 @@ namespace NPIC_CARD_APP
             foreach (Entry x in shown)
             {
                 // Name the group on its first row only, so the list reads as groups.
-                int i = _grid.Rows.Add(x.Group == lastGroup ? "" : x.Group, x.Name, Or(x.Path, "(not set)"),
+                int i = _grid.Rows.Add(x.Group == lastGroup ? "" : x.Group, x.Name, Or(x.Path, Lang.T("(not set)")),
                     StateText(x), x.Contents);
                 lastGroup = x.Group;
                 DataGridViewRow row = _grid.Rows[i];
@@ -282,11 +282,11 @@ namespace NPIC_CARD_APP
             _btnCopy.Enabled = x != null && !string.IsNullOrEmpty(x.Path);
 
             int warnings = _all.Count(e => e.Warn);
-            string summary = _all.Count + " folders" +
-                (warnings > 0 ? "  ·  " + warnings + " need attention (orange)" : "  ·  all folders the app needs are there");
+            string summary = Lang.F("{0} folders", _all.Count) +
+                (warnings > 0 ? Lang.F("  ·  {0} need attention (orange)", warnings) : Lang.T("  ·  all folders the app needs are there"));
             if (x == null)
             {
-                _lblDetails.Text = summary + Environment.NewLine + "Select a folder to see what it is used for.";
+                _lblDetails.Text = summary + Environment.NewLine + Lang.T("Select a folder to see what it is used for.");
                 _lblDetails.ForeColor = warnings > 0 ? Warning : TextMuted;
                 return;
             }
@@ -467,6 +467,15 @@ namespace NPIC_CARD_APP
                 list.Add(rfid);
             }
 
+            // Shown in the app's language (names are only compared with names from this same list).
+            foreach (Entry x in list)
+            {
+                x.Group = Lang.T(x.Group);
+                x.Name = Lang.T(x.Name);
+                x.Purpose = Lang.T(x.Purpose);
+                x.Contents = Lang.T(x.Contents);
+                x.ChangeHint = Lang.T(x.ChangeHint);
+            }
             return list;
         }
 
@@ -495,11 +504,11 @@ namespace NPIC_CARD_APP
         {
             switch (x.State)
             {
-                case FolderState.Ok:         return "✔ OK";
-                case FolderState.Missing:    return "Not found";
-                case FolderState.NotSet:     return "Not set";
-                case FolderState.NotCreated: return "Not created yet";
-                default:                     return "Online link";
+                case FolderState.Ok:         return Lang.T("✔ OK");
+                case FolderState.Missing:    return Lang.T("Not found");
+                case FolderState.NotSet:     return Lang.T("Not set");
+                case FolderState.NotCreated: return Lang.T("Not created yet");
+                default:                     return Lang.T("Online link");
             }
         }
 
@@ -544,7 +553,8 @@ namespace NPIC_CARD_APP
         }
 
         // ===================== Helpers =====================
-        private static string Plural(int n, string word) { return n + " " + word + (n == 1 ? "" : "s"); }
+        /// <summary>"3 files" in the app's language.</summary>
+        private static string Plural(int n, string word) { return Lang.T(n + " " + word + (n == 1 ? "" : "s")); }
 
         private static string FormatSize(long bytes)
         {
@@ -568,7 +578,7 @@ namespace NPIC_CARD_APP
 
         private static void SetCueBanner(TextBox box, string text)
         {
-            SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, text);
+            SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, Lang.T(text));
         }
     }
 }

@@ -100,6 +100,7 @@ namespace NPIC_CARD_APP
             ForeColor = TextMain;
 
             BuildUi();
+            Lang.Apply(this);           // Khmer only: labels, buttons, columns and status text, also when they change later
             DarkControls.Apply(this);   // dark mode only; before the handles exist, so restyling recreates nothing
             SlimScroll.Apply(this);     // slim scroll bars on every grid, list and scrolling panel
             LoadPrinters();
@@ -234,9 +235,12 @@ namespace NPIC_CARD_APP
                 Section("APP"),
                 Nav("Full Screen", Theme.IcoFullScreen, () => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"),
                 Nav("Settings & Help…", Theme.IcoSettings, ShowSettingsHub,
-                    (Theme.Dark ? "Light Mode" : "Dark Mode") + ", Theme Color, Folders (Ctrl+Shift+F), All Settings (Ctrl+,), " +
-                    "Epson Driver Setup (Ctrl+Shift+E), " +
-                    "System Info (Ctrl+Shift+I), Check for Updates (Ctrl+U) and Help & About (F1) in one page · ការណែនាំប្រើប្រាស់ជាភាសាខ្មែរ"),
+                    Lang.F("{0}, Theme Color, Language (Ctrl+Shift+L), Folders (Ctrl+Shift+F), All Settings (Ctrl+,), " +
+                    "Epson Driver Setup (Ctrl+Shift+E), System Info (Ctrl+Shift+I), Check for Updates (Ctrl+U) and Help & About (F1) " +
+                    "in one page", Lang.T(Theme.Dark ? "Light Mode" : "Dark Mode"))),
+
+                Section("LANGUAGE"),
+                BuildLanguageSwitch(),
                 Spacer(10)
             };
 
@@ -249,10 +253,33 @@ namespace NPIC_CARD_APP
             return side;
         }
 
+        /// <summary>EN | KH pills: the language of every window. Picking the other one asks, saves it and restarts the app.</summary>
+        private Control BuildLanguageSwitch()
+        {
+            var row = new FlowLayoutPanel
+            {
+                Height = 44, WrapContents = false, BackColor = Surface, Padding = new Padding(16, 4, 0, 0), Margin = new Padding(0)
+            };
+            var tabs = new PillTabs("EN", "KH") { Margin = new Padding(0) };
+            tabs.SelectedIndex = Lang.Khmer ? 1 : 0;   // before the handler: no question at start-up
+            bool reverting = false;
+            tabs.SelectedIndexChanged += (s, e) =>
+            {
+                if (reverting) return;
+                if (SwitchLanguage(tabs.SelectedIndex == 1)) return;
+                reverting = true;                        // answered No: show the language in use again
+                tabs.SelectedIndex = Lang.Khmer ? 1 : 0;
+                reverting = false;
+            };
+            _tip.SetToolTip(tabs, "English · ភាសាខ្មែរ  (Ctrl+Shift+L)");
+            row.Controls.Add(tabs);
+            return row;
+        }
+
         private NavItem Nav(string text, string glyph, Action action, string tooltip)
         {
             var item = new NavItem(text, glyph, (s, e) => action());
-            _tip.SetToolTip(item, tooltip);
+            _tip.SetTip(item, tooltip);
             return item;
         }
 
@@ -318,7 +345,7 @@ namespace NPIC_CARD_APP
             });
 
             _sideTabs = new PillTabs("Front", "Back") { Margin = new Padding(0, 6, 4, 0) };
-            _tip.SetToolTip(_sideTabs, "Side of the card that Print Selected sends to the printer");
+            _tip.SetTip(_sideTabs, "Side of the card that Print Selected sends to the printer");
             _sideTabs.SelectedIndexChanged += (s, e) => UpdateSideHighlight();
 
             var actions = new FlowLayoutPanel
@@ -366,10 +393,10 @@ namespace NPIC_CARD_APP
 
             _statStudents.Cursor = Cursors.Hand;
             _statStudents.Click += (s, e) => ShowGallery();
-            _tip.SetToolTip(_statStudents, "Open the student gallery (Ctrl+G)");
+            _tip.SetTip(_statStudents, "Open the student gallery (Ctrl+G)");
             _statPrinted.Cursor = Cursors.Hand;
             _statPrinted.Click += (s, e) => ShowPrintHistory();
-            _tip.SetToolTip(_statPrinted, "Open the print history (Ctrl+H)");
+            _tip.SetTip(_statPrinted, "Open the print history (Ctrl+H)");
 
             row.Controls.Add(_statStudents, 0, 0);
             row.Controls.Add(_statSelected, 1, 0);
@@ -442,7 +469,7 @@ namespace NPIC_CARD_APP
             _grid.ColumnHeadersDefaultCellStyle.ForeColor = TextMuted;
             _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Surface;
             _grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = TextMuted;
-            _grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 8.25f);
+            _grid.ColumnHeadersDefaultCellStyle.Font = Theme.UiFont(8.25f, true);
             _grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(8, 0, 8, 0);
             _grid.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.False;
             _grid.DefaultCellStyle.Font = new Font(CardFonts.UI, 9f);
@@ -489,8 +516,8 @@ namespace NPIC_CARD_APP
             _picBack.DoubleClick += (s, e) => ShowFullScreen(PreviewSide.Back);
             _picFront.Click += (s, e) => _sideTabs.SelectedIndex = 0;
             _picBack.Click += (s, e) => _sideTabs.SelectedIndex = 1;
-            _tip.SetToolTip(_picFront, "Click to print this side · double-click to enlarge");
-            _tip.SetToolTip(_picBack, "Click to print this side · double-click to enlarge");
+            _tip.SetTip(_picFront, "Click to print this side · double-click to enlarge");
+            _tip.SetTip(_picBack, "Click to print this side · double-click to enlarge");
 
             var tiles = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = new Padding(0) };
             tiles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
@@ -552,7 +579,7 @@ namespace NPIC_CARD_APP
                 rfidPage.Visible = tabs.SelectedIndex == 2;
                 if (rfidPage.Visible) { UpdateRfidPanel(); _txtRfid.Focus(); }
             };
-            _tip.SetToolTip(tabs, "Printer = driver and checks · Tray = slot positions and card orientation · " +
+            _tip.SetTip(tabs, "Printer = driver and checks · Tray = slot positions and card orientation · " +
                                   "RFID = save the printed card's chip number to the RFID CSV file");
 
             return MakeCard("Print setup", pages, tabs);
@@ -564,7 +591,7 @@ namespace NPIC_CARD_APP
             _cboPrinter.SelectedIndexChanged += (s, e) => OnPrinterChanged();
 
             _chkAllPrinters = new CheckBox { Text = "Show all", AutoSize = true, ForeColor = TextMuted, Margin = new Padding(0, 6, 0, 0) };
-            _tip.SetToolTip(_chkAllPrinters, "List every installed printer, not only card printers");
+            _tip.SetTip(_chkAllPrinters, "List every installed printer, not only card printers");
             _chkAllPrinters.CheckedChanged += (s, e) =>
             {
                 if (_loading) return;
@@ -626,9 +653,9 @@ namespace NPIC_CARD_APP
 
             // Order must match the SlotMode enum: Auto, One, Two
             _cboSlots = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 76, Margin = new Padding(0, 3, 10, 3) };
-            _cboSlots.Items.AddRange(new object[] { "Auto", "1", "2" });
+            _cboSlots.Items.AddRange(new object[] { Lang.T("Auto"), "1", "2" });
             _cboSlots.SelectedIndexChanged += (s, e) => UpdateSlotHint();
-            _tip.SetToolTip(_cboSlots,
+            _tip.SetTip(_cboSlots,
                 "Auto = 2 cards per tray load when 2 or more students are selected and slot 2 is set up; " +
                 "otherwise slot 1 only.\n1 = always slot 1 only.   2 = always slot 1 + slot 2.");
             _lblSlotHint = new Label { AutoSize = true, ForeColor = TextMuted, Font = CaptionFont, Margin = new Padding(0, 7, 0, 0) };
@@ -636,13 +663,16 @@ namespace NPIC_CARD_APP
 
             // Order must match the CardOrientation enum: Horizontal, VerticalRight, VerticalLeft
             _cboOrientation = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 190, Margin = new Padding(0, 3, 6, 3) };
-            _cboOrientation.Items.AddRange(new object[] { "Horizontal", "Vertical (turn right 90°)", "Vertical (turn left 90°)" });
+            _cboOrientation.Items.AddRange(new object[]
+            {
+                Lang.T("Horizontal"), Lang.T("Vertical (turn right 90°)"), Lang.T("Vertical (turn left 90°)")
+            });
             _cboOrientation.SelectedIndexChanged += (s, e) =>
             {
                 if (_cboOrientation.SelectedIndex >= 0) _settings.CardOrientation = (CardOrientation)_cboOrientation.SelectedIndex;
                 UpdateSlotHint();
             };
-            _tip.SetToolTip(_cboOrientation,
+            _tip.SetTip(_cboOrientation,
                 "How the card lies in the tray pocket.\n" +
                 "Vertical = the long side of the card runs in the feed direction (54 x 85.6 mm on the page).\n" +
                 "If the card comes out upside down, pick the other Vertical option.");
@@ -652,8 +682,8 @@ namespace NPIC_CARD_APP
             _chkRotateFront.CheckedChanged += (s, e) => { _settings.RotateFront180 = _chkRotateFront.Checked; };
             _chkRotateBack = new CheckBox { Text = "Back", AutoSize = true, Margin = new Padding(0, 6, 10, 3) };
             _chkRotateBack.CheckedChanged += (s, e) => { _settings.RotateBack180 = _chkRotateBack.Checked; };
-            _tip.SetToolTip(_chkRotateFront, "Rotate the front side 180° when printing");
-            _tip.SetToolTip(_chkRotateBack, "Rotate the back side 180° when printing");
+            _tip.SetTip(_chkRotateFront, "Rotate the front side 180° when printing");
+            _tip.SetTip(_chkRotateBack, "Rotate the back side 180° when printing");
             rows.Controls.Add(Row(FieldLabel("Rotate 180°"), _chkRotateFront, _chkRotateBack,
                 MakeButton("Save", PillKind.Ghost, (s, e) => SaveSettings(true), "Save slot positions and print options")));
             return rows;
@@ -689,7 +719,7 @@ namespace NPIC_CARD_APP
                 if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; UploadRfid(); }
                 else if (e.KeyCode == Keys.Escape) { _txtRfid.Clear(); e.SuppressKeyPress = true; }
             };
-            _tip.SetToolTip(_txtRfid, "RFID card number (UID). A USB reader types it here and presses Enter, which uploads it.");
+            _tip.SetTip(_txtRfid, "RFID card number (UID). A USB reader types it here and presses Enter, which uploads it.");
 
             _btnRfidUpload = MakeButton("Upload", PillKind.Primary, (s, e) => UploadRfid(),
                 "Save this RFID card number for the selected student in the RFID CSV file (Enter)");
@@ -782,7 +812,7 @@ namespace NPIC_CARD_APP
         private Button MakeButton(string text, PillKind kind, EventHandler onClick, string tooltip)
         {
             Button b = MakeButton(text, kind, onClick);
-            _tip.SetToolTip(b, tooltip);
+            _tip.SetTip(b, tooltip);
             return b;
         }
 
@@ -897,7 +927,7 @@ namespace NPIC_CARD_APP
 
         private static void SetCueBanner(TextBox box, string text)
         {
-            SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, text);
+            SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, Lang.T(text));
         }
 
         /// <summary>Rebinds the grid to the students that match the search box.</summary>
@@ -928,7 +958,7 @@ namespace NPIC_CARD_APP
             foreach (DataGridViewColumn col in _grid.Columns)
             {
                 string title;
-                if (ColumnTitles.TryGetValue(col.DataPropertyName, out title)) col.HeaderText = title;
+                if (ColumnTitles.TryGetValue(col.DataPropertyName, out title)) col.HeaderText = Lang.T(title);
             }
         }
 
@@ -1080,7 +1110,7 @@ namespace NPIC_CARD_APP
             _statSelected.Caption = count == 0
                 ? "Select rows in the list"
                 : string.Format("{0} tray load(s)  ·  {1} side", loads, PrintFront ? "front" : "back");
-            _tip.SetToolTip(_lblSlotHint, reason ?? "");
+            _tip.SetTip(_lblSlotHint, reason ?? "");
         }
 
         // ===================== Data =====================
@@ -1107,7 +1137,7 @@ namespace NPIC_CARD_APP
 
         private void ImportCsv()
         {
-            using (var dlg = new OpenFileDialog { Filter = "CSV UTF-8 (*.csv)|*.csv", Title = "Import students" })
+            using (var dlg = new OpenFileDialog { Filter = "CSV UTF-8 (*.csv)|*.csv", Title = Lang.T("Import students") })
             {
                 if (dlg.ShowDialog(this) == DialogResult.OK) LoadStudents(dlg.FileName);
             }
@@ -1118,7 +1148,7 @@ namespace NPIC_CARD_APP
             using (var dlg = new OpenFileDialog
             {
                 Filter = "Excel workbook (*.xlsx;*.xlsm)|*.xlsx;*.xlsm|Excel 97-2003 (*.xls)|*.xls|All files (*.*)|*.*",
-                Title = "Import students from Excel"
+                Title = Lang.T("Import students from Excel")
             })
             {
                 if (dlg.ShowDialog(this) == DialogResult.OK) LoadStudents(dlg.FileName);
@@ -1133,7 +1163,7 @@ namespace NPIC_CARD_APP
 
             using (var dlg = new Form
             {
-                Text = "Import students from API",
+                Text = Lang.T("Import students from API"),
                 ClientSize = new Size(560, 300),
                 FormBorderStyle = FormBorderStyle.FixedDialog,
                 StartPosition = FormStartPosition.CenterParent,
@@ -1198,6 +1228,7 @@ namespace NPIC_CARD_APP
 
                 dlg.Controls.Add(layout);
                 dlg.Controls.Add(buttons);
+                Lang.Apply(dlg);
                 dlg.AcceptButton = btnLoad;
                 dlg.CancelButton = btnCancel;
 
@@ -1331,7 +1362,7 @@ namespace NPIC_CARD_APP
             using (var dlg = new SaveFileDialog
             {
                 Filter = "Excel workbook (*.xlsx)|*.xlsx",
-                Title = "Save Excel template",
+                Title = Lang.T("Save Excel template"),
                 FileName = "students-template.xlsx",
                 OverwritePrompt = true
             })
@@ -1411,7 +1442,7 @@ namespace NPIC_CARD_APP
         {
             using (var dlg = new FolderBrowserDialog
             {
-                Description = "Folder with photos named {StudentId}.jpg / .png",
+                Description = Lang.T("Folder with photos named {StudentId}.jpg / .png"),
                 SelectedPath = _settings.PhotoFolder
             })
             {
@@ -1699,6 +1730,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.Shift | Keys.R: ShowRfidList(); return true;
                 case Keys.Control | Keys.Shift | Keys.I: ShowHelp(HelpForm.Page.SystemInfo); return true;
                 case Keys.Control | Keys.U: ShowUpdates(); return true;
+                case Keys.Control | Keys.Shift | Keys.L: SwitchLanguage(!Lang.Khmer); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
@@ -1979,6 +2011,47 @@ namespace NPIC_CARD_APP
         }
 
         /// <summary>
+        /// EN / KH (sidebar), Settings &amp; Help → Language or Ctrl+Shift+L: saves the other language and restarts the app,
+        /// like Dark Mode (every window reads the language once at start-up). The user guide follows the new language.
+        /// True when the app is restarting.
+        /// </summary>
+        private bool SwitchLanguage(bool khmer)
+        {
+            if (khmer == Lang.Khmer) return true;
+
+            // Asked in both languages: the reader may know only the one switched to.
+            string text = khmer
+                ? "Switch Card Studio to Khmer?\nប្តូរ Card Studio ទៅជាភាសាខ្មែរ?\n\n" +
+                  "The app restarts to apply it. Your settings are saved and a student list opened from a file comes back by " +
+                  "itself; students imported from the API or SQL Server must be loaded again.\n\nPrinted cards are not affected."
+                : "ប្តូរ Card Studio ទៅជាភាសាអង់គ្លេស?\nSwitch Card Studio to English?\n\n" +
+                  "កម្មវិធីនឹងបើកឡើងវិញដើម្បីប្រើភាសាថ្មី។ ការកំណត់របស់អ្នកត្រូវបានរក្សាទុក ហើយបញ្ជីនិស្សិតដែលបានបើកពីឯកសារ " +
+                  "នឹងត្រឡប់មកវិញដោយខ្លួនឯង។ និស្សិតដែលបាននាំចូលពី API ឬ SQL Server ត្រូវផ្ទុកម្ដងទៀត។\n\n" +
+                  "កាតដែលបានបោះពុម្ពមិនមានការប៉ះពាល់ទេ។";
+            if (AppDialog.Show(this, text, "Language · ភាសា", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                return false;
+
+            ReadUiToSettings();
+            string oldLanguage = _settings.UiLanguage;
+            bool oldHelp = _settings.HelpKhmer;
+            _settings.UiLanguage = khmer ? Lang.KhmerCode : Lang.EnglishCode;
+            _settings.HelpKhmer = khmer;   // the user guide opens in the same language
+            try
+            {
+                _settings.Save();
+            }
+            catch (Exception ex)
+            {
+                _settings.UiLanguage = oldLanguage;
+                _settings.HelpKhmer = oldHelp;
+                ShowError(ex);
+                return false;
+            }
+            Application.Restart();
+            return true;
+        }
+
+        /// <summary>
         /// Theme Color…: picks the primary colour, saves it and restarts the app (every window reads the theme colours
         /// once at start-up, like Dark Mode).
         /// </summary>
@@ -2027,6 +2100,7 @@ namespace NPIC_CARD_APP
             switch (choice)
             {
                 case SettingsHubChoice.DarkMode: ToggleDarkMode(); break;
+                case SettingsHubChoice.Language: SwitchLanguage(!Lang.Khmer); break;
                 case SettingsHubChoice.ThemeColor: ChangeThemeColor(); break;
                 case SettingsHubChoice.Folders: ShowFolders(); break;
                 case SettingsHubChoice.AllSettings: ShowAllSettings(); break;
@@ -2065,10 +2139,10 @@ namespace NPIC_CARD_APP
             string title = "Card Studio " + UpdateService.CurrentVersionText;
             string available = _settings.AvailableUpdateVersion;
             if (UpdateService.IsNewerThanRunning(available))
-                title += "  —  Update " + available.Trim() + " available (Ctrl+U)";
+                title += Lang.F("  —  Update {0} available (Ctrl+U)", available.Trim());
             LicenseStatus license = LicenseService.Check();
             if (license.ExpiresSoon)
-                title += "  —  License expires " + license.DaysLeftText;
+                title += Lang.F("  —  License expires {0}", Lang.T(license.DaysLeftText));
             Text = title;
         }
 
@@ -2274,7 +2348,7 @@ namespace NPIC_CARD_APP
             bool isDefault = string.IsNullOrWhiteSpace(_settings.RfidCsvPath);
             _lblRfidTarget.Text = "Saves to " + Path.GetFileName(path) + (isDefault ? "  (app data)" : "  ·  " + Path.GetDirectoryName(path));
             _lblRfidTarget.ForeColor = TextMuted;
-            _tip.SetToolTip(_lblRfidTarget, "RFID CSV file: " + path);
+            _tip.SetTip(_lblRfidTarget, "RFID CSV file: " + path);
 
             UpdateRfidButton();
         }
@@ -2317,7 +2391,7 @@ namespace NPIC_CARD_APP
             string chosen;
             using (var dlg = new SaveFileDialog
             {
-                Title = "RFID CSV file",
+                Title = Lang.T("RFID CSV file"),
                 Filter = "CSV file (*.csv)|*.csv",
                 FileName = Path.GetFileName(current),
                 InitialDirectory = Path.GetDirectoryName(current),
