@@ -1,3 +1,26 @@
+### v1.0.0.4
+
+Release date: 2026-10-18
+
+This version makes the sidebar shorter and adds background removal to the Student Gallery.
+
+## Feature
+* Student Gallery: new "Remove Background… (Ctrl+B)" button for the selected student
+* After removing the background, the gallery refreshes that student's photo and thumbnail straight away
+* The button also works when only the kept original photo is left, so it can be restored from the gallery
+* Settings & Help: new "Epson Driver Setup…" tile (Ctrl+Shift+E)
+
+## Change
+* Sidebar: "Google Sheets" removed. Use Import Students… (Ctrl+L) → Google Sheets, or Ctrl+Shift+G
+* Sidebar: "Epson Driver Setup…" removed. Use Settings & Help… → Epson Driver Setup…, the "Driver Setup…" button in Print setup → Printer, or Ctrl+Shift+E
+* Settings & Help page is taller, with tiles in 5 rows instead of 4
+
+## Known issue
+* The user guide (F1 → Overview) still lists driver setup as a sidebar command
+* Help still lists .xls files, but import only accepts .xlsx / .xlsm
+
+---
+
 ### v1.0.0.3
 
 Release date: 2026-10-18
