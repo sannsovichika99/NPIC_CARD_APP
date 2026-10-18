@@ -1,3 +1,40 @@
+### v1.0.0.3
+
+Release date: 2026-10-18
+
+This version adds license activation (each PC needs a serial number) and installs the card fonts automatically.
+
+## Feature
+* License activation: Card Studio asks for a serial number before it opens
+* Each PC shows its Machine ID (XXXX-XXXX-XXXX-XXXX). Send it to the administrator, who sends back a serial for that PC
+* A serial works only on the PC it was made for, and cannot be edited or forged
+* Serials have an expiry date (default 1 year) or never expire
+* 30 days before expiry, the window title and status bar say "License expires in N days"
+* Settings & Help → License… shows the expiry date and takes a new serial to renew it
+* After the expiry date, the activation window opens again until a new serial is entered
+* Clock check: if the PC's date is turned back, Card Studio asks for the correct date and time
+* System Info shows the license status, expiry date, Machine ID and license file
+* The license is saved for all Windows users of the PC (%ProgramData%\NPIC_CARD_APP\license.txt)
+* Card fonts are included: Khmer OS Muol, Khmer OS Muol Light, Khmer OS Siemreap, Siemreap, Tacteing
+* The setup installs missing card fonts for all users
+* If a font is still missing, Card Studio installs it for the current user at start-up (no administrator needed) and restarts once
+
+## Admin tool
+* New Serial Generator (Tools\SerialGenerator): paste a Machine ID, pick the expiry date, copy the serial
+* Expiry options: a date, 6 months, 1 year, 2 years or never expires
+* Every serial made is logged to serials.csv (date, Machine ID, name, expiry, serial)
+* Also available as a script: Installer\serial.ps1
+* The Serial Generator is for the administrator only and is not part of the setup
+
+## Known issue
+* After updating to v1.0.0.3, every PC must be activated before Card Studio opens. Collect the Machine IDs and send the serials before updating
+* Reinstalling Windows changes the Machine ID: that PC then needs a new serial
+* Keep a backup of Installer\serial-private.key (not in Git). Without it, no new serials can be made
+* PCs with a 1.0.2 build will not be offered 1.0.0.3, because 1.0.0.3 is a lower number
+* Help still lists .xls files, but import only accepts .xlsx / .xlsm
+
+---
+
 ### v1.0.0.2
 
 Release date: 2026-10-18
