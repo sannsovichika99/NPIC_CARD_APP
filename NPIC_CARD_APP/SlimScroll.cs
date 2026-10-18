@@ -8,15 +8,15 @@ using System.Windows.Forms;
 namespace NPIC_CARD_APP
 {
     /// <summary>
-    /// Slim overlay scroll bars (Windows 11 style) for every scrolling surface: data grids, list views and auto-scroll
-    /// panels. The native scroll bar keeps doing the scrolling underneath (wheel, keyboard, touchpad, ScrollIntoView);
+    /// Slim overlay scroll bars (Windows 11 style) for every scrolling surface: data grids, property grids, list views,
+    /// list boxes, rich text boxes and auto-scroll panels. The native scroll bar keeps doing the scrolling underneath (wheel, keyboard, touchpad, ScrollIntoView);
     /// a <see cref="SlimScrollBar"/> is laid exactly over it, mirrors its range and position, and drives the control
     /// through the control's own API.
     /// <para>Look: a 3 px muted line while you scroll or move over the content, fading out after
     /// <see cref="HideDelayMs"/>; hovering the strip widens it to 8 px with a soft track; the thumb turns
     /// <see cref="Theme.Accent"/> under the pointer and <see cref="Theme.AccentPressed"/> while dragged.</para>
     /// <para>WinForms cannot draw a translucent control over another one, so the bar lives in the strip Windows
-    /// reserves for the scroll bar instead of floating over the content. Multiline text boxes keep the native bar.</para>
+    /// reserves for the scroll bar instead of floating over the content. Plain multiline text boxes keep the native bar.</para>
     /// </summary>
     internal static class SlimScroll
     {
@@ -93,7 +93,9 @@ namespace NPIC_CARD_APP
         {
             var grid = c as DataGridView;
             if (grid != null) return new GridSource(grid);
-            if (c is ListView) return new WindowSource(c);
+            var props = c as PropertyGrid;
+            if (props != null) return PropertyGridSource.Create(props);
+            if (c is ListView || c is ListBox || c is RichTextBox) return new WindowSource(c);
             var scrollable = c as ScrollableControl;
             if (scrollable != null && scrollable.AutoScroll && !(c is Form) && !(c.Parent is DataGridView))
                 return new WindowSource(c);
@@ -307,7 +309,85 @@ namespace NPIC_CARD_APP
     }
 
     /// <summary>
-    /// A control with window-style scroll bars in its frame (auto-scroll panels, list views). The slim bar is a sibling
+    /// A <see cref="PropertyGrid"/>: the property list inside it (an internal PropertyGridView) scrolls with a child
+    /// <see cref="VScrollBar"/>, so the slim bar becomes a child of that list, on top. The list only reacts to the bar's
+    /// own scroll events, so scrolling is driven by line steps sent to the native bar.
+    /// </summary>
+    internal sealed class PropertyGridSource : ScrollSource
+    {
+        private const int WM_REFLECT_VSCROLL = 0x2000 + 0x0115, SB_LINEUP = 0, SB_LINEDOWN = 1, SB_ENDSCROLL = 8;
+
+        private readonly PropertyGrid _grid;
+        private readonly Control _view;
+        private readonly ScrollBar _bar;
+
+        private PropertyGridSource(PropertyGrid grid, Control view, ScrollBar bar) : base(view)
+        {
+            _grid = grid;
+            _view = view;
+            _bar = bar;
+            bar.ValueChanged += Raise;
+            bar.VisibleChanged += Raise;
+            bar.SizeChanged += Raise;
+            bar.LocationChanged += Raise;
+            grid.SelectedObjectsChanged += Raise;
+            grid.SelectedGridItemChanged += (s, e) => Raise(s, e);
+            grid.PropertyValueChanged += (s, e) => Raise(s, e);
+        }
+
+        /// <summary>Null when the grid's internal layout is not the expected one (the native bar stays).</summary>
+        public static PropertyGridSource Create(PropertyGrid grid)
+        {
+            foreach (Control view in grid.Controls)
+            {
+                if (view.GetType().Name != "PropertyGridView") continue;
+                foreach (Control c in view.Controls)
+                {
+                    var bar = c as VScrollBar;
+                    if (bar != null) return new PropertyGridSource(grid, view, bar);
+                }
+            }
+            return null;
+        }
+
+        public override Control OverlayParent { get { return _view; } }
+
+        public override Color Back { get { return _grid.ViewBackColor; } }
+
+        public override bool Read(bool vertical, out ScrollRange range, out Rectangle bounds, out int lead, out int trail)
+        {
+            range = new ScrollRange();
+            bounds = Rectangle.Empty;
+            lead = trail = 0;
+            if (!vertical || !_bar.Visible) return false;   // the property list never scrolls sideways
+            range = new ScrollRange { Min = _bar.Minimum, Max = _bar.Maximum, Page = _bar.LargeChange, Value = _bar.Value };
+            bounds = _bar.Bounds;
+            return bounds.Width > 0 && bounds.Height > 0;
+        }
+
+        public override void ScrollTo(bool vertical, int value)
+        {
+            if (!vertical || !_bar.IsHandleCreated) return;
+            bool down = value > _bar.Value;
+            IntPtr step = (IntPtr)(down ? SB_LINEDOWN : SB_LINEUP);
+            for (int guard = 0; guard < 2000 && (down ? _bar.Value < value : _bar.Value > value); guard++)
+            {
+                int before = _bar.Value;
+                Native.SendMessage(_bar.Handle, WM_REFLECT_VSCROLL, step, IntPtr.Zero);
+                if (_bar.Value == before) break;   // refused (an edit that failed to commit) or at the end
+            }
+            Native.SendMessage(_bar.Handle, WM_REFLECT_VSCROLL, (IntPtr)SB_ENDSCROLL, IntPtr.Zero);
+        }
+
+        public override void KeepAbove(Control bar, bool vertical)
+        {
+            int mine = _view.Controls.GetChildIndex(bar, false), theirs = _view.Controls.GetChildIndex(_bar, false);
+            if (mine > theirs && theirs >= 0) _view.Controls.SetChildIndex(bar, theirs);
+        }
+    }
+
+    /// <summary>
+    /// A control with window-style scroll bars in its frame (auto-scroll panels, list views, list boxes). The slim bar is a sibling
     /// laid over that frame strip, placed in the nearest ancestor with free (non-flow, non-table, non-scrolling) layout.
     /// </summary>
     internal sealed class WindowSource : ScrollSource
@@ -317,6 +397,16 @@ namespace NPIC_CARD_APP
         private const int OBJID_VSCROLL = unchecked((int)0xFFFFFFFB), OBJID_HSCROLL = unchecked((int)0xFFFFFFFA);
         private const int STATE_SYSTEM_INVISIBLE = 0x8000, STATE_SYSTEM_OFFSCREEN = 0x10000;
         private const int LVM_SCROLL = 0x1014, LVM_GETHEADER = 0x101F;
+        private const int WM_HSCROLL = 0x0114, SB_THUMBPOSITION = 4, SB_ENDSCROLL = 8;
+        private const int EM_GETSCROLLPOS = 0x0400 + 221, EM_SETSCROLLPOS = 0x0400 + 222;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT { public int X, Y; }
+
+        [DllImport("user32.dll", EntryPoint = "SendMessageW")]
+        private static extern IntPtr SendPoint(IntPtr hwnd, int msg, IntPtr wParam, ref POINT lParam);
+
+        private static void SendPoint(IntPtr hwnd, int msg, ref POINT point) { SendPoint(hwnd, msg, IntPtr.Zero, ref point); }
 
         [StructLayout(LayoutKind.Sequential)]
         private struct SCROLLINFO
@@ -357,6 +447,13 @@ namespace NPIC_CARD_APP
             {
                 scrollable.Scroll += (s, e) => Raise(s, e);
                 scrollable.Layout += (s, e) => Raise(s, e);
+            }
+            var rich = target as RichTextBox;
+            if (rich != null)
+            {
+                rich.VScroll += Raise;
+                rich.HScroll += Raise;
+                rich.TextChanged += Raise;   // a new page: new range, back at the top
             }
         }
 
@@ -474,6 +571,35 @@ namespace NPIC_CARD_APP
                     delta *= rowHeight;
                 }
                 Native.SendMessage(list.Handle, LVM_SCROLL, (IntPtr)(vertical ? 0 : delta), (IntPtr)(vertical ? delta : 0));
+                return;
+            }
+
+            var rich = Target as RichTextBox;
+            if (rich != null)
+            {
+                // Positions are pixels. EM_SETSCROLLPOS takes 32-bit values (WM_VSCROLL thumb positions stop at
+                // 65535 px, which a long page passes); move by the bar's delta from where the text is now.
+                SCROLLINFO info;
+                if (!Info(vertical, out info)) return;
+                int delta = value - info.nPos;
+                if (delta == 0) return;
+                var pos = new POINT();
+                SendPoint(rich.Handle, EM_GETSCROLLPOS, ref pos);
+                if (vertical) pos.Y += delta; else pos.X += delta;
+                SendPoint(rich.Handle, EM_SETSCROLLPOS, ref pos);
+                return;
+            }
+
+            var box = Target as ListBox;
+            if (box != null)
+            {
+                // Vertical position = index of the top item; horizontal = pixels (or columns in a multi-column box).
+                if (vertical) { if (box.TopIndex != value) box.TopIndex = value; }
+                else
+                {
+                    Native.SendMessage(box.Handle, WM_HSCROLL, (IntPtr)(SB_THUMBPOSITION | (value << 16)), IntPtr.Zero);
+                    Native.SendMessage(box.Handle, WM_HSCROLL, (IntPtr)SB_ENDSCROLL, IntPtr.Zero);
+                }
                 return;
             }
 
