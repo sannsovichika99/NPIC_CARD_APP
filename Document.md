@@ -1,3 +1,30 @@
+### v1.0.0.6
+
+Release date: 2026-10-18
+
+This version shows Card Studio in Khmer: every window can be switched between English and Khmer.
+
+## Feature
+* Language switch: EN / KH at the bottom of the sidebar, Settings & Help… → Language, or Ctrl+Shift+L
+* Switching asks first, saves the choice and restarts the app. Settings are kept, and a student list opened from a file comes back
+* Khmer covers every window: main window, import, photos, printing, RFID, history, gallery, settings, activation, Card Template and Card Designer
+* Buttons, labels, tabs, list columns, menus, tool tips, search hints and messages are translated
+* Card Text and Card Designer property lists show Khmer names and descriptions
+* Long Khmer text wraps between words instead of inside a word (uses the Khmer dictionary built into Windows 10 1903 and later)
+* Text without a translation stays in English, so nothing breaks
+* The user guide (F1) explains the language switch and lists Ctrl+Shift+L
+
+## Change
+* The language only changes the app windows. Printed cards are not affected: their text still comes from Card Text and the card design
+* The user guide keeps its own English | ខ្មែរ switch
+
+## Known issue
+* The user guide (F1) does not explain Card Template… or Card Designer… yet
+* The user guide (F1 → Overview) still lists driver setup as a sidebar command
+* Help still lists .xls files, but import only accepts .xlsx / .xlsm
+
+---
+
 ### v1.0.0.5
 
 Release date: 2026-10-18
