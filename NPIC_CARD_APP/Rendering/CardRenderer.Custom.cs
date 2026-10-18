@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using NPIC_CARD_APP.Models;
 using NPIC_CARD_APP.Services;
@@ -89,6 +90,29 @@ namespace NPIC_CARD_APP.Rendering
 
         private static void DrawShape(Graphics g, ShapeElement e)
         {
+            if (e.Rotation == 0f)
+            {
+                DrawShapeUnrotated(g, e);
+                return;
+            }
+            // Turn the canvas around the centre of the box, draw the shape as usual, turn back.
+            GraphicsState state = g.Save();
+            try
+            {
+                float cx = MmToPx(e.X + e.Width / 2f), cy = MmToPx(e.Y + e.Height / 2f);
+                g.TranslateTransform(cx, cy);
+                g.RotateTransform(e.Rotation);
+                g.TranslateTransform(-cx, -cy);
+                DrawShapeUnrotated(g, e);
+            }
+            finally
+            {
+                g.Restore(state);
+            }
+        }
+
+        private static void DrawShapeUnrotated(Graphics g, ShapeElement e)
+        {
             switch (e.Shape)
             {
                 case CardShapeKind.Line:
@@ -100,6 +124,12 @@ namespace NPIC_CARD_APP.Rendering
                     else LineMm(g, c, e.X + e.Width / 2f, e.Y, e.X + e.Width / 2f, e.Y + e.Height, thick);
                     return;
                 }
+                case CardShapeKind.Triangle:
+                    DrawTriangle(g, e);
+                    return;
+                case CardShapeKind.Curve:
+                    DrawCurve(g, e);
+                    return;
                 case CardShapeKind.Ellipse:
                     if (!e.FillColor.IsEmpty)
                         using (var b = new SolidBrush(e.FillColor))
@@ -123,6 +153,65 @@ namespace NPIC_CARD_APP.Rendering
                     }
                     return;
             }
+        }
+
+        /// <summary>Triangle filling the box: apex on the Direction side, or right angle in the Direction corner.</summary>
+        private static void DrawTriangle(Graphics g, ShapeElement e)
+        {
+            float x = MmToPx(e.X), y = MmToPx(e.Y), w = MmToPx(e.Width), h = MmToPx(e.Height);
+            float r = x + w, b = y + h, cx = x + w / 2f, cy = y + h / 2f;
+            PointF[] pts;
+            switch (e.Direction)
+            {
+                case CardShapeDirection.Down:        pts = new[] { new PointF(x, y), new PointF(r, y), new PointF(cx, b) }; break;
+                case CardShapeDirection.Left:        pts = new[] { new PointF(x, cy), new PointF(r, y), new PointF(r, b) }; break;
+                case CardShapeDirection.Right:       pts = new[] { new PointF(x, y), new PointF(r, cy), new PointF(x, b) }; break;
+                case CardShapeDirection.TopLeft:     pts = new[] { new PointF(x, y), new PointF(r, y), new PointF(x, b) }; break;
+                case CardShapeDirection.TopRight:    pts = new[] { new PointF(x, y), new PointF(r, y), new PointF(r, b) }; break;
+                case CardShapeDirection.BottomLeft:  pts = new[] { new PointF(x, y), new PointF(r, b), new PointF(x, b) }; break;
+                case CardShapeDirection.BottomRight: pts = new[] { new PointF(r, y), new PointF(r, b), new PointF(x, b) }; break;
+                default:                             pts = new[] { new PointF(cx, y), new PointF(r, b), new PointF(x, b) }; break;
+            }
+
+            if (!e.FillColor.IsEmpty)
+                using (var brush = new SolidBrush(e.FillColor))
+                    g.FillPolygon(brush, pts);
+            if (!e.BorderColor.IsEmpty && e.BorderMm > 0f)
+                using (var pen = new Pen(e.BorderColor, MmToPx(e.BorderMm)) { LineJoin = LineJoin.MiterClipped })
+                    g.DrawPolygon(pen, pts);
+        }
+
+        /// <summary>
+        /// Half-ellipse arch across the box (Up / Down / Left / Right), or a quarter ellipse centred on a corner.
+        /// Fill = the area inside the arch; the border is drawn along the curved edge only.
+        /// </summary>
+        private static void DrawCurve(Graphics g, ShapeElement e)
+        {
+            float x = MmToPx(e.X), y = MmToPx(e.Y), w = MmToPx(e.Width), h = MmToPx(e.Height);
+            RectangleF oval;
+            float start, sweep = 180f;
+            switch (e.Direction)
+            {
+                case CardShapeDirection.Down:        oval = new RectangleF(x, y - h, w, 2 * h); start = 0f; break;
+                case CardShapeDirection.Left:        oval = new RectangleF(x, y, 2 * w, h); start = 90f; break;
+                case CardShapeDirection.Right:       oval = new RectangleF(x - w, y, 2 * w, h); start = 270f; break;
+                case CardShapeDirection.TopLeft:     oval = new RectangleF(x - w, y - h, 2 * w, 2 * h); start = 0f; sweep = 90f; break;
+                case CardShapeDirection.TopRight:    oval = new RectangleF(x, y - h, 2 * w, 2 * h); start = 90f; sweep = 90f; break;
+                case CardShapeDirection.BottomRight: oval = new RectangleF(x, y, 2 * w, 2 * h); start = 180f; sweep = 90f; break;
+                case CardShapeDirection.BottomLeft:  oval = new RectangleF(x - w, y, 2 * w, 2 * h); start = 270f; sweep = 90f; break;
+                default:                             oval = new RectangleF(x, y, w, 2 * h); start = 180f; break;
+            }
+
+            if (!e.FillColor.IsEmpty)
+                using (var path = new GraphicsPath())
+                using (var brush = new SolidBrush(e.FillColor))
+                {
+                    path.AddPie(oval.X, oval.Y, oval.Width, oval.Height, start, sweep);
+                    g.FillPath(brush, path);
+                }
+            if (!e.BorderColor.IsEmpty && e.BorderMm > 0f)
+                using (var pen = new Pen(e.BorderColor, MmToPx(e.BorderMm)))
+                    g.DrawArc(pen, oval, start, sweep);
         }
 
         private static void DrawField(Graphics g, FieldElement e, Student s, CardText t)

@@ -36,7 +36,7 @@ namespace NPIC_CARD_APP
             A("QR ▾", "QR ▾");
             A("Student QR, back QR (Card Text) or a QR with your own text", "QR និស្សិត QR ផ្នែកក្រោយ (អត្ថបទលើកាត) ឬ QR ដែលមានអត្ថបទផ្ទាល់ខ្លួន");
             A("Shape ▾", "រាង ▾");
-            A("Rectangle, circle / ellipse or line", "ចតុកោណ រង្វង់ / អេលីប ឬបន្ទាត់");
+            A("Rectangle, circle / ellipse, triangle, curve or line", "ចតុកោណ រង្វង់ / អេលីប ត្រីកោណ ខ្សែកោង ឬបន្ទាត់");
             A("LAYERS  ·  TOP FIRST", "ស្រទាប់  ·  ខាងលើមុន");
             A("Bring forward (Ctrl+])", "នាំមកមុខ (Ctrl+])");
             A("Send backward (Ctrl+[)", "បញ្ជូនទៅក្រោយ (Ctrl+[)");
@@ -245,8 +245,16 @@ namespace NPIC_CARD_APP
                 "ពុម្ពអក្សរនៃអក្សរខ្មែរ។ អក្សរឡាតាំង និងលេខ តែងតែប្រើ Times New Roman ទំហំដូចគ្នា។");
             A("Frame thickness around the photo; 0 = no frame.", "កម្រាស់ស៊ុមជុំវិញរូបថត 0 = គ្មានស៊ុម។");
             A("Hidden elements are not printed.", "ធាតុដែលលាក់មិនត្រូវបានបោះពុម្ពទេ។");
-            A("Line: horizontal when wider than high, otherwise vertical. Its thickness is Border (mm).",
-                "បន្ទាត់៖ ផ្ដេកពេលទទឹងធំជាងកម្ពស់ បើមិនដូច្នោះទេ បញ្ឈរ។ កម្រាស់របស់វាគឺ ស៊ុម (mm)។");
+            A("Line: horizontal when wider than high, otherwise vertical. Its thickness is Border (mm). " +
+              "Triangle and Curve fill the box and point toward Direction.",
+                "បន្ទាត់៖ ផ្ដេកពេលទទឹងធំជាងកម្ពស់ បើមិនដូច្នោះទេ បញ្ឈរ។ កម្រាស់របស់វាគឺ ស៊ុម (mm)។ " +
+                "ត្រីកោណ និង ខ្សែកោង ពេញប្រអប់ ហើយចង្អុលទៅតាម ទិស។");
+            A("Triangle and Curve only. Up / Down / Left / Right = the apex or the top of the arch is on that side. " +
+              "A corner (TopLeft…) = a right-angled triangle or a quarter circle sitting in that corner. " +
+              "A curve is drawn with Border colour and Border (mm); give it a Fill colour to fill the area inside the arch.",
+                "សម្រាប់តែ ត្រីកោណ និង ខ្សែកោង។ ឡើងលើ / ចុះក្រោម / ឆ្វេង / ស្ដាំ = កំពូល ឬចំណុចខ្ពស់នៃធ្នូ នៅខាងនោះ។ " +
+                "ជ្រុង (ជ្រុងលើឆ្វេង…) = ត្រីកោណកែង ឬមួយភាគបួនរង្វង់ ដែលនៅក្នុងជ្រុងនោះ។ " +
+                "ខ្សែកោងគូរដោយ ពណ៌ស៊ុម និង ស៊ុម (mm) ដាក់ ពណ៌បំពេញ ដើម្បីបំពេញផ្ទៃក្នុងធ្នូ។");
             A("Makes white pixels transparent (logos, stamp, signature).", "ធ្វើឱ្យភីកសែលពណ៌សថ្លា (ឡូហ្គោ ត្រា ហត្ថលេខា)។");
             A("Optional text in front of the value, e.g. អត្តលេខ or ភេទ. Empty = value only.",
                 "អត្ថបទស្រេចចិត្តនៅខាងមុខតម្លៃ ឧ. អត្តលេខ ឬ ភេទ។ ទទេ = តែតម្លៃ។");
@@ -299,6 +307,23 @@ namespace NPIC_CARD_APP
             A("CustomText", "អត្ថបទផ្ទាល់ខ្លួន");
             A("Rectangle", "ចតុកោណ");
             A("Ellipse", "អេលីប");
+            A("Rotation (°)", "បង្វិល (°)");
+            A("Turns the shape clockwise around its centre, 0–359°. On the card, drag the round handle above the selection " +
+              "(Shift = 15° steps), or right-click → Rotate 90°.",
+                "បង្វិលរាងតាមទិសទ្រនិចនាឡិកាជុំវិញចំណុចកណ្ដាលរបស់វា 0–359°។ នៅលើកាត អូសចំណុចមូលខាងលើការជ្រើសរើស " +
+                "(Shift = ម្ដង 15°) ឬចុចស្ដាំ → បង្វិល 90°។");
+            A("Rotate 90° right", "បង្វិល 90° ទៅស្ដាំ");
+            A("Rotate 90° left", "បង្វិល 90° ទៅឆ្វេង");
+            A("Reset rotation", "កំណត់ការបង្វិលឡើងវិញ");
+            A("Triangle", "ត្រីកោណ");
+            A("Curve", "ខ្សែកោង");
+            A("Direction", "ទិស");
+            A("Up", "ឡើងលើ");
+            A("Down", "ចុះក្រោម");
+            A("TopLeft", "ជ្រុងលើឆ្វេង");
+            A("TopRight", "ជ្រុងលើស្ដាំ");
+            A("BottomLeft", "ជ្រុងក្រោមឆ្វេង");
+            A("BottomRight", "ជ្រុងក្រោមស្ដាំ");
             A("Generate", "បង្កើត");
         }
     }

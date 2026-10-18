@@ -83,7 +83,13 @@ namespace NPIC_CARD_APP.Rendering
         CustomText
     }
 
-    public enum CardShapeKind { Rectangle, Ellipse, Line }
+    public enum CardShapeKind { Rectangle, Ellipse, Line, Triangle, Curve }
+
+    /// <summary>
+    /// Where a triangle or curve points. A side = apex / top of the arch on that side.
+    /// A corner = right-angled triangle or quarter curve sitting in that corner.
+    /// </summary>
+    public enum CardShapeDirection { Up, Down, Left, Right, TopLeft, TopRight, BottomLeft, BottomRight }
 
     /// <summary>One thing on the card. Concrete types are listed in XmlInclude so the XML file can hold any of them.</summary>
     [XmlInclude(typeof(TextElement)), XmlInclude(typeof(FieldElement)), XmlInclude(typeof(ImageElement)),
@@ -335,8 +341,16 @@ namespace NPIC_CARD_APP.Rendering
             BorderColor = Color.Empty;
         }
 
-        [Category("3. Shape"), DisplayName("Shape"), Description("Line: horizontal when wider than high, otherwise vertical. Its thickness is Border (mm).")]
+        [Category("3. Shape"), DisplayName("Shape"),
+         Description("Line: horizontal when wider than high, otherwise vertical. Its thickness is Border (mm). " +
+                     "Triangle and Curve fill the box and point toward Direction.")]
         public CardShapeKind Shape { get; set; }
+
+        [Category("3. Shape"), DisplayName("Direction"),
+         Description("Triangle and Curve only. Up / Down / Left / Right = the apex or the top of the arch is on that side. " +
+                     "A corner (TopLeft…) = a right-angled triangle or a quarter circle sitting in that corner. " +
+                     "A curve is drawn with Border colour and Border (mm); give it a Fill colour to fill the area inside the arch.")]
+        public CardShapeDirection Direction { get; set; }
 
         [Category("3. Shape"), DisplayName("Fill colour"), Description("Transparent (Web tab) = no fill."), XmlIgnore]
         public Color FillColor { get; set; }
@@ -356,8 +370,31 @@ namespace NPIC_CARD_APP.Rendering
         [Category("3. Shape"), DisplayName("Corner radius (mm)"), Description("Rounded corners of a rectangle.")]
         public float CornerMm { get; set; }
 
+        private float _rotation;
+
+        [Category("3. Shape"), DisplayName("Rotation (°)"),
+         Description("Turns the shape clockwise around its centre, 0–359°. On the card, drag the round handle above the selection " +
+                     "(Shift = 15° steps), or right-click → Rotate 90°.")]
+        public float Rotation
+        {
+            get { return _rotation; }
+            set { _rotation = NormalizeAngle(value); }
+        }
+
+        /// <summary>Any angle → 0 ≤ a &lt; 360, rounded to 0.1°.</summary>
+        internal static float NormalizeAngle(float degrees)
+        {
+            if (float.IsNaN(degrees) || float.IsInfinity(degrees)) return 0f;
+            float a = (float)Math.Round(degrees % 360f, 1);
+            if (a < 0f) a += 360f;
+            return a >= 360f ? 0f : a;
+        }
+
         public override string Kind { get { return "Shape"; } }
-        protected override string Describe() { return Shape.ToString(); }
+        protected override string Describe()
+        {
+            return Shape == CardShapeKind.Triangle || Shape == CardShapeKind.Curve ? Shape + " " + Direction : Shape.ToString();
+        }
     }
 
     /// <summary>One side of the card.</summary>

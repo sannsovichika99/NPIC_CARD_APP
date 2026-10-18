@@ -119,7 +119,7 @@ namespace NPIC_CARD_APP
                 "You can also drag picture files onto the card.", (b) => ShowMenu(b, ImageMenu())), 0, 1);
             adds.Controls.Add(AddButton("Photo", "The student's photo from the photo folder", (b) => AddPhoto()), 1, 1);
             adds.Controls.Add(AddButton("QR ▾", "Student QR, back QR (Card Text) or a QR with your own text", (b) => ShowMenu(b, QrMenu())), 0, 2);
-            adds.Controls.Add(AddButton("Shape ▾", "Rectangle, circle / ellipse or line", (b) => ShowMenu(b, ShapeMenu())), 1, 2);
+            adds.Controls.Add(AddButton("Shape ▾", "Rectangle, circle / ellipse, triangle, curve or line", (b) => ShowMenu(b, ShapeMenu())), 1, 2);
             left.Controls.Add(adds, 0, 1);
 
             left.Controls.Add(SectionLabel("LAYERS  ·  TOP FIRST"), 0, 2);
@@ -436,9 +436,11 @@ namespace NPIC_CARD_APP
                                "arrows nudge 0.1 mm (Shift 1 mm)  ·  right-click for more";
                 return;
             }
+            float angle = e is ShapeElement ? ((ShapeElement)e).Rotation : 0f;
             _status.Text = string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                "{0}  ·  {1}      X {2:0.0}   Y {3:0.0}   W {4:0.0}   H {5:0.0} mm{6}",
+                "{0}  ·  {1}      X {2:0.0}   Y {3:0.0}   W {4:0.0}   H {5:0.0} mm{6}{7}",
                 Lang.T(e.Kind), Lang.T(e.DisplayName), e.X, e.Y, e.Width, e.Height,
+                angle != 0f ? string.Format(System.Globalization.CultureInfo.InvariantCulture, "   ↻ {0:0.#}°", angle) : "",
                 e.Locked ? Lang.T("   ·  locked") : "") + (_back && e is FieldElement && ((FieldElement)e).IsStudentField
                     ? Lang.T("   ·  student fields print empty on the back") : "");
         }
@@ -733,6 +735,15 @@ namespace NPIC_CARD_APP
         {
             var e = new ShapeElement { Shape = shape, Width = 30f, Height = 10f };
             if (shape == CardShapeKind.Ellipse) { e.Width = e.Height = 10f; }
+            if (shape == CardShapeKind.Triangle) { e.Width = 10f; e.Height = 9f; }
+            if (shape == CardShapeKind.Curve)
+            {
+                // A curved line by default; set a Fill colour to make it a filled arch / corner.
+                e.Height = 8f;
+                e.FillColor = Color.Empty;
+                e.BorderColor = CardColors.Navy;
+                e.BorderMm = 0.5f;
+            }
             if (shape == CardShapeKind.Line)
             {
                 e.Height = 1f;
@@ -818,6 +829,8 @@ namespace NPIC_CARD_APP
             ContextMenuStrip m = NewMenu();
             m.Items.Add(Item("Rectangle / band", () => AddShape(CardShapeKind.Rectangle)));
             m.Items.Add(Item("Circle / ellipse", () => AddShape(CardShapeKind.Ellipse)));
+            m.Items.Add(Item("Triangle", () => AddShape(CardShapeKind.Triangle)));
+            m.Items.Add(Item("Curve", () => AddShape(CardShapeKind.Curve)));
             m.Items.Add(Item("Line", () => AddShape(CardShapeKind.Line)));
             return m;
         }
@@ -948,9 +961,29 @@ namespace NPIC_CARD_APP
             m.Items.Add(Item(has && _selected.Locked ? "Unlock" : "Lock", ToggleLock, has));
             m.Items.Add(Item("Centre horizontally", () => Centre(true, false), has));
             m.Items.Add(Item("Centre vertically", () => Centre(false, true), has));
+            var shape = _selected as ShapeElement;
+            if (shape != null)
+            {
+                m.Items.Add(new ToolStripSeparator());
+                m.Items.Add(Item("Rotate 90° right", () => RotateSelected(90f)));
+                m.Items.Add(Item("Rotate 90° left", () => RotateSelected(-90f)));
+                m.Items.Add(Item("Reset rotation", () => RotateSelected(0f), shape.Rotation != 0f));
+            }
             m.Items.Add(new ToolStripSeparator());
             m.Items.Add(Item("Delete\tDel", DeleteSelected, has));
             m.Show(owner, at);
+        }
+
+        /// <summary>Turns the selected shape by <paramref name="delta"/> degrees clockwise; 0 = back to upright.</summary>
+        private void RotateSelected(float delta)
+        {
+            var shape = _selected as ShapeElement;
+            if (shape == null) return;
+            shape.Rotation = delta == 0f ? 0f : shape.Rotation + delta;
+            _grid.Refresh();
+            _canvas.Invalidate();
+            RenderNow();
+            Commit();
         }
 
         private void Centre(bool horizontal, bool vertical)
@@ -1472,13 +1505,15 @@ namespace NPIC_CARD_APP
         private const float HandlePx = 8f;
         private const float GridMm = 0.5f;
         private const float SafeMm = 1.5f;
+        private const float RotateGapPx = 26f;   // distance of the rotate knob above the top edge
+        private const int RotateHandle = 8;      // index of the rotate knob in HandlePoints
 
         private Bitmap _image;
         private CardElement _selected, _hover;
         private bool _snap = true, _outlines = true;
 
         // Drag state
-        private enum Drag { None, Move, Resize }
+        private enum Drag { None, Move, Resize, Rotate }
         private Drag _drag;
         private int _handle;
         private PointF _startMm;
@@ -1547,6 +1582,48 @@ namespace NPIC_CARD_APP
             return new PointF((px.X - c.X) / s, (px.Y - c.Y) / s);
         }
 
+        // ---- Rotation helpers (only shapes rotate) ----
+
+        private static float AngleOf(CardElement e)
+        {
+            var shape = e as ShapeElement;
+            return shape == null ? 0f : shape.Rotation;
+        }
+
+        private static PointF Centre(RectangleF r) { return new PointF(r.X + r.Width / 2f, r.Y + r.Height / 2f); }
+
+        /// <summary>Turns p clockwise around c, the same way the renderer turns the shape.</summary>
+        private static PointF Turn(PointF p, PointF c, float degrees)
+        {
+            if (degrees == 0f) return p;
+            double a = degrees * Math.PI / 180.0, cos = Math.Cos(a), sin = Math.Sin(a);
+            float dx = p.X - c.X, dy = p.Y - c.Y;
+            return new PointF(c.X + (float)(dx * cos - dy * sin), c.Y + (float)(dx * sin + dy * cos));
+        }
+
+        /// <summary>Outline of the element's box on the canvas, turned with the shape.</summary>
+        private void DrawBox(Graphics g, Pen pen, CardElement e)
+        {
+            RectangleF r = ToPx(e.Bounds);
+            float a = AngleOf(e);
+            if (a == 0f) { g.DrawRectangle(pen, r.X, r.Y, r.Width, r.Height); return; }
+            PointF c = Centre(r);
+            g.DrawPolygon(pen, new[]
+            {
+                Turn(new PointF(r.Left, r.Top), c, a), Turn(new PointF(r.Right, r.Top), c, a),
+                Turn(new PointF(r.Right, r.Bottom), c, a), Turn(new PointF(r.Left, r.Bottom), c, a)
+            });
+        }
+
+        /// <summary>Is p inside the element's (turned) box, grown by the given pixels on each side?</summary>
+        private bool HitBox(CardElement e, PointF p, float growX, float growY)
+        {
+            RectangleF r = ToPx(e.Bounds);
+            PointF local = Turn(p, Centre(r), -AngleOf(e));
+            r.Inflate(growX, growY);
+            return r.Contains(local);
+        }
+
         // ---- Painting ----
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -1585,10 +1662,7 @@ namespace NPIC_CARD_APP
                 using (var pen = new Pen(Color.FromArgb(90, 120, 120, 140)) { DashStyle = DashStyle.Dot })
                     foreach (CardElement el in Side.Elements)
                         if (el != _selected && el.Visible)
-                        {
-                            RectangleF r = ToPx(el.Bounds);
-                            g.DrawRectangle(pen, r.X, r.Y, r.Width, r.Height);
-                        }
+                            DrawBox(g, pen, el);
             }
 
             if (Side != null && Side.Elements.Count == 0)
@@ -1604,8 +1678,7 @@ namespace NPIC_CARD_APP
 
             if (_hover != null && _hover != _selected && Side != null && Side.Elements.Contains(_hover))
             {
-                RectangleF r = ToPx(_hover.Bounds);
-                using (var pen = new Pen(Color.FromArgb(150, Theme.Accent), 1.2f)) g.DrawRectangle(pen, r.X, r.Y, r.Width, r.Height);
+                using (var pen = new Pen(Color.FromArgb(150, Theme.Accent), 1.2f)) DrawBox(g, pen, _hover);
             }
 
             // Snap guides while dragging
@@ -1617,18 +1690,33 @@ namespace NPIC_CARD_APP
 
             if (_selected != null)
             {
-                RectangleF r = ToPx(_selected.Bounds);
                 using (var pen = new Pen(Theme.Accent, 1.6f) { DashStyle = _selected.Locked ? DashStyle.Dash : DashStyle.Solid })
-                    g.DrawRectangle(pen, r.X, r.Y, r.Width, r.Height);
+                    DrawBox(g, pen, _selected);
                 if (!_selected.Locked)
                 {
+                    PointF[] hs = HandlePoints(_selected);
                     using (var fill = new SolidBrush(Color.White))
                     using (var pen = new Pen(Theme.Accent, 1.4f))
-                        foreach (RectangleF h in Handles(r))
+                    {
+                        if (hs.Length > RotateHandle)
                         {
+                            // Rotate knob: a round handle on a stem above the top edge
+                            PointF knob = hs[RotateHandle];
+                            using (var stem = new Pen(Theme.Accent, 1.2f)) g.DrawLine(stem, hs[1], knob);
+                            RectangleF k = HandleRect(knob);
+                            k.Inflate(1.5f, 1.5f);
+                            using (var knobFill = new SolidBrush(_drag == Drag.Rotate ? Theme.Accent : Color.White))
+                                g.FillEllipse(knobFill, k);
+                            g.DrawEllipse(pen, k);
+                        }
+                        for (int i = 0; i < Math.Min(8, hs.Length); i++)
+                        {
+                            RectangleF h = HandleRect(hs[i]);
                             g.FillRectangle(fill, h);
                             g.DrawRectangle(pen, h.X, h.Y, h.Width, h.Height);
                         }
+                    }
+                    if (_drag == Drag.Rotate && hs.Length > RotateHandle) DrawAngleBadge(g, hs[RotateHandle], AngleOf(_selected));
                 }
             }
 
@@ -1637,31 +1725,71 @@ namespace NPIC_CARD_APP
                     g.DrawRectangle(pen, 2, 2, Width - 5, Height - 5);
         }
 
-        /// <summary>TL, T, TR, R, BR, B, BL, L.</summary>
-        private static RectangleF[] Handles(RectangleF r)
+        /// <summary>Handle centres, turned with the shape: TL, T, TR, R, BR, B, BL, L, then the rotate knob (shapes only).</summary>
+        private PointF[] HandlePoints(CardElement e)
         {
-            float h = HandlePx, o = h / 2f;
-            float cx = r.X + r.Width / 2f, cy = r.Y + r.Height / 2f;
-            return new[]
+            RectangleF r = ToPx(e.Bounds);
+            PointF c = Centre(r);
+            var pts = new List<PointF>
             {
-                new RectangleF(r.Left - o, r.Top - o, h, h), new RectangleF(cx - o, r.Top - o, h, h),
-                new RectangleF(r.Right - o, r.Top - o, h, h), new RectangleF(r.Right - o, cy - o, h, h),
-                new RectangleF(r.Right - o, r.Bottom - o, h, h), new RectangleF(cx - o, r.Bottom - o, h, h),
-                new RectangleF(r.Left - o, r.Bottom - o, h, h), new RectangleF(r.Left - o, cy - o, h, h)
+                new PointF(r.Left, r.Top), new PointF(c.X, r.Top), new PointF(r.Right, r.Top), new PointF(r.Right, c.Y),
+                new PointF(r.Right, r.Bottom), new PointF(c.X, r.Bottom), new PointF(r.Left, r.Bottom), new PointF(r.Left, c.Y)
             };
+            if (e is ShapeElement) pts.Add(new PointF(c.X, r.Top - RotateGapPx));
+            float a = AngleOf(e);
+            for (int i = 0; i < pts.Count; i++) pts[i] = Turn(pts[i], c, a);
+            return pts.ToArray();
+        }
+
+        private static RectangleF HandleRect(PointF centre)
+        {
+            return new RectangleF(centre.X - HandlePx / 2f, centre.Y - HandlePx / 2f, HandlePx, HandlePx);
         }
 
         private int HandleAt(Point p)
         {
             if (_selected == null || _selected.Locked) return -1;
-            RectangleF[] hs = Handles(ToPx(_selected.Bounds));
-            for (int i = 0; i < hs.Length; i++)
+            PointF[] hs = HandlePoints(_selected);
+            for (int i = hs.Length - 1; i >= 0; i--)   // the rotate knob first
             {
-                RectangleF h = hs[i];
+                RectangleF h = HandleRect(hs[i]);
                 h.Inflate(3f, 3f);
                 if (h.Contains(p)) return i;
             }
             return -1;
+        }
+
+        /// <summary>"45°" pill next to the rotate knob while rotating.</summary>
+        private void DrawAngleBadge(Graphics g, PointF knob, float degrees)
+        {
+            string text = degrees.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "°";
+            SizeF size = g.MeasureString(text, Theme.Small);
+            var box = new RectangleF(knob.X + 12f, knob.Y - size.Height / 2f - 3f, size.Width + 10f, size.Height + 6f);
+            if (box.Right > Width - 4) box.X = knob.X - 12f - box.Width;
+            using (GraphicsPath p = Theme.RoundRect(box, box.Height / 2f))
+            using (var b = new SolidBrush(Theme.Accent))
+                g.FillPath(b, p);
+            using (var b = new SolidBrush(Color.White))
+                g.DrawString(text, Theme.Small, b, box.X + 5f, box.Y + 3f);
+        }
+
+        /// <summary>Points the shape's top at the mouse. Shift = 15° steps; with Snap on, 0 / 90 / 180 / 270° pull within 3°.</summary>
+        private void RotateTowards(Point p, bool steps)
+        {
+            var shape = _selected as ShapeElement;
+            if (shape == null) return;
+            PointF c = Centre(ToPx(shape.Bounds));
+            float vx = p.X - c.X, vy = p.Y - c.Y;
+            if (vx * vx + vy * vy < 9f) return;   // too close to the centre to tell a direction
+            double deg = Math.Atan2(vx, -vy) * 180.0 / Math.PI;
+            if (steps) deg = Math.Round(deg / 15.0) * 15.0;
+            else
+            {
+                deg = Math.Round(deg);
+                double right = Math.Round(deg / 90.0) * 90.0;
+                if (_snap && Math.Abs(deg - right) <= 3.0) deg = right;
+            }
+            shape.Rotation = (float)deg;
         }
 
         /// <summary>Top-most visible, unlocked element under the point (a tiny element gets a few extra pixels).</summary>
@@ -1673,8 +1801,7 @@ namespace NPIC_CARD_APP
                 CardElement el = Side.Elements[i];
                 if (!el.Visible || el.Locked) continue;
                 RectangleF r = ToPx(el.Bounds);
-                r.Inflate(Math.Max(0f, 6f - r.Width) / 2f + 1f, Math.Max(0f, 6f - r.Height) / 2f + 1f);
-                if (r.Contains(p)) return el;
+                if (HitBox(el, p, Math.Max(0f, 6f - r.Width) / 2f + 1f, Math.Max(0f, 6f - r.Height) / 2f + 1f)) return el;
             }
             return null;
         }
@@ -1689,7 +1816,7 @@ namespace NPIC_CARD_APP
             {
                 CardElement hit = ElementAt(e.Location);
                 // Clicking inside the selected (maybe locked) element keeps it selected
-                if (hit == null && _selected != null && ToPx(_selected.Bounds).Contains(e.Location)) hit = _selected;
+                if (hit == null && _selected != null && HitBox(_selected, e.Location, 0f, 0f)) hit = _selected;
                 if (hit != _selected)
                 {
                     _selected = hit;
@@ -1705,7 +1832,7 @@ namespace NPIC_CARD_APP
             }
             if (e.Button != MouseButtons.Left || _selected == null || _selected.Locked) return;
 
-            _drag = handle >= 0 ? Drag.Resize : Drag.Move;
+            _drag = handle == RotateHandle ? Drag.Rotate : handle >= 0 ? Drag.Resize : Drag.Move;
             _handle = handle;
             _startMm = ToMm(e.Location);
             _startBounds = _selected.Bounds;
@@ -1719,7 +1846,9 @@ namespace NPIC_CARD_APP
             if (_drag == Drag.None)
             {
                 int h = HandleAt(e.Location);
-                Cursor = h >= 0 ? HandleCursor(h) : ElementAt(e.Location) != null ? Cursors.SizeAll : Cursors.Default;
+                Cursor = h == RotateHandle ? Cursors.Hand
+                    : h >= 0 ? HandleCursor(h, AngleOf(_selected))
+                    : ElementAt(e.Location) != null ? Cursors.SizeAll : Cursors.Default;
                 CardElement hover = ElementAt(e.Location);
                 if (hover != _hover) { _hover = hover; Invalidate(); }
                 return;
@@ -1731,7 +1860,15 @@ namespace NPIC_CARD_APP
             _moved = true;
             bool shift = (ModifierKeys & Keys.Shift) != 0;
 
-            RectangleF r = _drag == Drag.Move ? MoveRect(dx, dy) : ResizeRect(dx, dy, shift);
+            if (_drag == Drag.Rotate)
+            {
+                RotateTowards(e.Location, shift);
+                Invalidate();
+                ElementMoving?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            RectangleF r = _drag == Drag.Move ? MoveRect(dx, dy) : ResizeTurned(dx, dy, shift);
             _selected.Bounds = new RectangleF((float)Math.Round(r.X, 2), (float)Math.Round(r.Y, 2), (float)Math.Round(r.Width, 2), (float)Math.Round(r.Height, 2));
             Invalidate();
             ElementMoving?.Invoke(this, EventArgs.Empty);
@@ -1766,9 +1903,10 @@ namespace NPIC_CARD_APP
         protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
         protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
 
-        private static Cursor HandleCursor(int h)
+        /// <summary>Resize cursor of a handle, following the shape's rotation in 45° steps.</summary>
+        private static Cursor HandleCursor(int h, float degrees)
         {
-            switch (h)
+            switch (((h + (int)Math.Round(degrees / 45f)) % 8 + 8) % 8)
             {
                 case 0: case 4: return Cursors.SizeNWSE;
                 case 2: case 6: return Cursors.SizeNESW;
@@ -1812,17 +1950,31 @@ namespace NPIC_CARD_APP
 
         private float Round(float mm) { return _snap ? (float)Math.Round(mm / GridMm) * GridMm : mm; }
 
-        private RectangleF ResizeRect(float dx, float dy, bool keepRatio)
+        /// <summary>
+        /// Resize along the shape's own (turned) sides: the mouse move is turned back into the shape's frame,
+        /// and the box is shifted so the opposite handle stays where it is on the card.
+        /// </summary>
+        private RectangleF ResizeTurned(float dx, float dy, bool keepRatio)
+        {
+            float a = AngleOf(_selected);
+            if (a == 0f) return ResizeRect(dx, dy, keepRatio, true);
+            PointF local = Turn(new PointF(dx, dy), PointF.Empty, -a);
+            RectangleF n = ResizeRect(local.X, local.Y, keepRatio, false);   // the mm grid does not apply to turned sides
+            PointF centre = Turn(Centre(n), Centre(_startBounds), a);
+            return new RectangleF(centre.X - n.Width / 2f, centre.Y - n.Height / 2f, n.Width, n.Height);
+        }
+
+        private RectangleF ResizeRect(float dx, float dy, bool keepRatio, bool grid)
         {
             float l = _startBounds.Left, t = _startBounds.Top, r = _startBounds.Right, b = _startBounds.Bottom;
             bool left = _handle == 0 || _handle == 6 || _handle == 7;
             bool right = _handle == 2 || _handle == 3 || _handle == 4;
             bool top = _handle == 0 || _handle == 1 || _handle == 2;
             bool bottom = _handle == 4 || _handle == 5 || _handle == 6;
-            if (left) l = Round(l + dx);
-            if (right) r = Round(r + dx);
-            if (top) t = Round(t + dy);
-            if (bottom) b = Round(b + dy);
+            if (left) l = grid ? Round(l + dx) : l + dx;
+            if (right) r = grid ? Round(r + dx) : r + dx;
+            if (top) t = grid ? Round(t + dy) : t + dy;
+            if (bottom) b = grid ? Round(b + dy) : b + dy;
 
             const float min = 0.5f;
             if (r - l < min) { if (left) l = r - min; else r = l + min; }
