@@ -1,3 +1,41 @@
+### v1.0.0.5
+
+Release date: 2026-10-18
+
+This version adds new card designs and a Card Designer to make your own cards.
+
+## Feature
+* Card Template… (sidebar): choose the card design used for preview and printing
+* 4 built-in designs: Classic (the original NPIC card), Modern (navy header band), Minimal (clean white card, large name) and Ribbon (navy ribbon down the left edge)
+* Every design is previewed live with the selected student and the current Card Text, so what you see is what prints
+* The photo box is the same size in every design, so photos cropped with Remove Background… fit all of them
+* Card Designer… (sidebar): build your own front and back
+* Add text, student fields, the photo, QR codes, images and shapes (rectangle, ellipse, line)
+* Move and resize elements on a live preview, and edit every detail in the properties panel
+* Fonts: Khmer OS Siemreap, Khmer OS Muol, Khmer OS Muol Light, Siemreap, Tacteing (ornament)
+* Field formats: as it is, CAPITAL LETTERS, Khmer digits (2025 → ២០២៥) or Khmer date (24/01/2008 → ២៤ មករា ២០០៨)
+* Fields can have a label in front, e.g. "អត្តលេខ: NPIC24001"
+* Images: Upload image…, drag and drop, or paste a picture with Ctrl+V. Change picture… keeps the element's box
+* Layers: bring forward / send backward, bring to front / send to back, lock, snap
+* Undo / redo (Ctrl+Z / Ctrl+Y), copy / paste (Ctrl+C / Ctrl+V), duplicate (Ctrl+D), delete (Del)
+* Arrow keys move the selected element 0.1 mm (Shift + arrow = 1 mm)
+* My designs: create, rename, duplicate, delete, import and export designs
+* Save (Ctrl+S) keeps the design. Save & Use also prints with it
+* Unsaved changes are never lost: Close or Esc asks first
+* Designs are saved to %AppData%\NPIC_CARD_APP\CardDesigns
+* Custom fields: every column of the student list is kept (e.g. Phone, BloodType), for all import sources, and can be printed with a Card Designer field
+* Slim scroll bars now also on property lists and formatted text (release notes, user guide)
+
+## Change
+* Pictures chosen in Card Text and Card Designer are copied to the app data folder, so cards still print if the original file is moved
+
+## Known issue
+* The user guide (F1) does not explain Card Template… or Card Designer… yet
+* The user guide (F1 → Overview) still lists driver setup as a sidebar command
+* Help still lists .xls files, but import only accepts .xlsx / .xlsm
+
+---
+
 ### v1.0.0.4
 
 Release date: 2026-10-18
