@@ -549,6 +549,9 @@ namespace NPIC_CARD_APP
                 case CardImageSource.PinIcon: case CardImageSource.MailIcon: case CardImageSource.GlobeIcon:
                     e.Width = e.Height = 2.5f; break;
                 case CardImageSource.BackQrPicture: e.RemoveWhite = false; break;
+                case CardImageSource.Ornament: e.Width = 17.2f; e.Height = 5f; break;
+                case CardImageSource.WatermarkPattern:
+                    e.Width = CardRenderer.CardWidthMm; e.Height = CardRenderer.CardHeightMm; e.Locked = true; break;
                 case CardImageSource.CustomFile:
                     UploadImages();
                     return;
@@ -812,6 +815,9 @@ namespace NPIC_CARD_APP
             m.Items.Add(Item("Location icon", () => AddImage(CardImageSource.PinIcon)));
             m.Items.Add(Item("Email icon", () => AddImage(CardImageSource.MailIcon)));
             m.Items.Add(Item("Website icon", () => AddImage(CardImageSource.GlobeIcon)));
+            m.Items.Add(new ToolStripSeparator());
+            m.Items.Add(Item("Ornament (Card Text)", () => AddImage(CardImageSource.Ornament)));
+            m.Items.Add(Item("NPIC watermark pattern", () => AddImage(CardImageSource.WatermarkPattern)));
             return m;
         }
 

@@ -52,6 +52,15 @@ namespace NPIC_CARD_APP
             A("All designs print the same student data, Card Text, photo and QR codes. The slot positions from Test Print stay the same.",
                 "គ្រប់ការរចនាបោះពុម្ពទិន្នន័យនិស្សិត អត្ថបទលើកាត រូបថត និងកូដ QR ដូចគ្នា។ ទីតាំងរន្ធពី បោះពុម្ពសាកល្បង នៅដដែល។");
             A("New design", "ការរចនាថ្មី");
+            A("Right-click a template to copy it into My designs and change it  ·  double-click to use it",
+                "ចុចកណ្ដុរស្ដាំលើគំរូ ដើម្បីចម្លងទៅ ការរចនារបស់ខ្ញុំ ហើយកែវា  ·  ចុចពីរដងដើម្បីប្រើ");
+            A("Copy as new design", "ចម្លងជាការរចនាថ្មី");
+            A("Copy the selected built-in template into My designs and open it in Card Designer to change it",
+                "ចម្លងគំរូដែលមានស្រាប់ដែលបានជ្រើស ទៅ ការរចនារបស់ខ្ញុំ ហើយបើកវាក្នុង រចនាកាត ដើម្បីកែ");
+            A("Use this template", "ប្រើគំរូនេះ");
+            A("Copy and edit in Card Designer…", "ចម្លង ហើយកែក្នុង រចនាកាត…");
+            A("Copy to My designs", "ចម្លងទៅ ការរចនារបស់ខ្ញុំ");
+            A("{0} (copy)", "{0} (ចម្លង)");
 
             // ---- Card Text ----
             A("Card Text", "អត្ថបទលើកាត");

@@ -133,6 +133,8 @@ namespace NPIC_CARD_APP
             A("Location icon", "រូបតំណាងទីតាំង");
             A("Email icon", "រូបតំណាងអ៊ីមែល");
             A("Website icon", "រូបតំណាងគេហទំព័រ");
+            A("Ornament (Card Text)", "គ្រឿងលម្អ (អត្ថបទលើកាត)");
+            A("NPIC watermark pattern", "លំនាំស្នាមទឹក NPIC");
             A("Student QR (changes per student)", "QR និស្សិត (ប្ដូរតាមនិស្សិតម្នាក់ៗ)");
             A("Back QR (from Card Text)", "QR ផ្នែកក្រោយ (ពីអត្ថបទលើកាត)");
             A("QR with my own text…", "QR ដែលមានអត្ថបទផ្ទាល់ខ្លួន…");
@@ -307,6 +309,11 @@ namespace NPIC_CARD_APP
             A("CustomText", "អត្ថបទផ្ទាល់ខ្លួន");
             A("Rectangle", "ចតុកោណ");
             A("Ellipse", "អេលីប");
+            A("Label size (pt)", "ទំហំស្លាក (pt)");
+            A("Size of the label and the colon when Label column is more than 0. 0 = the same size as the value.",
+                "ទំហំស្លាក និងសញ្ញា : ពេល ជួរស្លាក ធំជាង 0។ 0 = ទំហំដូចតម្លៃ។");
+            A("Ornament", "គ្រឿងលម្អ");
+            A("WatermarkPattern", "លំនាំស្នាមទឹក");
             A("Rotation (°)", "បង្វិល (°)");
             A("Turns the shape clockwise around its centre, 0–359°. On the card, drag the round handle above the selection " +
               "(Shift = 15° steps), or right-click → Rotate 90°.",

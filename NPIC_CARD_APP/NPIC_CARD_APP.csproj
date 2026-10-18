@@ -185,6 +185,7 @@
     <Compile Include="Rendering\CardRenderer.Custom.cs" />
     <Compile Include="Rendering\CustomCard.cs" />
     <Compile Include="Rendering\CardTemplates.cs" />
+    <Compile Include="Rendering\BuiltInDesigns.cs" />
     <Compile Include="Rendering\KhmerText.cs" />
     <Compile Include="Rendering\PositionGrid.cs" />
     <Compile Include="Rendering\QrEncoder.cs" />

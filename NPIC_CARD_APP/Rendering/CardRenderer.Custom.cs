@@ -232,8 +232,9 @@ namespace NPIC_CARD_APP.Rendering
             {
                 // Label column, then ": value" — rows with the same label width line up like the built-in cards.
                 float colonX = e.X + e.LabelWidth;
-                DrawRuns(g, Runs(e.Label, e, e.LabelColor), e.SizePt, e.X, e.Y, e.LabelWidth, e.Height, TextFormatFlags.Left);
-                DrawRuns(g, Runs(":", e, e.LabelColor), e.SizePt, colonX, e.Y, 1.4f, e.Height, TextFormatFlags.Left);
+                float labelPt = e.LabelSizePt > 0f ? e.LabelSizePt : e.SizePt;
+                DrawRuns(g, Runs(e.Label, e, e.LabelColor), labelPt, e.X, e.Y, e.LabelWidth, e.Height, TextFormatFlags.Left);
+                DrawRuns(g, Runs(":", e, e.LabelColor), labelPt, colonX, e.Y, 1.4f, e.Height, TextFormatFlags.Left);
                 float valueX = colonX + 1.3f;
                 DrawRuns(g, Runs(value, e, e.Color), e.SizePt, valueX, e.Y, Math.Max(0.5f, e.X + e.Width - valueX), e.Height, align);
                 return;
@@ -293,6 +294,16 @@ namespace NPIC_CARD_APP.Rendering
                 case CardImageSource.PinIcon: DrawPinIcon(g, cx, cy + 0.35f); return;
                 case CardImageSource.MailIcon: DrawMailIcon(g, cx, cy); return;
                 case CardImageSource.GlobeIcon: DrawGlobeIcon(g, cx, cy); return;
+                case CardImageSource.Ornament: DrawOrnament(g, t.OrnamentText, cx, cy, e.Width / 2f); return;
+                case CardImageSource.WatermarkPattern:
+                {
+                    // Same pattern (and phase) as the Classic back, shown only inside the box
+                    GraphicsState state = g.Save();
+                    g.SetClip(new RectangleF(MmToPx(e.X), MmToPx(e.Y), MmToPx(e.Width), MmToPx(e.Height)), CombineMode.Intersect);
+                    DrawWatermarkText(g);
+                    g.Restore(state);
+                    return;
+                }
             }
 
             Bitmap img;

@@ -69,6 +69,10 @@ namespace NPIC_CARD_APP.Rendering
     {
         NpicLogo, MinistryLogo, Stamp, Signature, BackQrPicture, Facebook, Telegram, YouTube, TikTok,
         PinIcon, MailIcon, GlobeIcon,
+        /// <summary>The ornament from Card Text (Tacteing glyphs, or a drawn ornament when the font is missing).</summary>
+        Ornament,
+        /// <summary>Diagonal "NPIC" pattern of the Classic back, clipped to the box.</summary>
+        WatermarkPattern,
         /// <summary>Any PNG/JPG chosen in "File".</summary>
         CustomFile
     }
@@ -240,6 +244,10 @@ namespace NPIC_CARD_APP.Rendering
         [Category("4. Label"), DisplayName("Label column (mm)"),
          Description("0 = label and value on one line (\"Label: value\"). More than 0 = the label gets a column this wide and \": value\" starts after it, so rows line up.")]
         public float LabelWidth { get; set; }
+
+        [Category("4. Label"), DisplayName("Label size (pt)"),
+         Description("Size of the label and the colon when Label column is more than 0. 0 = the same size as the value.")]
+        public float LabelSizePt { get; set; }
 
         [Category("4. Label"), DisplayName("Label colour"), XmlIgnore]
         public Color LabelColor { get; set; }

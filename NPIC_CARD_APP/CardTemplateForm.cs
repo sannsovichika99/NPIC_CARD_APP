@@ -48,6 +48,7 @@ namespace NPIC_CARD_APP
         private readonly CardTemplate _currentTemplate;
         private readonly string _currentDesignId;
         private readonly Size _clientSize;
+        private readonly PillButton _btnCopy;
         private Choice _selected;
         private ContextMenuStrip _menu;
 
@@ -93,6 +94,12 @@ namespace NPIC_CARD_APP
 
             // ---- Built-in templates ----
             body.Controls.Add(SectionLabel("BUILT-IN TEMPLATES", BodyPad, y));
+            body.Controls.Add(new Label
+            {
+                Text = "Right-click a template to copy it into My designs and change it  ·  double-click to use it",
+                Font = Theme.Small, ForeColor = Theme.TextMuted, BackColor = Theme.Surface, AutoSize = false,
+                TextAlign = ContentAlignment.TopRight, Location = new Point(BodyPad + 200, y - 1), Size = new Size(width - 2 * BodyPad - 200, 18)
+            });
             y += 24;
             for (int i = 0; i < _builtIn.Count; i++)
             {
@@ -100,6 +107,7 @@ namespace NPIC_CARD_APP
                 c.Tile = NewTile(c);
                 c.Tile.Location = new Point(BodyPad + i * TemplateTile.CellWidth, y);
                 c.Tile.DoubleClick += (s, e) => { Choose(c); DialogResult = DialogResult.OK; };
+                c.Tile.MouseUp += (s, e) => { if (e.Button == MouseButtons.Right) ShowBuiltInMenu(c, e.Location); };
                 body.Controls.Add(c.Tile);
             }
             y += TemplateTile.CellHeight + 10;
@@ -156,9 +164,12 @@ namespace NPIC_CARD_APP
                 OpenInDesigner(_selected != null ? _selected.DesignId : null, false));
             designer.Margin = new Padding(0, 0, 24, 0);
             _tip.SetTip(designer, "Open Card Designer: edit the selected design of yours, or create a new one");
+            _btnCopy = ModalUi.Button("Copy as new design", PillKind.Ghost, (s, e) => CopyBuiltIn(_selected, true));
+            _tip.SetTip(_btnCopy, "Copy the selected built-in template into My designs and open it in Card Designer to change it");
             footer.Controls.Add(apply);    // right-to-left flow: first added = rightmost
             footer.Controls.Add(cancel);
             footer.Controls.Add(designer);
+            footer.Controls.Add(_btnCopy);
             AcceptButton = apply;
             CancelButton = cancel;
 
@@ -263,6 +274,34 @@ namespace NPIC_CARD_APP
             _menu.Items.Add(new ToolStripSeparator());
             _menu.Items.Add(ThemedMenu.Item("Delete…", () => DeleteDesign(c)));
             _menu.Show(c.Tile, at);
+        }
+
+        private void ShowBuiltInMenu(Choice c, Point at)
+        {
+            Choose(c);
+            if (_menu != null) _menu.Dispose();
+            _menu = ThemedMenu.Create();
+            _menu.Items.Add(ThemedMenu.Item("Use this template", () => { Choose(c); DialogResult = DialogResult.OK; }));
+            _menu.Items.Add(new ToolStripSeparator());
+            _menu.Items.Add(ThemedMenu.Item("Copy and edit in Card Designer…", () => CopyBuiltIn(c, true)));
+            _menu.Items.Add(ThemedMenu.Item("Copy to My designs", () => CopyBuiltIn(c, false)));
+            _menu.Show(c.Tile, at);
+        }
+
+        /// <summary>
+        /// Rebuilds a built-in template as an editable design (same look, live data), saves it under My designs and selects it.
+        /// <paramref name="edit"/> = open it in Card Designer right away.
+        /// </summary>
+        private void CopyBuiltIn(Choice c, bool edit)
+        {
+            if (c == null || c.DesignId != null || !BuiltInDesigns.CanCopy(c.Template)) return;
+            CustomCardDesign d = BuiltInDesigns.Create(c.Template);
+            d.Name = CustomCardStore.UniqueName(Lang.F("{0} (copy)", c.Name));
+            if (!TrySave(d)) return;
+            Choice added = MakeChoice(d);
+            _mine.Insert(0, added);
+            AfterLibraryChange(added);
+            if (edit) OpenInDesigner(d.Id, false);
         }
 
         private void RenameDesign(Choice c)
@@ -371,6 +410,7 @@ namespace NPIC_CARD_APP
             if (choice.Tile != null && choice.DesignId != null) _minePanel.ScrollControlIntoView(choice.Tile);
 
             _preview.SetImages(choice.Front, choice.Back);
+            _btnCopy.Enabled = choice.DesignId == null && BuiltInDesigns.CanCopy(choice.Template);
             bool inUse = choice == FindCurrent();
             _hint.Text = choice.Name + (inUse ? Lang.T("  (in use)") : "") + "  ·  " + choice.Description +
                 "\nAll designs print the same student data, Card Text, photo and QR codes. " +
