@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -9,10 +10,22 @@ namespace NPIC_CARD_APP.Services
     {
         Ok,
         Empty,
-        /// <summary>Not 105 Base32 characters starting with the format version.</summary>
+        /// <summary>Not a version 1 or version 2 serial (wrong length or first character).</summary>
         NotASerial,
         /// <summary>Right length, but the check character does not match: a character was changed.</summary>
         Typo
+    }
+
+    /// <summary>What a serial number holds, read from its text (its signature is not checked yet).</summary>
+    internal sealed class SerialData
+    {
+        /// <summary>1 = no expiry date (first format), 2 = with expiry date.</summary>
+        public int Version { get; set; }
+
+        /// <summary>Last day the serial works (local date), or null when it never expires.</summary>
+        public DateTime? Expires { get; set; }
+
+        public byte[] Signature { get; set; }
     }
 
     /// <summary>
@@ -20,30 +33,46 @@ namespace NPIC_CARD_APP.Services
     /// Serial Generator (Tools\SerialGenerator, to make them), so the two can never disagree. Installer\serial.ps1 repeats it.
     ///
     ///   Machine ID = 16 Base32 characters (80 bits), shown as XXXX-XXXX-XXXX-XXXX.
-    ///   Serial     = "1" (format version) + ECDSA P-256 signature of <see cref="SignedPrefix"/> + Machine ID (64 bytes =
-    ///                103 characters) + 1 check character = 105 characters, shown in groups of 5.
+    ///   Serial v2  = "2" + expiry (3 characters: days after 2020-01-01, 0 = never) + ECDSA P-256 signature of
+    ///                "CardStudio-Serial-v2|" + Machine ID + "|" + expiry days (64 bytes = 103 characters) + 1 check character
+    ///                = 108 characters, shown in groups of 5. Made by the generator since expiry dates were added.
+    ///   Serial v1  = "1" + signature of "CardStudio-Serial-v1|" + Machine ID + 1 check character = 105 characters.
+    ///                The first format: still accepted, never expires.
+    /// The expiry date is inside the signed text, so it cannot be changed without making the serial invalid.
     /// </summary>
     internal static class SerialFormat
     {
-        /// <summary>First character of every serial: the format version.</summary>
-        public const char FormatVersion = '1';
-
-        /// <summary>Signed text = this prefix + the Machine ID (16 characters, no dashes).</summary>
-        public const string SignedPrefix = "CardStudio-Serial-v1|";
-
         /// <summary>Crockford Base32: no I, L, O or U, so a serial cannot be misread.</summary>
         public const string Alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
         public const int MachineIdLength = 16;
         public const int SignatureBytes = 64;
 
-        /// <summary>1 version + 103 signature + 1 check character.</summary>
-        public const int SerialLength = 105;
+        /// <summary>Length of a version 1 serial (no expiry date).</summary>
+        public const int LengthV1 = 105;
+
+        /// <summary>Length of a version 2 serial (with expiry date): the one the generator makes.</summary>
+        public const int SerialLength = 108;
+
+        /// <summary>Expiry dates are stored as days after this date; 0 = never expires.</summary>
+        private static readonly DateTime Epoch = new DateTime(2020, 1, 1);
+
+        /// <summary>3 Base32 characters = 15 bits.</summary>
+        private const int MaxExpiryDays = (1 << 15) - 1;
+
+        /// <summary>Latest expiry date a serial can hold (2109).</summary>
+        public static DateTime MaxExpiry { get { return Epoch.AddDays(MaxExpiryDays); } }
+
+        /// <summary>Earliest expiry date a serial can hold.</summary>
+        public static DateTime MinExpiry { get { return Epoch.AddDays(1); } }
 
         /// <summary>Bytes that are signed for <paramref name="machineId"/> (any spelling: dashes, case, spaces).</summary>
-        public static byte[] SignedData(string machineId)
+        public static byte[] SignedData(int version, string machineId, DateTime? expires)
         {
-            return Encoding.UTF8.GetBytes(SignedPrefix + Normalize(machineId));
+            string text = version == 1
+                ? "CardStudio-Serial-v1|" + Normalize(machineId)
+                : "CardStudio-Serial-v2|" + Normalize(machineId) + "|" + ExpiryDays(expires).ToString(CultureInfo.InvariantCulture);
+            return Encoding.UTF8.GetBytes(text);
         }
 
         /// <summary>True when <paramref name="text"/> is a Machine ID (16 Base32 characters, dashes / spaces ignored).</summary>
@@ -59,25 +88,59 @@ namespace NPIC_CARD_APP.Services
             return Group(Normalize(text), 4);
         }
 
-        /// <summary>Turns a 64-byte signature into the serial the user pastes (groups of 5).</summary>
-        public static string Encode(byte[] signature)
+        /// <summary>
+        /// Turns a signature of <see cref="SignedData"/>(2, id, <paramref name="expires"/>) into the serial the user pastes
+        /// (version 2, groups of 5).
+        /// </summary>
+        public static string Encode(byte[] signature, DateTime? expires)
         {
             if (signature == null || signature.Length != SignatureBytes)
                 throw new ArgumentException("An ECDSA P-256 signature has " + SignatureBytes + " bytes.", "signature");
-            string body = FormatVersion + ToBase32(signature);
+            int days = ExpiryDays(expires);
+            string body = "2" + Alphabet[(days >> 10) & 31] + Alphabet[(days >> 5) & 31] + Alphabet[days & 31] + ToBase32(signature);
             return Group(body + CheckChar(body), 5);
         }
 
-        /// <summary>Reads the signature back out of a serial; null unless the result is <see cref="SerialShape.Ok"/>.</summary>
-        public static SerialShape Decode(string serial, out byte[] signature)
+        /// <summary>Reads version, expiry date and signature out of a serial; <paramref name="data"/> is null unless Ok.</summary>
+        public static SerialShape Decode(string serial, out SerialData data)
         {
-            signature = null;
+            data = null;
             string body = Normalize(serial);
             if (body.Length == 0) return SerialShape.Empty;
-            if (body.Length != SerialLength || body[0] != FormatVersion) return SerialShape.NotASerial;
-            if (CheckChar(body.Substring(0, SerialLength - 1)) != body[SerialLength - 1]) return SerialShape.Typo;
-            signature = FromBase32(body.Substring(1, SerialLength - 2), SignatureBytes);
-            return signature == null ? SerialShape.NotASerial : SerialShape.Ok;
+
+            int version = body[0] == '1' && body.Length == LengthV1 ? 1 : body[0] == '2' && body.Length == SerialLength ? 2 : 0;
+            if (version == 0) return SerialShape.NotASerial;
+            if (CheckChar(body.Substring(0, body.Length - 1)) != body[body.Length - 1]) return SerialShape.Typo;
+
+            int sigStart = version == 1 ? 1 : 4;
+            DateTime? expires = null;
+            if (version == 2)
+            {
+                int days = 0;
+                for (int i = 1; i < 4; i++)
+                {
+                    int v = Alphabet.IndexOf(body[i]);
+                    if (v < 0) return SerialShape.NotASerial;
+                    days = (days << 5) | v;
+                }
+                expires = days == 0 ? (DateTime?)null : Epoch.AddDays(days);
+            }
+
+            byte[] signature = FromBase32(body.Substring(sigStart, body.Length - 1 - sigStart), SignatureBytes);
+            if (signature == null) return SerialShape.NotASerial;
+            data = new SerialData { Version = version, Expires = expires, Signature = signature };
+            return SerialShape.Ok;
+        }
+
+        /// <summary>Days after 2020-01-01 of the last valid day; 0 = never expires.</summary>
+        private static int ExpiryDays(DateTime? expires)
+        {
+            if (expires == null) return 0;
+            int days = (int)(expires.Value.Date - Epoch).TotalDays;
+            if (days < 1 || days > MaxExpiryDays)
+                throw new ArgumentOutOfRangeException("expires", "The expiry date must be between " +
+                    MinExpiry.ToString("yyyy-MM-dd") + " and " + MaxExpiry.ToString("yyyy-MM-dd") + ".");
+            return days;
         }
 
         /// <summary>Letters and digits typed in a serial / Machine ID, without dashes or spaces.</summary>

@@ -308,6 +308,24 @@ It works offline, and every serial works on one PC only.
    ```
 3. Send the serial back; the user pastes it and clicks **Activate**. It is saved to `%ProgramData%\NPIC_CARD_APP\license.txt` (all Windows users of the PC) and checked again on every start.
 
+### Expiry date
+
+Every serial carries the **last day it works** (default: 1 year from today), or never expires. The date is part of the
+signed text, so it cannot be edited; changing it makes the serial invalid.
+
+- **Generator:** pick the date under **Expires** (or *6 months / 1 year / 2 years*, or **Never expires**).
+- **Script:** 1 year by default, or `-Expires 2027-06-30`, `-Months 6`, `-NoExpiry`.
+- **30 days before:** Card Studio says *License expires in N days* in the window title and status bar.
+- **To renew:** make a new serial for the same Machine ID. The user enters it in **Settings & Help → License…**, which
+  also shows the current expiry date. Renewing early is fine: the new serial replaces the old one.
+- **After the last day:** the activation window opens again (*Your serial number expired on …*) until a new serial is entered.
+- **Clock check:** Card Studio remembers the latest date it ran (`license-seen.txt` beside `license.txt`). If the PC's
+  date is more than a day earlier, it asks for the correct date and time. Entering the same serial again doesn't help;
+  a **new** serial from you resets the check (for a PC whose clock really was wrong). Serials that never expire skip this check.
+- **Old serials:** serials made before expiry dates existed (105 characters, starting with `1`) still work and never expire.
+  New serials have 108 characters and start with `2`.
+- A serial that **never expires cannot be stopped later**: prefer a date, and renew it.
+
 | | |
 |---|---|
 | Serial Generator | Admin only: **never give it to users** and never add it to the setup (the installer packs only `NPIC_CARD_APP\bin`). It shares `SerialFormat.cs` and `LicenseService.cs` with the app, so its serials always pass the app's check; it warns when its key does not match the app's public key |
@@ -315,5 +333,6 @@ It works offline, and every serial works on one PC only.
 | Public key | `PublicKey` in `NPIC_CARD_APP\Services\LicenseService.cs`; only the public key ships, so serials cannot be forged from the source or the exe |
 | New key pair | `serial.ps1 -NewKey` (add `-Force` to replace one). Writes the new public key into the source; rebuild. **All serials made with the old key stop working** |
 | Machine ID | From Windows' `MachineGuid`. It changes when Windows is reinstalled: that PC then needs a new serial |
-| Status | System Info (Ctrl+Shift+I) → **License** shows the status, Machine ID and license file |
+| Status | System Info (Ctrl+Shift+I) → **License** shows the status, expiry date, Machine ID and license file; **Settings & Help → License…** shows the expiry date and takes a renewal |
+| Log | `serials.csv` columns: Date, MachineId, Name, Expires (`yyyy-MM-dd` or `never`), Serial. Logs from before expiry dates get the Expires column added the next time a serial is made |
 | Deactivate a PC | Delete `license.txt` (in `%ProgramData%\NPIC_CARD_APP` or `%AppData%\NPIC_CARD_APP`) |

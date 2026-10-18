@@ -48,6 +48,9 @@ namespace CardStudio.SerialGenerator
 
         private readonly Label _lblKeyPath, _lblKeyStatus;
         private readonly TextBox _txtMachine, _txtName, _txtSerial, _txtSearch;
+        private readonly DateTimePicker _dtpExpires;
+        private readonly CheckBox _chkNever;
+        private readonly Label _lblExpiresHint;
         private readonly Label _lblMachineHint, _lblResult;
         private readonly Button _btnGenerate, _btnCopySerial, _btnCopyMessage;
         private readonly DataGridView _grid;
@@ -88,7 +91,7 @@ namespace CardStudio.SerialGenerator
             root.Controls.Add(keyCard, 0, 0);
 
             // ===================== New serial =====================
-            var form = Card(3, 7);
+            var form = Card(3, 8);
             form.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
             form.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
             form.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -123,13 +126,51 @@ namespace CardStudio.SerialGenerator
             _txtName.HandleCreated += (s, e) => SetCue(_txtName, "Optional, for the log: e.g. Office PC 1 – Dara");
             form.Controls.Add(_txtName, 1, 4);
 
-            form.Controls.Add(FieldLabel("Serial number"), 0, 5);
+            // Expires  [2027-10-18 ▾] [6 months] [1 year] [2 years]  ☐ Never expires   works up to and including that day
+            form.Controls.Add(FieldLabel("Expires"), 0, 5);
+            // Fills the cell width (never pushes the Generate column out of the window); the hint wraps to its own line.
+            var expiryRow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Margin = new Padding(0, 0, 0, 12)
+            };
+            _dtpExpires = new DateTimePicker
+            {
+                Format = DateTimePickerFormat.Custom, CustomFormat = "yyyy-MM-dd", Width = 130, Font = Mono,
+                MinDate = DateTime.Today, MaxDate = SerialFormat.MaxExpiry, Value = DateTime.Today.AddYears(1),
+                Margin = new Padding(0, 2, 10, 0)
+            };
+            _dtpExpires.ValueChanged += (s, e) => UpdateExpiryHint();
+            expiryRow.Controls.Add(_dtpExpires);
+            foreach (int months in new[] { 6, 12, 24 })
+            {
+                int m = months;
+                Button quick = MakeButton(m == 6 ? "6 months" : m == 12 ? "1 year" : "2 years", false, (s, e) =>
+                {
+                    _chkNever.Checked = false;
+                    _dtpExpires.Value = DateTime.Today.AddMonths(m);
+                });
+                quick.MinimumSize = new Size(0, 28);
+                quick.Padding = new Padding(2, 0, 2, 0);
+                quick.Font = UiFont;
+                quick.Margin = new Padding(0, 1, 6, 0);
+                quick.TabStop = false;
+                expiryRow.Controls.Add(quick);
+            }
+            _chkNever = new CheckBox { Text = "Never expires", AutoSize = true, Margin = new Padding(8, 6, 12, 0) };
+            _chkNever.CheckedChanged += (s, e) => { _dtpExpires.Enabled = !_chkNever.Checked; UpdateExpiryHint(); };
+            expiryRow.Controls.Add(_chkNever);
+            expiryRow.SetFlowBreak(_chkNever, true);
+            _lblExpiresHint = new Label { AutoSize = true, ForeColor = TextSoft, Margin = new Padding(0, 4, 0, 0), MaximumSize = new Size(520, 0) };
+            expiryRow.Controls.Add(_lblExpiresHint);
+            form.Controls.Add(expiryRow, 1, 5);
+
+            form.Controls.Add(FieldLabel("Serial number"), 0, 6);
             _txtSerial = new TextBox
             {
                 Font = Mono, Multiline = true, ReadOnly = true, WordWrap = true, BackColor = SurfaceAlt, Dock = DockStyle.Fill,
                 Height = 60, MinimumSize = new Size(0, 60), Margin = new Padding(0, 2, 8, 0), TabStop = false
             };
-            form.Controls.Add(_txtSerial, 1, 5);
+            form.Controls.Add(_txtSerial, 1, 6);
             var copyButtons = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Margin = new Padding(0) };
             _btnCopySerial = MakeButton("Copy Serial", false, (s, e) => CopyText(_last == null ? null : _last.Serial, "Serial copied."));
             _btnCopyMessage = MakeButton("Copy Message", false, (s, e) => CopyText(_last == null ? null : ComposeMessage(_last), "Message copied: paste it in Telegram, email…"));
@@ -138,10 +179,10 @@ namespace CardStudio.SerialGenerator
             _btnCopySerial.MinimumSize = _btnCopyMessage.MinimumSize = new Size(130, 30);
             copyButtons.Controls.Add(_btnCopySerial);
             copyButtons.Controls.Add(_btnCopyMessage);
-            form.Controls.Add(copyButtons, 2, 5);
+            form.Controls.Add(copyButtons, 2, 6);
 
             _lblResult = new Label { AutoSize = true, Margin = new Padding(0, 6, 0, 0), MaximumSize = new Size(640, 0) };
-            form.Controls.Add(_lblResult, 1, 6);
+            form.Controls.Add(_lblResult, 1, 7);
             form.SetColumnSpan(_lblResult, 2);
             root.Controls.Add(form, 0, 1);
 
@@ -171,8 +212,10 @@ namespace CardStudio.SerialGenerator
             // Tab: Machine ID → PC / user → Generate (they are added to the grid in another order)
             _txtMachine.TabIndex = 0;
             _txtName.TabIndex = 1;
-            _btnGenerate.TabIndex = 2;
-            copyButtons.TabIndex = 3;
+            expiryRow.TabIndex = 2;
+            _btnGenerate.TabIndex = 3;
+            copyButtons.TabIndex = 4;
+            UpdateExpiryHint();
 
             AcceptButton = _btnGenerate;
             LoadKey(SigningKey.FindDefault(), false);
@@ -331,7 +374,9 @@ namespace CardStudio.SerialGenerator
             if (before != null)
             {
                 _lblMachineHint.Text = "✓ " + id + "  ·  already has a serial (" + before.Date +
-                    (string.IsNullOrEmpty(before.Name) ? "" : ", " + before.Name) + "). A new one also works; the old one keeps working.";
+                    (string.IsNullOrEmpty(before.Name) ? "" : ", " + before.Name) +
+                    (before.ExpiryDate == null ? ", never expires" : (before.IsExpired ? ", expired " : ", expires ") + before.Expires) +
+                    "). A new one also works: once entered, it replaces the old one on that PC.";
                 _lblMachineHint.ForeColor = Warning;
                 if (_txtName.Text.Length == 0 && !string.IsNullOrEmpty(before.Name)) _txtName.Text = before.Name;
             }
@@ -358,17 +403,25 @@ namespace CardStudio.SerialGenerator
                     MessageBoxDefaultButton.Button2) != DialogResult.Yes)
                 return;
 
+            DateTime? expires = SelectedExpiry;
+            if (expires != null && expires.Value < DateTime.Today)
+            {
+                ShowResult("The expiry date is in the past: pick a later date or Never expires.", Danger);
+                return;
+            }
+
             var record = new SerialRecord
             {
                 Date = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
                 MachineId = SerialFormat.FormatMachineId(text),
-                Name = _txtName.Text.Trim()
+                Name = _txtName.Text.Trim(),
+                Expires = expires == null ? SerialRecord.Never : expires.Value.ToString("yyyy-MM-dd")
             };
             try
             {
-                record.Serial = _key.MakeSerial(record.MachineId);
+                record.Serial = _key.MakeSerial(record.MachineId, expires);
             }
-            catch (CryptographicException ex)
+            catch (Exception ex) when (ex is CryptographicException || ex is ArgumentException)
             {
                 ShowResult("The serial could not be made: " + ex.Message, Danger);
                 return;
@@ -394,14 +447,39 @@ namespace CardStudio.SerialGenerator
 
             bool copied = TrySetClipboard(record.Serial);
             ShowResult("✓ Serial for " + record.MachineId + (record.Name.Length > 0 ? " (" + record.Name + ")" : "") +
+                       (expires == null ? ", never expires," : ", expires " + record.Expires + ",") +
                        (copied ? " copied to the clipboard" : "") + "  ·  " + logNote, logNote.StartsWith("NOT") ? Warning : Success);
             OnMachineIdChanged();
         }
 
+        /// <summary>Expiry date chosen for the next serial; null = never expires.</summary>
+        private DateTime? SelectedExpiry
+        {
+            get { return _chkNever.Checked ? (DateTime?)null : _dtpExpires.Value.Date; }
+        }
+
+        private void UpdateExpiryHint()
+        {
+            DateTime? expires = SelectedExpiry;
+            if (expires == null)
+            {
+                _lblExpiresHint.Text = "The serial works for ever on that PC: it cannot be stopped later.";
+                return;
+            }
+            int days = (int)(expires.Value - DateTime.Today).TotalDays;
+            _lblExpiresHint.Text = "The serial works up to and including this day (" +
+                (days == 0 ? "today only" : days == 1 ? "1 day from today" : days.ToString("N0") + " days from today") +
+                "). Card Studio warns " + LicenseService.WarnDays + " days before.";
+        }
+
         private static string ComposeMessage(SerialRecord r)
         {
+            string until = r.ExpiryDate == null
+                ? "Never expires.\r\nមិនផុតកំណត់។"
+                : "Valid until " + r.Expires + " (last day).\r\nមានសុពលភាពរហូតដល់ថ្ងៃ " + r.Expires + "។";
             return "Card Studio serial number" + (string.IsNullOrEmpty(r.Name) ? "" : " – " + r.Name) + "\r\n" +
-                   "Machine ID: " + r.MachineId + "\r\n\r\n" +
+                   "Machine ID: " + r.MachineId + "\r\n" +
+                   until + "\r\n\r\n" +
                    r.Serial + "\r\n\r\n" +
                    "Open Card Studio, paste this serial in \"Serial number\" and click Activate.\r\n" +
                    "បើក Card Studio បិទភ្ជាប់លេខសៀរៀលនេះ ហើយចុច Activate។";
@@ -491,8 +569,19 @@ namespace CardStudio.SerialGenerator
             grid.DefaultCellStyle.ForeColor = TextMain;
 
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Date", HeaderText = "DATE", FillWeight = 70 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "MachineId", HeaderText = "MACHINE ID", FillWeight = 85, DefaultCellStyle = { Font = Mono } });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "MachineId", HeaderText = "MACHINE ID", FillWeight = 110, DefaultCellStyle = { Font = Mono } });
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "PC / USER", FillWeight = 90 });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ExpiresText", HeaderText = "EXPIRES", FillWeight = 60, Name = "Expires" });
+            grid.CellFormatting += (s, e) =>
+            {
+                if (e.RowIndex < 0 || grid.Columns[e.ColumnIndex].Name != "Expires") return;
+                var r = grid.Rows[e.RowIndex].DataBoundItem as SerialRecord;
+                if (r != null && r.IsExpired)
+                {
+                    e.CellStyle.ForeColor = Danger;
+                    e.Value = r.Expires + " (expired)";
+                }
+            };
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Serial", HeaderText = "SERIAL (double-click to copy)", FillWeight = 160, DefaultCellStyle = { Font = Mono, ForeColor = TextSoft } });
 
             grid.CellDoubleClick += (s, e) =>

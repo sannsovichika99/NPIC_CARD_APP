@@ -5,10 +5,10 @@ using System.Windows.Forms;
 namespace NPIC_CARD_APP
 {
     /// <summary>Page picked on the <see cref="SettingsHubForm"/>.</summary>
-    public enum SettingsHubChoice { None, DarkMode, ThemeColor, Folders, AllSettings, SystemInfo, Updates, HelpAbout }
+    public enum SettingsHubChoice { None, DarkMode, ThemeColor, Folders, AllSettings, SystemInfo, Updates, HelpAbout, License }
 
     /// <summary>
-    /// "Settings &amp; Help" page: Dark / Light Mode, Theme Color…, Folders…, All Settings…, System Info, Check for Updates and Help &amp; About
+    /// "Settings &amp; Help" page: Dark / Light Mode, Theme Color…, Folders…, All Settings…, System Info, Check for Updates, License… and Help &amp; About
     /// grouped in one popup, so the sidebar stays short. Picking a tile closes the page and sets <see cref="Choice"/>; the main
     /// window then runs that command, so each page itself is unchanged. Their keyboard shortcuts keep working here and in the
     /// main window.
@@ -31,7 +31,7 @@ namespace NPIC_CARD_APP
             Size = new Size(Math.Min(720, work.Width), Math.Min(740, work.Height));
             MinimumSize = new Size(Math.Min(560, work.Width), Math.Min(640, work.Height));
 
-            // ---- Tiles (2 x 3, then one wide tile): appearance, settings, help, updates ----
+            // ---- Tiles (2 x 4): appearance, settings, help, updates and license ----
             var grid = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4, BackColor = Theme.Surface,
@@ -62,7 +62,9 @@ namespace NPIC_CARD_APP
                 "Version " + Services.UpdateService.CurrentVersionText + " is installed. Look for a newer version and install it; " +
                 "settings, print history and card images are kept.");
             grid.Controls.Add(updates, 0, 3);
-            grid.SetColumnSpan(updates, 2);
+            Services.LicenseStatus license = Services.LicenseService.Check();
+            grid.Controls.Add(Card(SettingsHubChoice.License, "License…", Theme.IcoKey, "",
+                license.Describe() + ". Enter a new serial number from your administrator to renew it."), 1, 3);
 
             // ---- Footer ----
             var footer = ModalUi.Footer();

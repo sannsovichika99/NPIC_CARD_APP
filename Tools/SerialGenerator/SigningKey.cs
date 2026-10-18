@@ -53,22 +53,27 @@ namespace CardStudio.SerialGenerator
             return new SigningKey(System.IO.Path.GetFullPath(path), key);
         }
 
-        /// <summary>The serial number for <paramref name="machineId"/>, checked before it is returned.</summary>
-        public string MakeSerial(string machineId)
+        /// <summary>
+        /// The serial number for <paramref name="machineId"/> that works up to and including <paramref name="expires"/>
+        /// (null = never expires), checked before it is returned.
+        /// </summary>
+        public string MakeSerial(string machineId, DateTime? expires)
         {
             if (!SerialFormat.IsMachineId(machineId))
                 throw new ArgumentException("Not a Machine ID.", "machineId");
+            if (expires != null) expires = expires.Value.Date;
 
-            byte[] data = SerialFormat.SignedData(machineId);
+            byte[] data = SerialFormat.SignedData(2, machineId, expires);   // throws when the date is out of range
             using (var ecdsa = new ECDsaCng(_key))
             {
                 byte[] signature = ecdsa.SignData(data, HashAlgorithmName.SHA256);
                 if (!ecdsa.VerifyData(data, signature, HashAlgorithmName.SHA256))
                     throw new CryptographicException("The new signature could not be verified.");
-                string serial = SerialFormat.Encode(signature);
+                string serial = SerialFormat.Encode(signature, expires);
 
                 // Same check Card Studio runs: decode the text again and verify with the app's own public key.
-                if (MatchesApp && !LicenseService.IsValidFor(serial, machineId))
+                SerialData check;
+                if (MatchesApp && (!LicenseService.Verify(serial, machineId, out check) || check.Expires != expires))
                     throw new CryptographicException("The serial did not pass Card Studio's check.");
                 return serial;
             }

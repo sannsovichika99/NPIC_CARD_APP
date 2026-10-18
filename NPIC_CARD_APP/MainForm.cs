@@ -147,6 +147,7 @@ namespace NPIC_CARD_APP
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
+            WarnIfLicenseExpiresSoon();
             CheckForUpdatesQuietly();
         }
 
@@ -1933,6 +1934,7 @@ namespace NPIC_CARD_APP
                 case SettingsHubChoice.SystemInfo: ShowHelp(HelpForm.Page.SystemInfo); break;
                 case SettingsHubChoice.Updates: ShowUpdates(); break;
                 case SettingsHubChoice.HelpAbout: ShowHelp(HelpForm.Page.Overview); break;
+                case SettingsHubChoice.License: ShowLicense(); break;
             }
         }
 
@@ -1964,7 +1966,30 @@ namespace NPIC_CARD_APP
             string available = _settings.AvailableUpdateVersion;
             if (UpdateService.IsNewerThanRunning(available))
                 title += "  —  Update " + available.Trim() + " available (Ctrl+U)";
+            LicenseStatus license = LicenseService.Check();
+            if (license.ExpiresSoon)
+                title += "  —  License expires " + license.DaysLeftText;
             Text = title;
+        }
+
+        /// <summary>
+        /// From <see cref="LicenseService.WarnDays"/> days before the serial's expiry date: say so in the status bar
+        /// (the window title says it too, see <see cref="UpdateTitle"/>).
+        /// </summary>
+        private void WarnIfLicenseExpiresSoon()
+        {
+            LicenseStatus license = LicenseService.Check();
+            if (!license.ExpiresSoon) return;
+            SetStatus("License expires " + license.DaysLeftText + " (" + LicenseService.FormatDate(license.Expires.Value) +
+                      "): ask your administrator for a new serial, then enter it in Settings & Help → License….");
+        }
+
+        /// <summary>License page (Settings &amp; Help → License…): expiry date, and a new serial to renew it.</summary>
+        private void ShowLicense()
+        {
+            if (!ActivationForm.ShowRenew(this)) return;
+            UpdateTitle();
+            SetStatus("License: " + LicenseService.Check().Describe() + ".");
         }
 
         /// <summary>
@@ -2332,7 +2357,7 @@ namespace NPIC_CARD_APP
             Color tone =
                 text.StartsWith("Error") || text.StartsWith("Preview error") ? Danger :
                 text.StartsWith("Missing") || text.StartsWith("No card printer") || text.StartsWith("Auto slots") ||
-                text.StartsWith("Printing cancelled") ? Warning :
+                text.StartsWith("Printing cancelled") || text.StartsWith("License expires") ? Warning :
                 Success;
             _lblStatusDot.ForeColor = tone;
             _lblStatus.ForeColor = tone == Success ? TextMuted : tone;

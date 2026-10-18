@@ -9,9 +9,19 @@
     The serial is signed with the private key in Installer\serial-private.key (git-ignored, keep a backup!).
     The app only holds the matching public key (NPIC_CARD_APP\Services\LicenseService.cs).
 
+    Every serial has an expiry date (the last day it works), 1 year from today unless -Expires, -Months or -NoExpiry
+    says otherwise. The date is signed into the serial, so it cannot be changed.
+
+    The Serial Generator app (Tools\SerialGenerator) does the same with a window; both write Installer\serials.csv.
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File Installer\serial.ps1 -MachineId 7K2Q-M9XD-4TRB-0HCA -Name "Office PC 1"
-    Prints the serial for that PC, copies it to the clipboard and adds a line to Installer\serials.csv.
+    Prints the serial for that PC (works for 1 year), copies it to the clipboard and adds a line to Installer\serials.csv.
+
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -File Installer\serial.ps1 -MachineId 7K2Q-M9XD-4TRB-0HCA -Expires 2027-06-30
+    powershell -ExecutionPolicy Bypass -File Installer\serial.ps1 -MachineId 7K2Q-M9XD-4TRB-0HCA -Months 6
+    powershell -ExecutionPolicy Bypass -File Installer\serial.ps1 -MachineId 7K2Q-M9XD-4TRB-0HCA -NoExpiry
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File Installer\serial.ps1 -NewKey
@@ -27,6 +37,18 @@ param(
     [Parameter(ParameterSetName = "Serial")]
     [string]$Name = "",
 
+    # Last day the serial works, as yyyy-MM-dd. Default: 1 year from today.
+    [Parameter(ParameterSetName = "Serial")]
+    [string]$Expires = "",
+
+    # Works for this many months from today (instead of -Expires).
+    [Parameter(ParameterSetName = "Serial")]
+    [int]$Months = 0,
+
+    # The serial never expires.
+    [Parameter(ParameterSetName = "Serial")]
+    [switch]$NoExpiry,
+
     [Parameter(ParameterSetName = "NewKey", Mandatory = $true)]
     [switch]$NewKey,
 
@@ -38,10 +60,12 @@ param(
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Core
 
-# Must match LicenseService.cs exactly.
+# Must match NPIC_CARD_APP\Services\SerialFormat.cs exactly (serial format version 2: with expiry date).
 $Alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
-$FormatVersion = "1"
-$SignedPrefix = "CardStudio-Serial-v1|"
+$FormatVersion = "2"
+$SignedPrefix = "CardStudio-Serial-v2|"
+$Epoch = [datetime]"2020-01-01"     # expiry = days after this date; 0 = never expires
+$MaxExpiryDays = 32767              # 3 Base32 characters
 
 $keyFile = Join-Path $PSScriptRoot "serial-private.key"
 $logFile = Join-Path $PSScriptRoot "serials.csv"
@@ -123,22 +147,56 @@ if ($id.Length -ne 16 -or $id.Contains("?")) {
     throw "'$MachineId' is not a Machine ID. It has 16 letters and digits, like 7K2Q-M9XD-4TRB-0HCA (shown in Card Studio's activation window)."
 }
 
+# Expiry date: last day the serial works (null = never)
+$expiryDate = $null
+if ($NoExpiry) {
+    if ($Expires -or $Months) { throw "Use -NoExpiry, -Expires or -Months, not several." }
+} elseif ($Expires) {
+    if ($Months) { throw "Use -Expires or -Months, not both." }
+    $parsed = [datetime]::MinValue
+    if (-not [datetime]::TryParseExact($Expires, "yyyy-MM-dd", [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::None, [ref]$parsed)) { throw "-Expires must look like 2027-06-30." }
+    $expiryDate = $parsed.Date
+} elseif ($Months) {
+    $expiryDate = (Get-Date).Date.AddMonths($Months)
+} else {
+    $expiryDate = (Get-Date).Date.AddYears(1)
+}
+$days = 0
+if ($expiryDate) {
+    if ($expiryDate -lt (Get-Date).Date) { throw "The expiry date $($expiryDate.ToString('yyyy-MM-dd')) is in the past." }
+    $days = [int]($expiryDate - $Epoch).TotalDays
+    if ($days -lt 1 -or $days -gt $MaxExpiryDays) { throw "The expiry date must be before $($Epoch.AddDays($MaxExpiryDays).ToString('yyyy-MM-dd'))." }
+}
+$expiresText = if ($expiryDate) { $expiryDate.ToString("yyyy-MM-dd") } else { "never" }
+
 $blob = [Convert]::FromBase64String((Get-Content $keyFile -Raw).Trim())
 $key = [Security.Cryptography.CngKey]::Import($blob, [Security.Cryptography.CngKeyBlobFormat]::EccPrivateBlob)
 $ecdsa = [Security.Cryptography.ECDsaCng]::new($key)
 try {
-    $data = [Text.Encoding]::UTF8.GetBytes($SignedPrefix + $id)
+    $data = [Text.Encoding]::UTF8.GetBytes($SignedPrefix + $id + "|" + $days)
     $signature = $ecdsa.SignData($data, [Security.Cryptography.HashAlgorithmName]::SHA256)
     if (-not $ecdsa.VerifyData($data, $signature, [Security.Cryptography.HashAlgorithmName]::SHA256)) { throw "Signature check failed." }
 } finally { $ecdsa.Dispose(); $key.Dispose() }
 
-$body = $FormatVersion + (ToBase32 $signature)
+$expiryChars = "" + $Alphabet[($days -shr 10) -band 31] + $Alphabet[($days -shr 5) -band 31] + $Alphabet[$days -band 31]
+$body = $FormatVersion + $expiryChars + (ToBase32 $signature)
 $serial = Join-Groups ($body + (CheckChar $body)) 5
+
+# Log from before expiry dates (no Expires column): add the column once; those old serials never expire.
+if ((Test-Path $logFile) -and (Get-Item $logFile).Length -gt 0) {
+    $old = @(Import-Csv $logFile -Encoding UTF8)
+    if ($old.Count -gt 0 -and -not ($old[0].PSObject.Properties.Name -contains "Expires")) {
+        $old | Select-Object Date, MachineId, Name, @{ n = "Expires"; e = { "" } }, Serial |
+            Export-Csv -Path $logFile -NoTypeInformation -Encoding UTF8
+    }
+}
 
 [pscustomobject]@{
     Date      = (Get-Date).ToString("yyyy-MM-dd HH:mm")
     MachineId = Join-Groups $id 4
     Name      = $Name
+    Expires   = $expiresText
     Serial    = $serial
 } | Export-Csv -Path $logFile -Append -NoTypeInformation -Encoding UTF8
 
@@ -146,6 +204,7 @@ try { Set-Clipboard -Value $serial; $copied = " (copied to the clipboard)" } cat
 
 Write-Host ""
 Write-Host "Machine ID: $(Join-Groups $id 4)$(if ($Name) { "  - $Name" })"
+Write-Host "Expires:    $(if ($expiryDate) { "$expiresText (last day it works)" } else { "never" })"
 Write-Host "Serial number$copied`:" -ForegroundColor Green
 Write-Host $serial
 Write-Host ""

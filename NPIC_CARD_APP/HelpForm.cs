@@ -947,10 +947,16 @@ namespace NPIC_CARD_APP
                 w.Row(T("Skipped version", "កំណែដែលបានរំលង"), _settings.SkippedUpdateVersion);
 
             w.Heading(T("License", "អាជ្ញាប័ណ្ណ"));
-            LicenseState license = LicenseService.Check();
-            w.Row(T("Status", "ស្ថានភាព"), license == LicenseState.Activated
+            LicenseStatus license = LicenseService.Check();
+            w.Row(T("Status", "ស្ថានភាព"), license.IsActivated
                 ? T("Activated on this PC", "បានធ្វើឱ្យសកម្មលើកុំព្យូទ័រនេះ")
-                : T("Not activated", "មិនទាន់ធ្វើឱ្យសកម្ម"), license != LicenseState.Activated);
+                : license.Describe(), !license.IsActivated);
+            if (license.IsActivated)
+                w.Row(T("Expires", "ផុតកំណត់"), license.Expires == null
+                    ? T("Never", "មិនផុតកំណត់")
+                    : LicenseService.FormatDate(license.Expires.Value) + "  ·  " + license.DaysLeftText,
+                    license.ExpiresSoon,
+                    license.ExpiresSoon ? T("renew it: Settings & Help → License…", "បន្ត៖ Settings & Help → License…") : null);
             w.Row(T("Machine ID", "Machine ID"), LicenseService.MachineId);
             w.Row(T("License file", "ឯកសារអាជ្ញាប័ណ្ណ"), LicenseService.FilePath);
 

@@ -8,8 +8,8 @@ using NPIC_CARD_APP.Services;
 namespace NPIC_CARD_APP
 {
     /// <summary>
-    /// "Activate Card Studio": shown before the main window until a serial number valid for this PC is entered
-    /// (see <see cref="LicenseService"/>). Shows the Machine ID to send to the administrator, takes the serial they send back.
+    /// "Activate Card Studio": shown before the main window until a serial number valid for this PC, and not expired,
+    /// is entered (see <see cref="LicenseService"/>). Also the "License" page (<see cref="ShowRenew"/>) to renew a serial. Shows the Machine ID to send to the administrator, takes the serial they send back.
     /// Exit (or the X) closes the app.
     /// </summary>
     public sealed class ActivationForm : ModalForm
@@ -31,20 +31,42 @@ namespace NPIC_CARD_APP
         /// </summary>
         public static bool EnsureActivated()
         {
-            LicenseState state = LicenseService.Check();
-            if (state == LicenseState.Activated) return true;
-            using (var form = new ActivationForm(state))
+            LicenseStatus status = LicenseService.Check();
+            if (status.IsActivated) return true;
+            using (var form = new ActivationForm(status, false))
                 return form.ShowDialog() == DialogResult.OK;
         }
 
-        private ActivationForm(LicenseState state)
+        /// <summary>
+        /// "License" page (Settings &amp; Help → License…): shows the expiry date and takes a new serial to renew it.
+        /// True when a new serial was saved.
+        /// </summary>
+        public static bool ShowRenew(IWin32Window owner)
         {
-            Text = "Activate Card Studio";
-            Subtitle = "A serial number is required to open the app";
+            using (var form = new ActivationForm(LicenseService.Check(), true))
+                if (form.ShowDialog(owner) != DialogResult.OK) return false;
+
+            LicenseStatus now = LicenseService.Check();
+            AppDialog.Show(owner, "The new serial number is saved.\n\n" + now.Describe() + ".", "License",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return true;
+        }
+
+        private ActivationForm(LicenseStatus status, bool renew)
+        {
+            Text = renew ? "License" : "Activate Card Studio";
+            Subtitle = renew ? status.Describe() : "A serial number is required to open the app";
             Glyph = Theme.IcoKey;
-            StartPosition = FormStartPosition.CenterScreen;
-            ShowInTaskbar = true;   // the first window of the app: it must be findable on the taskbar
-            DimOwner = false;
+            if (renew)
+            {
+                StartPosition = FormStartPosition.CenterParent;
+            }
+            else
+            {
+                StartPosition = FormStartPosition.CenterScreen;
+                ShowInTaskbar = true;   // the first window of the app: it must be findable on the taskbar
+                DimOwner = false;
+            }
             Resizable = false;
             KeyPreview = true;
 
@@ -59,14 +81,20 @@ namespace NPIC_CARD_APP
             var intro = new Label
             {
                 AutoSize = true, MaximumSize = new Size(BodyWidth, 0), ForeColor = Theme.TextMain, Margin = new Padding(0, 0, 0, 4),
-                Text = "Each PC needs its own serial number. Send the Machine ID below to your administrator, " +
-                       "then paste the serial number you receive and click Activate."
+                Text = renew
+                    ? "To renew, send the Machine ID below to your administrator, then paste the new serial number you " +
+                      "receive and click Activate. It replaces the current one."
+                    : "Each PC needs its own serial number. Send the Machine ID below to your administrator, " +
+                      "then paste the serial number you receive and click Activate."
             };
             var introKh = new Label
             {
                 AutoSize = true, MaximumSize = new Size(BodyWidth, 0), ForeColor = Theme.TextSoft, Margin = new Padding(0, 0, 0, 14),
-                Text = "កុំព្យូទ័រនីមួយៗត្រូវការលេខសៀរៀលផ្ទាល់ខ្លួន។ សូមផ្ញើ Machine ID ខាងក្រោមទៅអ្នកគ្រប់គ្រង " +
-                       "បន្ទាប់មកបិទភ្ជាប់លេខសៀរៀលដែលទទួលបាន ហើយចុច Activate។"
+                Text = renew
+                    ? "ដើម្បីបន្តសុពលភាព សូមផ្ញើ Machine ID ខាងក្រោមទៅអ្នកគ្រប់គ្រង " +
+                      "បន្ទាប់មកបិទភ្ជាប់លេខសៀរៀលថ្មីដែលទទួលបាន ហើយចុច Activate។"
+                    : "កុំព្យូទ័រនីមួយៗត្រូវការលេខសៀរៀលផ្ទាល់ខ្លួន។ សូមផ្ញើ Machine ID ខាងក្រោមទៅអ្នកគ្រប់គ្រង " +
+                      "បន្ទាប់មកបិទភ្ជាប់លេខសៀរៀលដែលទទួលបាន ហើយចុច Activate។"
             };
             body.Controls.Add(intro, 0, 0);
             body.SetColumnSpan(intro, 2);
@@ -109,7 +137,7 @@ namespace NPIC_CARD_APP
             // ---- Footer: [Exit] [Activate] ----
             var footer = ModalUi.Footer();
             var btnActivate = ModalUi.Button("Activate", PillKind.Primary, (s, e) => TryActivate());
-            var btnExit = ModalUi.Button("Exit", PillKind.Secondary);
+            var btnExit = ModalUi.Button(renew ? "Cancel" : "Exit", PillKind.Secondary);
             btnExit.DialogResult = DialogResult.Cancel;
             footer.Controls.Add(btnActivate);   // right-to-left flow: first = rightmost
             footer.Controls.Add(btnExit);
@@ -121,9 +149,7 @@ namespace NPIC_CARD_APP
 
             _copiedTimer.Tick += (s, e) => { _copiedTimer.Stop(); _btnCopy.Text = "Copy"; };
 
-            if (state == LicenseState.Invalid)
-                ShowError("The saved serial number is not valid for this PC (it was made for another PC, or Windows was " +
-                          "reinstalled). Ask your administrator for a new serial for this Machine ID.");
+            ShowStatus(status, renew);
 
             Size pref = body.GetPreferredSize(new Size(BodyWidth + 48, 0));
             _clientSize = new Size(BodyWidth + 48, HeaderHeight + pref.Height + 8 + ModalUi.FooterHeight);
@@ -148,10 +174,46 @@ namespace NPIC_CARD_APP
             _txtSerial.SelectAll();
         }
 
+        /// <summary>Why the window opened: expired, wrong date, serial for another PC; on the License page, when it expires.</summary>
+        private void ShowStatus(LicenseStatus status, bool renew)
+        {
+            switch (status.State)
+            {
+                case LicenseState.Invalid:
+                    ShowError("The saved serial number is not valid for this PC (it was made for another PC, or Windows was " +
+                              "reinstalled). Ask your administrator for a new serial for this Machine ID.");
+                    break;
+                case LicenseState.Expired:
+                    ShowError("Your serial number expired on " + LicenseService.FormatDate(status.Expires.Value) + ". " +
+                              "Send this PC's Machine ID to your administrator for a new serial number.");
+                    break;
+                case LicenseState.ClockWrong:
+                    ShowError("This PC's date (" + LicenseService.FormatDate(DateTime.Today) + ") is earlier than the last time " +
+                              "Card Studio was used (" + LicenseService.FormatDate(status.LastSeen.Value) + "). Set the correct date " +
+                              "and time in Windows, then open Card Studio again. If the date is already correct, ask your " +
+                              "administrator for a new serial number.");
+                    break;
+                case LicenseState.Activated:
+                    if (renew)
+                        ShowNotice(status.Expires == null
+                                ? "This serial never expires: a new one is only needed if the administrator asks for it."
+                                : "The current serial works until " + LicenseService.FormatDate(status.Expires.Value) +
+                                  " (expires " + status.DaysLeftText + ").",
+                            status.ExpiresSoon ? Theme.Warning : Theme.TextSoft);
+                    break;
+            }
+        }
+
         private void ShowError(string message)
+        {
+            ShowNotice(message, Theme.Danger);
+        }
+
+        private void ShowNotice(string message, Color color)
         {
             bool show = !string.IsNullOrEmpty(message);
             if (!show && !_lblError.Visible) return;
+            _lblError.ForeColor = color;
             _lblError.Text = message ?? "";
             _lblError.Visible = show;
             if (IsHandleCreated) FitHeight();
