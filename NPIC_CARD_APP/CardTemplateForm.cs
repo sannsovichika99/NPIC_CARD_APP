@@ -82,8 +82,15 @@ namespace NPIC_CARD_APP
             apply.DialogResult = DialogResult.OK;
             var cancel = ModalUi.Button("Cancel", PillKind.Secondary);
             cancel.DialogResult = DialogResult.Cancel;
+            var designer = ModalUi.Button("Card Designer…", PillKind.Ghost, (s, e) =>
+            {
+                OpenDesigner = true;
+                DialogResult = DialogResult.Cancel;
+            });
+            designer.Margin = new Padding(0, 0, 24, 0);
             footer.Controls.Add(apply);    // right-to-left flow: first added = rightmost
             footer.Controls.Add(cancel);
+            footer.Controls.Add(designer);
             AcceptButton = apply;
             CancelButton = cancel;
 
@@ -97,6 +104,9 @@ namespace NPIC_CARD_APP
         }
 
         public CardTemplate SelectedTemplate { get { return _selected; } }
+
+        /// <summary>True when the user clicked Card Designer… (the form closes with Cancel; the caller opens the designer).</summary>
+        public bool OpenDesigner { get; private set; }
 
         /// <summary>Draws front + back of every design once (600 dpi) and keeps screen-size copies.</summary>
         private void RenderAll(Student student, AppSettings settings)

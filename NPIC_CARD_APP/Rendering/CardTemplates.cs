@@ -12,7 +12,9 @@ namespace NPIC_CARD_APP.Rendering
         /// <summary>Clean white card: large name, photo on the right, hairline divider.</summary>
         Minimal,
         /// <summary>Navy ribbon down the left edge holding the logo, QR code and generation.</summary>
-        Ribbon
+        Ribbon,
+        /// <summary>The user's own design made with Card Designer… (see <see cref="CustomCardStore"/>).</summary>
+        Custom
     }
 
     /// <summary>Name and short description of a <see cref="CardTemplate"/> for the picker.</summary>
@@ -43,7 +45,9 @@ namespace NPIC_CARD_APP.Rendering
             new CardTemplateInfo(CardTemplate.Minimal, "Minimal",
                 "Clean white card with the name in large type, photo on the right and a hairline divider. Uses the least ink."),
             new CardTemplateInfo(CardTemplate.Ribbon, "Ribbon",
-                "Navy ribbon down the left edge with the logo, QR code and generation number. Logos and social icons in the ribbon on the back.")
+                "Navy ribbon down the left edge with the logo, QR code and generation number. Logos and social icons in the ribbon on the back."),
+            new CardTemplateInfo(CardTemplate.Custom, "Custom",
+                "Your own design, made with Card Designer…: place text, student fields, photo, QR codes, images and shapes anywhere on the card.")
         };
 
         public static CardTemplateInfo Find(CardTemplate template)

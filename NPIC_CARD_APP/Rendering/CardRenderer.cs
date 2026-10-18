@@ -79,6 +79,7 @@ namespace NPIC_CARD_APP.Rendering
                 case CardTemplate.Modern: return RenderModernFront(s, settings);
                 case CardTemplate.Minimal: return RenderMinimalFront(s, settings);
                 case CardTemplate.Ribbon: return RenderRibbonFront(s, settings);
+                case CardTemplate.Custom: return RenderCustomSide(CustomCardStore.Current.Front, s, settings);
                 default: return RenderClassicFront(s, settings);
             }
         }
@@ -90,6 +91,7 @@ namespace NPIC_CARD_APP.Rendering
                 case CardTemplate.Modern: return RenderModernBack(settings);
                 case CardTemplate.Minimal: return RenderMinimalBack(settings);
                 case CardTemplate.Ribbon: return RenderRibbonBack(settings);
+                case CardTemplate.Custom: return RenderCustomSide(CustomCardStore.Current.Back, null, settings);
                 default: return RenderClassicBack(settings);
             }
         }
@@ -642,7 +644,7 @@ namespace NPIC_CARD_APP.Rendering
             int w = (int)Math.Round(MmToPx(CardWidthMm));
             int h = (int)Math.Round(MmToPx(CardHeightMm));
             var bmp = new Bitmap(w, h, PixelFormat.Format24bppRgb); // 24bpp: GDI text needs no alpha
-            bmp.SetResolution(Dpi, Dpi);
+            bmp.SetResolution(CurrentDpi, CurrentDpi);
             using (Graphics g = Graphics.FromImage(bmp))
                 g.Clear(Color.White);
             return bmp;
@@ -668,8 +670,16 @@ namespace NPIC_CARD_APP.Rendering
             return Rectangle.Round(new RectangleF(MmToPx(x), MmToPx(y), MmToPx(w), MmToPx(h)));
         }
 
-        private static float MmToPx(float mm) { return mm * Dpi / 25.4f; }
+        /// <summary>
+        /// Resolution of the bitmap being drawn: <see cref="Dpi"/> for preview and print, lower while Card Designer redraws the
+        /// card on every mouse move (see <see cref="RenderCustomSide"/>). Per thread, so a background render is never affected.
+        /// </summary>
+        [ThreadStatic] private static float _dpiOverride;
 
-        private static float PtToPx(float pt) { return pt * Dpi / 72f; }
+        private static float CurrentDpi { get { return _dpiOverride > 0f ? _dpiOverride : Dpi; } }
+
+        private static float MmToPx(float mm) { return mm * CurrentDpi / 25.4f; }
+
+        private static float PtToPx(float pt) { return pt * CurrentDpi / 72f; }
     }
 }

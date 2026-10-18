@@ -1,0 +1,1289 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Text;
+using System.IO;
+using System.Reflection;
+using System.Windows.Forms;
+using NPIC_CARD_APP.Models;
+using NPIC_CARD_APP.Rendering;
+using NPIC_CARD_APP.Services;
+
+namespace NPIC_CARD_APP
+{
+    /// <summary>
+    /// Card Designer…: build your own card. Add text, student fields, the photo, QR codes, images and shapes to the front and the
+    /// back, move and resize them on a live preview (drawn by the same renderer that prints), and edit every detail on the right.
+    /// Works on a copy: Save writes %AppData%\NPIC_CARD_APP\custom-card.xml; Save &amp; Use also switches printing to the
+    /// "Custom" template (<see cref="UseDesign"/>). Cancel / Esc / ✕ keep the saved design.
+    /// </summary>
+    internal sealed class CardDesignerForm : ModalForm
+    {
+        private const int MaxUndo = 100;
+
+        private readonly AppSettings _settings;
+        private readonly Student _student;
+        private CustomCardDesign _design;
+        private bool _back;
+        private CardElement _selected;
+        private CardElement _clipboard;
+
+        private readonly DesignCanvas _canvas;
+        private readonly ListBox _layers;
+        private readonly PropertyGrid _grid;
+        private readonly Label _status;
+        private readonly Label _propsTitle;
+        private readonly PillButton _tabFront, _tabBack, _btnUndo, _btnRedo, _btnSnap, _btnOutlines;
+        private readonly Timer _renderTimer = new Timer { Interval = 15 };
+        private readonly ToolTip _tip = new ToolTip();
+        private bool _syncingLayers;
+
+        private readonly List<string> _undo = new List<string>();
+        private readonly List<string> _redo = new List<string>();
+        private string _committed;   // design as of the last finished change
+        private string _saved;       // design as last saved (or as opened)
+
+        /// <summary>True after Save &amp; Use: the caller switches printing to the Custom template.</summary>
+        public bool UseDesign { get; private set; }
+
+        /// <summary>True when Save or Save &amp; Use wrote the design at least once.</summary>
+        public bool Saved { get; private set; }
+
+        /// <param name="student">Student drawn on the front; null = a sample student.</param>
+        public CardDesignerForm(Student student, AppSettings settings)
+        {
+            _settings = settings;
+            _student = student ?? SampleStudent();
+            _design = CustomCardStore.Clone(CustomCardStore.Current);
+            _committed = _saved = CustomCardStore.Serialize(_design);
+
+            Text = "Card Designer";
+            Subtitle = CustomCardStore.Exists
+                ? "Your custom card — move, resize and edit anything, front and back"
+                : "Start from this layout or a blank card — move, resize and edit anything, front and back";
+            Glyph = Theme.IcoEdit;
+            KeyPreview = true;
+            Rectangle work = Screen.FromPoint(Cursor.Position).WorkingArea;
+            Size = new Size(Math.Min(1380, work.Width), Math.Min(900, work.Height));
+            MinimumSize = new Size(Math.Min(1080, work.Width), Math.Min(700, work.Height));
+            Font = new Font(CardFonts.UI, 9f);
+
+            // ---- Toolbar: side tabs, undo / redo, snapping, outlines, start over / import / export ----
+            FlowLayoutPanel toolbar = ModalUi.Toolbar(56);
+            _tabFront = Tool(toolbar, "Front", () => ShowSide(false), "Edit the front (student side)");
+            _tabBack = Tool(toolbar, "Back", () => ShowSide(true), "Edit the back (same for every student)");
+            _tabBack.Margin = new Padding(0, 0, 22, 0);
+            _btnUndo = Tool(toolbar, "Undo", Undo, "Undo (Ctrl+Z)");
+            _btnRedo = Tool(toolbar, "Redo", Redo, "Redo (Ctrl+Y)");
+            _btnRedo.Margin = new Padding(0, 0, 22, 0);
+            _btnSnap = Tool(toolbar, "Snap", ToggleSnap, "Snap to a 0.5 mm grid and to the card's edges and centre lines");
+            _btnSnap.Checked = true;
+            _btnOutlines = Tool(toolbar, "Outlines", ToggleOutlines, "Show the outline of every element and the 1.5 mm safe margin (never printed)");
+            _btnOutlines.Checked = true;
+            _btnOutlines.Margin = new Padding(0, 0, 22, 0);
+            PillButton startOver = Tool(toolbar, "Start Over ▾", null, "Begin again from the starter layout or an empty side");
+            startOver.Click += (s, e) => ShowMenu(startOver, StartOverMenu());
+            Tool(toolbar, "Import…", ImportDesign, "Open a design saved with Export…");
+            Tool(toolbar, "Export…", ExportDesign, "Save this design to a file, to share it or keep a copy");
+
+            // ---- Left: add tools + layer list ----
+            var left = new TableLayoutPanel
+            {
+                Dock = DockStyle.Left, Width = 248, ColumnCount = 1, RowCount = 5, BackColor = Theme.Surface,
+                Padding = new Padding(14, 12, 10, 12)
+            };
+            left.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            left.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            left.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            left.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            left.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            left.Paint += (s, e) => { using (var p = new Pen(Theme.GridLine)) e.Graphics.DrawLine(p, left.Width - 1, 0, left.Width - 1, left.Height); };
+
+            left.Controls.Add(SectionLabel("ADD"), 0, 0);
+            var adds = new TableLayoutPanel { ColumnCount = 2, RowCount = 3, AutoSize = true, Dock = DockStyle.Top, BackColor = Theme.Surface, Margin = new Padding(0, 4, 0, 10) };
+            adds.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            adds.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            adds.Controls.Add(AddButton("Text", "Fixed text, the same on every card", (b) => AddText()), 0, 0);
+            adds.Controls.Add(AddButton("Field ▾", "Student data (name, ID, date of birth…) or Card Text (director, address…)", (b) => ShowMenu(b, FieldMenu())), 1, 0);
+            adds.Controls.Add(AddButton("Image ▾", "Logo, stamp, signature, social icon or your own picture", (b) => ShowMenu(b, ImageMenu())), 0, 1);
+            adds.Controls.Add(AddButton("Photo", "The student's photo from the photo folder", (b) => AddPhoto()), 1, 1);
+            adds.Controls.Add(AddButton("QR ▾", "Student QR, back QR (Card Text) or a QR with your own text", (b) => ShowMenu(b, QrMenu())), 0, 2);
+            adds.Controls.Add(AddButton("Shape ▾", "Rectangle, circle / ellipse or line", (b) => ShowMenu(b, ShapeMenu())), 1, 2);
+            left.Controls.Add(adds, 0, 1);
+
+            left.Controls.Add(SectionLabel("LAYERS  ·  TOP FIRST"), 0, 2);
+            _layers = new ListBox
+            {
+                Dock = DockStyle.Fill, DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 34, IntegralHeight = false,
+                BorderStyle = BorderStyle.None, BackColor = Theme.Surface, ForeColor = Theme.TextMain, Margin = new Padding(0, 4, 0, 8)
+            };
+            _layers.DrawItem += DrawLayerItem;
+            _layers.SelectedIndexChanged += (s, e) => { if (!_syncingLayers) SelectElement(_layers.SelectedItem as CardElement); };
+            _layers.MouseDown += (s, e) =>
+            {
+                if (e.Button != MouseButtons.Right) return;
+                int i = _layers.IndexFromPoint(e.Location);
+                if (i >= 0) { _layers.SelectedIndex = i; ShowElementMenu(_layers, e.Location); }
+            };
+            left.Controls.Add(_layers, 0, 3);
+
+            var layerButtons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = true, BackColor = Theme.Surface, Margin = new Padding(0) };
+            SmallTool(layerButtons, "▲", BringForward, "Bring forward (Ctrl+])");
+            SmallTool(layerButtons, "▼", SendBackward, "Send backward (Ctrl+[)");
+            SmallTool(layerButtons, "Copy", DuplicateSelected, "Duplicate (Ctrl+D)");
+            SmallTool(layerButtons, "Delete", DeleteSelected, "Delete (Del)");
+            left.Controls.Add(layerButtons, 0, 4);
+
+            // ---- Right: properties ----
+            var right = new Panel { Dock = DockStyle.Right, Width = 340, BackColor = Theme.Surface, Padding = new Padding(12, 12, 14, 12) };
+            right.Paint += (s, e) => { using (var p = new Pen(Theme.GridLine)) e.Graphics.DrawLine(p, 0, 0, 0, right.Height); };
+            _grid = new PropertyGrid
+            {
+                Dock = DockStyle.Fill, PropertySort = PropertySort.Categorized, ToolbarVisible = false, HelpVisible = true,
+                Font = new Font(CardFonts.UI, 9.25f), BackColor = Theme.Surface, ViewBackColor = Theme.Surface,
+                ViewForeColor = Theme.TextMain, ViewBorderColor = Theme.Border, LineColor = Theme.AppBack,
+                CategoryForeColor = Theme.Accent, CategorySplitterColor = Theme.Border, HelpBackColor = Theme.SurfaceAlt,
+                HelpForeColor = Theme.TextSoft, HelpBorderColor = Theme.Border, SelectedItemWithFocusBackColor = Theme.ButtonA,
+                SelectedItemWithFocusForeColor = Color.White, DisabledItemForeColor = Theme.TextMuted
+            };
+            _grid.PropertyValueChanged += (s, e) => OnPropertyChanged();
+            _propsTitle = new Label
+            {
+                Dock = DockStyle.Top, Height = 26, Font = Theme.SmallCaps, ForeColor = Theme.TextMuted, BackColor = Theme.Surface,
+                TextAlign = ContentAlignment.TopLeft, UseMnemonic = false
+            };
+            right.Controls.Add(_grid);
+            right.Controls.Add(_propsTitle);
+
+            // ---- Centre: canvas + status line ----
+            var centre = new Panel { Dock = DockStyle.Fill, BackColor = Theme.AppBack };
+            _canvas = new DesignCanvas { Dock = DockStyle.Fill };
+            _canvas.SelectionChanged += (s, e) => SelectElement(_canvas.Selected);
+            _canvas.ElementMoving += (s, e) => { RequestRender(); UpdateStatus(); };
+            _canvas.ElementMoved += (s, e) => { _grid.Refresh(); Commit(); };
+            _canvas.ContextMenuRequested += (s, e) => ShowElementMenu(_canvas, _canvas.PointToClient(Cursor.Position));
+            _canvas.Resize += (s, e) => RequestRender();
+            _status = new Label
+            {
+                Dock = DockStyle.Bottom, Height = 30, Font = Theme.Small, ForeColor = Theme.TextSoft, BackColor = Theme.AppBack,
+                TextAlign = ContentAlignment.MiddleCenter, UseMnemonic = false, AutoEllipsis = true
+            };
+            centre.Controls.Add(_canvas);
+            centre.Controls.Add(_status);
+
+            // ---- Footer ----
+            var footer = ModalUi.Footer();
+            var saveUse = ModalUi.Button("Save & Use", PillKind.Primary, (s, e) => SaveDesign(true));
+            var save = ModalUi.Button("Save", PillKind.Secondary, (s, e) => SaveDesign(false));
+            var cancel = ModalUi.Button("Close", PillKind.Secondary, (s, e) => Close());
+            footer.Controls.Add(saveUse);   // right-to-left flow: first added = rightmost
+            footer.Controls.Add(save);
+            footer.Controls.Add(cancel);
+            _tip.SetToolTip(saveUse, "Save the design and print with it from now on (Card Template → Custom)");
+            _tip.SetToolTip(save, "Save the design (Ctrl+S); printing keeps the current template");
+            CancelButton = cancel;
+
+            // Docking runs in reverse add order: the fill control first, the edges last.
+            Controls.Add(centre);
+            Controls.Add(right);
+            Controls.Add(left);
+            Controls.Add(toolbar);
+            Controls.Add(footer);
+
+            _renderTimer.Tick += (s, e) => { _renderTimer.Stop(); RenderNow(); };
+            ShowSide(false);
+        }
+
+        // =====================================================================
+        // SIDE, SELECTION, RENDERING
+        // =====================================================================
+        private CardSideDesign Side { get { return _back ? _design.Back : _design.Front; } }
+
+        private void ShowSide(bool back)
+        {
+            _back = back;
+            _tabFront.Checked = !back;
+            _tabBack.Checked = back;
+            _canvas.Side = Side;
+            SelectElement(null);
+            RefreshLayers();
+            RenderNow();
+        }
+
+        private void SelectElement(CardElement element)
+        {
+            if (element != null && !Side.Elements.Contains(element)) element = null;
+            _selected = element;
+            _canvas.Selected = element;
+            _grid.SelectedObject = element ?? (object)Side;
+            _propsTitle.Text = element == null
+                ? (_back ? "BACK OF THE CARD" : "FRONT OF THE CARD") + "  ·  NOTHING SELECTED"
+                : element.Kind.ToUpperInvariant() + " PROPERTIES";
+
+            _syncingLayers = true;
+            _layers.SelectedItem = element;
+            if (element == null) _layers.ClearSelected();
+            _syncingLayers = false;
+            UpdateStatus();
+        }
+
+        private void RefreshLayers()
+        {
+            _syncingLayers = true;
+            _layers.BeginUpdate();
+            _layers.Items.Clear();
+            for (int i = Side.Elements.Count - 1; i >= 0; i--) _layers.Items.Add(Side.Elements[i]);
+            _layers.SelectedItem = _selected;
+            _layers.EndUpdate();
+            _syncingLayers = false;
+        }
+
+        /// <summary>Asks for a redraw; mouse moves are combined so the canvas never falls behind.</summary>
+        private void RequestRender()
+        {
+            if (!_renderTimer.Enabled) _renderTimer.Start();
+        }
+
+        private void RenderNow()
+        {
+            RectangleF card = _canvas.CardRect;
+            if (card.Width < 10f) return;
+            float dpi = Math.Max(100f, Math.Min(400f, card.Width / (CardRenderer.CardWidthMm / 25.4f)));
+            Bitmap bmp;
+            try
+            {
+                bmp = CardRenderer.RenderCustomSide(Side, _back ? null : _student, _settings, dpi);
+            }
+            catch (Exception ex)
+            {
+                _status.Text = "Could not draw the card: " + ex.Message;
+                return;
+            }
+            _canvas.SetImage(bmp);
+        }
+
+        private void UpdateStatus()
+        {
+            CardElement e = _selected;
+            _btnUndo.Enabled = _undo.Count > 0;
+            _btnRedo.Enabled = _redo.Count > 0;
+            if (e == null)
+            {
+                _status.Text = "Click an element to select it  ·  drag to move, handles to resize (Shift keeps the shape)  ·  " +
+                               "arrows nudge 0.1 mm (Shift 1 mm)  ·  right-click for more";
+                return;
+            }
+            _status.Text = string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "{0}  ·  {1}      X {2:0.0}   Y {3:0.0}   W {4:0.0}   H {5:0.0} mm{6}",
+                e.Kind, e.DisplayName, e.X, e.Y, e.Width, e.Height,
+                e.Locked ? "   ·  locked" : "") + (_back && e is FieldElement && ((FieldElement)e).IsStudentField
+                    ? "   ·  student fields print empty on the back" : "");
+        }
+
+        // =====================================================================
+        // UNDO / REDO — whole-design snapshots, taken after each finished change
+        // =====================================================================
+        private void Commit()
+        {
+            string now = CustomCardStore.Serialize(_design);
+            if (now == _committed) { UpdateStatus(); return; }
+            _undo.Add(_committed);
+            if (_undo.Count > MaxUndo) _undo.RemoveAt(0);
+            _redo.Clear();
+            _committed = now;
+            _layers.Invalidate();
+            UpdateStatus();
+        }
+
+        private void Undo() { StepHistory(_undo, _redo); }
+        private void Redo() { StepHistory(_redo, _undo); }
+
+        private void StepHistory(List<string> from, List<string> to)
+        {
+            if (from.Count == 0) return;
+            int index = _selected == null ? -1 : Side.Elements.IndexOf(_selected);
+            to.Add(_committed);
+            _committed = from[from.Count - 1];
+            from.RemoveAt(from.Count - 1);
+            Restore(_committed, index);
+        }
+
+        private void Restore(string xml, int selectIndex)
+        {
+            _design = CustomCardStore.Deserialize(xml);
+            _canvas.Side = Side;
+            RefreshLayers();
+            SelectElement(selectIndex >= 0 && selectIndex < Side.Elements.Count ? Side.Elements[selectIndex] : null);
+            RefreshLayers();
+            RenderNow();
+        }
+
+        /// <summary>Replaces the whole design (Start Over, Import) as one undoable step.</summary>
+        private void ReplaceDesign(CustomCardDesign design)
+        {
+            _design = design;
+            _canvas.Side = Side;
+            SelectElement(null);
+            RefreshLayers();
+            RenderNow();
+            Commit();
+        }
+
+        private void OnPropertyChanged()
+        {
+            if (_selected != null)
+            {
+                // Keep sizes usable whatever was typed
+                _selected.Width = Math.Max(0.3f, _selected.Width);
+                _selected.Height = Math.Max(0.3f, _selected.Height);
+            }
+            _layers.Invalidate();
+            RenderNow();
+            Commit();
+        }
+
+        // =====================================================================
+        // ADD ELEMENTS
+        // =====================================================================
+        private void Add(CardElement e)
+        {
+            // New elements appear in the middle of the card (a little lower each time, so they do not hide each other)
+            int sameSpot = Side.Elements.FindAll(x => Math.Abs(x.X + x.Width / 2f - CardRenderer.CardWidthMm / 2f) < 0.01f).Count;
+            e.X = (CardRenderer.CardWidthMm - e.Width) / 2f;
+            e.Y = Math.Min(CardRenderer.CardHeightMm - e.Height, (CardRenderer.CardHeightMm - e.Height) / 2f + (sameSpot % 6) * 2f);
+            Side.Elements.Add(e);
+            RefreshLayers();
+            SelectElement(e);
+            RenderNow();
+            Commit();
+            _canvas.Focus();
+        }
+
+        private void AddText()
+        {
+            Add(new TextElement { Text = "អត្ថបទថ្មី New text", Width = 40f, Height = 5f, SizePt = 8f });
+        }
+
+        private void AddField(CardField field, string label, float labelWidth, Color color, float width)
+        {
+            Add(new FieldElement
+            {
+                Field = field, Label = label, LabelWidth = labelWidth, LabelColor = CardColors.Navy, Color = color,
+                SizePt = 7f, Width = width, Height = 4f
+            });
+        }
+
+        private void AddImage(CardImageSource source)
+        {
+            var e = new ImageElement { Source = source, Width = 12f, Height = 12f };
+            switch (source)
+            {
+                case CardImageSource.Signature: e.Width = 13f; e.Height = 5.6f; break;
+                case CardImageSource.Facebook: case CardImageSource.Telegram: case CardImageSource.YouTube: case CardImageSource.TikTok:
+                case CardImageSource.PinIcon: case CardImageSource.MailIcon: case CardImageSource.GlobeIcon:
+                    e.Width = e.Height = 2.5f; break;
+                case CardImageSource.BackQrPicture: e.RemoveWhite = false; break;
+                case CardImageSource.CustomFile:
+                    string path = new CardImageFileEditor().EditValue(null, null, "") as string;
+                    if (string.IsNullOrEmpty(path)) return;   // file dialog cancelled
+                    e.FilePath = path;
+                    e.Name = Path.GetFileNameWithoutExtension(path);
+                    e.Width = 20f; e.Height = 20f;
+                    break;
+            }
+            Add(e);
+        }
+
+        private void AddPhoto()
+        {
+            Add(new PhotoElement { Width = CardRenderer.PhotoWidthMm, Height = CardRenderer.PhotoHeightMm });
+        }
+
+        private void AddQr(CardQrContent content)
+        {
+            var e = new QrElement { Content = content, Width = 12f, Height = 12f };
+            if (content == CardQrContent.CustomText) e.CustomText = "https://www.npic.edu.kh";
+            Add(e);
+        }
+
+        private void AddShape(CardShapeKind shape)
+        {
+            var e = new ShapeElement { Shape = shape, Width = 30f, Height = 10f };
+            if (shape == CardShapeKind.Ellipse) { e.Width = e.Height = 10f; }
+            if (shape == CardShapeKind.Line)
+            {
+                e.Height = 1f;
+                e.FillColor = Color.Empty;
+                e.BorderColor = CardColors.Navy;
+                e.BorderMm = 0.3f;
+            }
+            Add(e);
+        }
+
+        private ContextMenuStrip FieldMenu()
+        {
+            ContextMenuStrip m = NewMenu();
+            m.Items.Add(Header("STUDENT"));
+            m.Items.Add(Item("Student ID  ·  អត្តលេខ", () => AddField(CardField.StudentId, "អត្តលេខ: ", 0f, CardColors.IdRed, 24f)));
+            m.Items.Add(Item("Name (Khmer)  ·  គោត្តនាម-នាម", () => AddField(CardField.NameKhmer, "គោត្តនាម-នាម", 13.8f, CardColors.Navy, 56f)));
+            m.Items.Add(Item("Name (Latin)  ·  អក្សរឡាតាំង", () => AddField(CardField.NameLatin, "អក្សរឡាតាំង", 13.8f, CardColors.Navy, 56f)));
+            m.Items.Add(Item("Gender  ·  ភេទ", () => AddField(CardField.Gender, "ភេទ", 13.8f, CardColors.Navy, 40f)));
+            m.Items.Add(Item("Date of birth  ·  ថ្ងៃខែឆ្នាំកំណើត", () => AddField(CardField.DateOfBirth, "ថ្ងៃខែឆ្នាំកំណើត", 13.8f, CardColors.Navy, 50f)));
+            m.Items.Add(Item("Faculty  ·  មហាវិទ្យាល័យ", () => AddField(CardField.Faculty, "មហាវិទ្យាល័យ", 13.8f, CardColors.Navy, 56f)));
+            m.Items.Add(Item("Level  ·  កម្រិត", () => AddField(CardField.Level, "កម្រិត", 13.8f, CardColors.Navy, 56f)));
+            m.Items.Add(Item("Generation  ·  ជំនាន់ទី", () => AddField(CardField.Generation, "ជំនាន់ទី: ", 0f, CardColors.Navy, 18f)));
+            m.Items.Add(Item("Expiry date  ·  ផុតកំណត់", () => AddField(CardField.ExpiryDate, "", 0f, CardColors.IdRed, 26f)));
+            m.Items.Add(new ToolStripSeparator());
+            m.Items.Add(Header("CARD TEXT (same on every card)"));
+            m.Items.Add(Item("Issue line 1", () => AddField(CardField.IssueLine1, "", 0f, CardColors.Blue, 48f)));
+            m.Items.Add(Item("Issue line 2", () => AddField(CardField.IssueLine2, "", 0f, CardColors.Blue, 44f)));
+            m.Items.Add(Item("Director title", () => AddField(CardField.DirectorTitle, "", 0f, CardColors.Blue, 25f)));
+            m.Items.Add(Item("Director name", () => AddField(CardField.DirectorName, "", 0f, CardColors.Navy, 20f)));
+            m.Items.Add(Item("Address", () => AddField(CardField.Address, "", 0f, CardColors.Navy, 56f)));
+            m.Items.Add(Item("Email", () => AddField(CardField.Email, "", 0f, CardColors.Navy, 40f)));
+            m.Items.Add(Item("Website", () => AddField(CardField.Website, "", 0f, CardColors.Navy, 40f)));
+            return m;
+        }
+
+        private ContextMenuStrip ImageMenu()
+        {
+            ContextMenuStrip m = NewMenu();
+            m.Items.Add(Item("From file…", () => AddImage(CardImageSource.CustomFile)));
+            m.Items.Add(new ToolStripSeparator());
+            m.Items.Add(Item("NPIC logo", () => AddImage(CardImageSource.NpicLogo)));
+            m.Items.Add(Item("Ministry logo", () => AddImage(CardImageSource.MinistryLogo)));
+            m.Items.Add(Item("Stamp", () => AddImage(CardImageSource.Stamp)));
+            m.Items.Add(Item("Director signature (Card Text)", () => AddImage(CardImageSource.Signature)));
+            m.Items.Add(new ToolStripSeparator());
+            m.Items.Add(Item("Facebook", () => AddImage(CardImageSource.Facebook)));
+            m.Items.Add(Item("Telegram", () => AddImage(CardImageSource.Telegram)));
+            m.Items.Add(Item("YouTube", () => AddImage(CardImageSource.YouTube)));
+            m.Items.Add(Item("TikTok", () => AddImage(CardImageSource.TikTok)));
+            m.Items.Add(new ToolStripSeparator());
+            m.Items.Add(Item("Location icon", () => AddImage(CardImageSource.PinIcon)));
+            m.Items.Add(Item("Email icon", () => AddImage(CardImageSource.MailIcon)));
+            m.Items.Add(Item("Website icon", () => AddImage(CardImageSource.GlobeIcon)));
+            return m;
+        }
+
+        private ContextMenuStrip QrMenu()
+        {
+            ContextMenuStrip m = NewMenu();
+            m.Items.Add(Item("Student QR (changes per student)", () => AddQr(CardQrContent.StudentQr)));
+            m.Items.Add(Item("Back QR (from Card Text)", () => AddQr(CardQrContent.BackQr)));
+            m.Items.Add(Item("QR with my own text…", () => AddQr(CardQrContent.CustomText)));
+            return m;
+        }
+
+        private ContextMenuStrip ShapeMenu()
+        {
+            ContextMenuStrip m = NewMenu();
+            m.Items.Add(Item("Rectangle / band", () => AddShape(CardShapeKind.Rectangle)));
+            m.Items.Add(Item("Circle / ellipse", () => AddShape(CardShapeKind.Ellipse)));
+            m.Items.Add(Item("Line", () => AddShape(CardShapeKind.Line)));
+            return m;
+        }
+
+        private ContextMenuStrip StartOverMenu()
+        {
+            ContextMenuStrip m = NewMenu();
+            m.Items.Add(Item("Starter layout (front and back)", () =>
+            {
+                if (Confirm("Replace both sides with the starter layout?\n\nUndo (Ctrl+Z) brings your design back."))
+                    ReplaceDesign(CustomCardStore.CreateStarter());
+            }));
+            m.Items.Add(Item("Empty " + (_back ? "back" : "front"), () =>
+            {
+                if (!Confirm("Remove everything from the " + (_back ? "back" : "front") + "?\n\nUndo (Ctrl+Z) brings it back.")) return;
+                Side.Elements.Clear();
+                Side.BackgroundColor = Color.White;
+                SelectElement(null);
+                RefreshLayers();
+                RenderNow();
+                Commit();
+            }));
+            return m;
+        }
+
+        // =====================================================================
+        // EDIT COMMANDS
+        // =====================================================================
+        private void DeleteSelected()
+        {
+            if (_selected == null) return;
+            int i = Side.Elements.IndexOf(_selected);
+            Side.Elements.Remove(_selected);
+            RefreshLayers();
+            SelectElement(Side.Elements.Count == 0 ? null : Side.Elements[Math.Min(i, Side.Elements.Count - 1)]);
+            RenderNow();
+            Commit();
+        }
+
+        private void DuplicateSelected()
+        {
+            if (_selected == null) return;
+            PasteElement(_selected.Clone(), 1.5f);
+        }
+
+        private void CopySelected()
+        {
+            if (_selected != null) _clipboard = _selected.Clone();
+        }
+
+        private void Paste()
+        {
+            if (_clipboard != null) PasteElement(_clipboard.Clone(), Side.Elements.Exists(e => e.Bounds == _clipboard.Bounds) ? 1.5f : 0f);
+        }
+
+        private void PasteElement(CardElement copy, float offset)
+        {
+            copy.X = Math.Min(copy.X + offset, CardRenderer.CardWidthMm - 1f);
+            copy.Y = Math.Min(copy.Y + offset, CardRenderer.CardHeightMm - 1f);
+            copy.Locked = false;
+            int at = _selected == null ? Side.Elements.Count : Side.Elements.IndexOf(_selected) + 1;
+            Side.Elements.Insert(at, copy);
+            RefreshLayers();
+            SelectElement(copy);
+            RenderNow();
+            Commit();
+        }
+
+        private void BringForward() { MoveLayer(1); }
+        private void SendBackward() { MoveLayer(-1); }
+
+        /// <summary>+1 / -1 = one step up / down; int.MaxValue / int.MinValue = to the top / bottom.</summary>
+        private void MoveLayer(int step)
+        {
+            if (_selected == null) return;
+            List<CardElement> list = Side.Elements;
+            int from = list.IndexOf(_selected);
+            int to = step == int.MaxValue ? list.Count - 1 : step == int.MinValue ? 0 : from + step;
+            to = Math.Max(0, Math.Min(list.Count - 1, to));
+            if (to == from) return;
+            list.RemoveAt(from);
+            list.Insert(to, _selected);
+            RefreshLayers();
+            RenderNow();
+            Commit();
+        }
+
+        private void Nudge(float dx, float dy)
+        {
+            if (_selected == null) return;
+            _selected.X = (float)Math.Round(_selected.X + dx, 2);
+            _selected.Y = (float)Math.Round(_selected.Y + dy, 2);
+            _grid.Refresh();
+            RenderNow();
+            Commit();
+        }
+
+        private void ToggleLock()
+        {
+            if (_selected == null) return;
+            _selected.Locked = !_selected.Locked;
+            _grid.Refresh();
+            _canvas.Invalidate();
+            Commit();
+        }
+
+        private void ShowElementMenu(Control owner, Point at)
+        {
+            ContextMenuStrip m = NewMenu();
+            bool has = _selected != null;
+            m.Items.Add(Item("Bring to front", () => MoveLayer(int.MaxValue), has));
+            m.Items.Add(Item("Bring forward\tCtrl+]", BringForward, has));
+            m.Items.Add(Item("Send backward\tCtrl+[", SendBackward, has));
+            m.Items.Add(Item("Send to back", () => MoveLayer(int.MinValue), has));
+            m.Items.Add(new ToolStripSeparator());
+            m.Items.Add(Item("Duplicate\tCtrl+D", DuplicateSelected, has));
+            m.Items.Add(Item("Copy\tCtrl+C", CopySelected, has));
+            m.Items.Add(Item("Paste\tCtrl+V", Paste, _clipboard != null));
+            m.Items.Add(Item(has && _selected.Locked ? "Unlock" : "Lock", ToggleLock, has));
+            m.Items.Add(Item("Centre horizontally", () => Centre(true, false), has));
+            m.Items.Add(Item("Centre vertically", () => Centre(false, true), has));
+            m.Items.Add(new ToolStripSeparator());
+            m.Items.Add(Item("Delete\tDel", DeleteSelected, has));
+            m.Show(owner, at);
+        }
+
+        private void Centre(bool horizontal, bool vertical)
+        {
+            if (_selected == null) return;
+            if (horizontal) _selected.X = (float)Math.Round((CardRenderer.CardWidthMm - _selected.Width) / 2f, 2);
+            if (vertical) _selected.Y = (float)Math.Round((CardRenderer.CardHeightMm - _selected.Height) / 2f, 2);
+            _grid.Refresh();
+            RenderNow();
+            Commit();
+        }
+
+        private void ToggleSnap()
+        {
+            _btnSnap.Checked = !_btnSnap.Checked;
+            _canvas.Snap = _btnSnap.Checked;
+        }
+
+        private void ToggleOutlines()
+        {
+            _btnOutlines.Checked = !_btnOutlines.Checked;
+            _canvas.ShowOutlines = _btnOutlines.Checked;
+        }
+
+        // =====================================================================
+        // SAVE / IMPORT / EXPORT / CLOSE
+        // =====================================================================
+        private void SaveDesign(bool use)
+        {
+            try
+            {
+                CustomCardStore.Save(_design);
+            }
+            catch (Exception ex)
+            {
+                AppDialog.Show(this, "Could not save the design:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            _saved = _committed = CustomCardStore.Serialize(_design);
+            Saved = true;
+            if (use)
+            {
+                UseDesign = true;
+                DialogResult = DialogResult.OK;   // closes
+                return;
+            }
+            _status.Text = "Design saved.  Choose Custom in Card Template… (or click Save & Use) to print with it.";
+        }
+
+        private void ImportDesign()
+        {
+            using (var dlg = new OpenFileDialog { Title = "Import card design", Filter = "Card design (*.xml)|*.xml|All files (*.*)|*.*" })
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                try
+                {
+                    ReplaceDesign(CustomCardStore.ReadFile(dlg.FileName));
+                    _status.Text = "Imported " + Path.GetFileName(dlg.FileName) + ". Click Save to keep it.";
+                }
+                catch (Exception ex) when (ex is InvalidDataException || ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    AppDialog.Show(this, ex.Message, "Import card design", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+        }
+
+        private void ExportDesign()
+        {
+            using (var dlg = new SaveFileDialog
+            {
+                Title = "Export card design", Filter = "Card design (*.xml)|*.xml", FileName = "card-design.xml", OverwritePrompt = true
+            })
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                try
+                {
+                    CustomCardStore.WriteFile(dlg.FileName, _design);
+                    _status.Text = "Exported to " + dlg.FileName +
+                                   ". Pictures chosen with From file… stay on this PC: copy them along if you move the design.";
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    AppDialog.Show(this, "Could not export the design:\n\n" + ex.Message, "Export card design", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (!UseDesign && e.CloseReason == CloseReason.UserClosing && CustomCardStore.Serialize(_design) != _saved &&
+                !Confirm("Close without saving?\n\nYour changes to the design will be lost."))
+            {
+                e.Cancel = true;
+                return;
+            }
+            base.OnFormClosing(e);
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            // While a value is being typed in the property grid, its text box gets the keys (Ctrl+Z, Del, arrows…).
+            bool typing = _grid.ContainsFocus;
+            switch (keyData)
+            {
+                case Keys.Control | Keys.S: SaveDesign(false); return true;
+            }
+            if (!typing)
+            {
+                switch (keyData)
+                {
+                    case Keys.Control | Keys.Z: Undo(); return true;
+                    case Keys.Control | Keys.Y:
+                    case Keys.Control | Keys.Shift | Keys.Z: Redo(); return true;
+                    case Keys.Control | Keys.D: DuplicateSelected(); return true;
+                    case Keys.Control | Keys.C: CopySelected(); return true;
+                    case Keys.Control | Keys.V: Paste(); return true;
+                    case Keys.Control | Keys.OemCloseBrackets: BringForward(); return true;
+                    case Keys.Control | Keys.OemOpenBrackets: SendBackward(); return true;
+                    case Keys.Delete: DeleteSelected(); return true;
+                }
+                if (_canvas.Focused && _selected != null)
+                {
+                    float step = (keyData & Keys.Shift) != 0 ? 1f : 0.1f;
+                    switch (keyData & ~Keys.Shift)
+                    {
+                        case Keys.Left: Nudge(-step, 0f); return true;
+                        case Keys.Right: Nudge(step, 0f); return true;
+                        case Keys.Up: Nudge(0f, -step); return true;
+                        case Keys.Down: Nudge(0f, step); return true;
+                    }
+                }
+                if (keyData == Keys.Escape && _selected != null && (_canvas.Focused || _layers.Focused))
+                {
+                    SelectElement(null);
+                    return true;
+                }
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            NarrowNameColumn(130);
+            RenderNow();
+            _canvas.Focus();
+        }
+
+        /// <summary>The grid splits 50/50 by default; values need the room. No public API, so via reflection (cosmetic only).</summary>
+        private void NarrowNameColumn(int width)
+        {
+            try
+            {
+                foreach (Control c in _grid.Controls)
+                {
+                    if (c.GetType().Name != "PropertyGridView") continue;
+                    MethodInfo move = c.GetType().GetMethod("MoveSplitterTo", BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (move != null) move.Invoke(c, new object[] { width });
+                }
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _renderTimer.Dispose();
+                _tip.Dispose();
+                if (_lastMenu != null) _lastMenu.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
+        // =====================================================================
+        // SMALL UI HELPERS
+        // =====================================================================
+        private bool Confirm(string text)
+        {
+            return AppDialog.Show(this, text, Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+        }
+
+        private PillButton Tool(Control parent, string text, Action action, string tip)
+        {
+            PillButton b = ModalUi.ToolButton(text, action == null ? null : (EventHandler)((s, e) => action()));
+            parent.Controls.Add(b);
+            _tip.SetToolTip(b, tip);
+            return b;
+        }
+
+        private void SmallTool(Control parent, string text, Action action, string tip)
+        {
+            PillButton b = Tool(parent, text, action, tip);
+            b.MinimumSize = new Size(0, 30);
+            b.Padding = new Padding(6, 0, 6, 0);
+            b.Margin = new Padding(0, 0, 4, 4);
+        }
+
+        private PillButton AddButton(string text, string tip, Action<PillButton> action)
+        {
+            var b = new PillButton(PillKind.Secondary)
+            {
+                Text = text, Dock = DockStyle.Fill, Height = 34, Margin = new Padding(0, 0, 6, 6), MinimumSize = new Size(0, 34)
+            };
+            b.Click += (s, e) => action(b);
+            _tip.SetToolTip(b, tip);
+            return b;
+        }
+
+        private static Label SectionLabel(string text)
+        {
+            return new Label
+            {
+                Text = text, Font = Theme.SmallCaps, ForeColor = Theme.TextMuted, BackColor = Theme.Surface, AutoSize = true,
+                Margin = new Padding(0, 4, 0, 2)
+            };
+        }
+
+        private ContextMenuStrip _lastMenu;
+
+        /// <summary>
+        /// New one-shot menu. The previous one is disposed only now: a menu command may still be running (e.g. a file dialog)
+        /// after its menu has closed.
+        /// </summary>
+        private ContextMenuStrip NewMenu()
+        {
+            if (_lastMenu != null) _lastMenu.Dispose();
+            _lastMenu = new ContextMenuStrip
+            {
+                Font = new Font(CardFonts.UI, 9.25f), ShowImageMargin = false, BackColor = Theme.Surface, ForeColor = Theme.TextMain,
+                Renderer = new ToolStripProfessionalRenderer(new MenuColors())
+            };
+            return _lastMenu;
+        }
+
+        private static ToolStripMenuItem Item(string text, Action action, bool enabled = true)
+        {
+            string shortcut = null;
+            int tab = text.IndexOf('\t');
+            if (tab >= 0) { shortcut = text.Substring(tab + 1); text = text.Substring(0, tab); }
+            var item = new ToolStripMenuItem(text) { Enabled = enabled, ForeColor = Theme.TextMain, ShortcutKeyDisplayString = shortcut };
+            item.Click += (s, e) => action();
+            return item;
+        }
+
+        private static ToolStripLabel Header(string text)
+        {
+            return new ToolStripLabel(text) { Font = Theme.SmallCaps, ForeColor = Theme.TextMuted, Margin = new Padding(6, 6, 0, 2) };
+        }
+
+        private static void ShowMenu(Control under, ContextMenuStrip menu)
+        {
+            menu.Show(under, new Point(0, under.Height + 2));
+        }
+
+        private void DrawLayerItem(object sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0) return;
+            var el = (CardElement)_layers.Items[e.Index];
+            bool selected = (e.State & DrawItemState.Selected) != 0;
+            Graphics g = e.Graphics;
+            using (var back = new SolidBrush(Theme.Surface)) g.FillRectangle(back, e.Bounds);
+            Theme.HighQuality(g);
+            var row = new RectangleF(e.Bounds.X + 1, e.Bounds.Y + 2, e.Bounds.Width - 3, e.Bounds.Height - 4);
+            if (selected)
+                using (GraphicsPath p = Theme.RoundRect(row, 8))
+                using (var b = new SolidBrush(Theme.AccentSoft))
+                    g.FillPath(b, p);
+
+            // Kind badge
+            var badge = new RectangleF(row.X + 6, row.Y + (row.Height - 18) / 2f, 44, 18);
+            using (GraphicsPath p = Theme.RoundRect(badge, 9))
+            using (var b = new SolidBrush(selected ? Theme.Surface : Theme.Tile))
+                g.FillPath(b, p);
+            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+            Theme.DrawText(g, el.Kind, Theme.SmallCaps, selected ? Theme.Accent : Theme.TextSoft, badge, StringAlignment.Center);
+
+            string flags = (el.Locked ? "  · locked" : "") + (el.Visible ? "" : "  hidden");
+            Color fore = !el.Visible ? Theme.TextMuted : selected ? Theme.Accent : Theme.TextMain;
+            TextRenderer.DrawText(g, el.DisplayName + flags, _layers.Font,
+                Rectangle.Round(new RectangleF(badge.Right + 8, row.Y, row.Right - badge.Right - 12, row.Height)), fore,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+        }
+
+        private static Student SampleStudent()
+        {
+            return new Student
+            {
+                StudentId = "NPIC24001", NameKh = "សុខ សុភា", NameEn = "Sok Sophea", Gender = "F",
+                DateOfBirth = "15/03/2005", Faculty = "បច្ចេកវិទ្យាព័ត៌មាន", Level = "បរិញ្ញាបត្របច្ចេកវិទ្យា",
+                Generation = "17", ValidUntil = "30/12/2027"
+            };
+        }
+
+        /// <summary>Menu colours that follow the light / dark theme.</summary>
+        private sealed class MenuColors : ProfessionalColorTable
+        {
+            public override Color ToolStripDropDownBackground { get { return Theme.Surface; } }
+            public override Color MenuBorder { get { return Theme.Border; } }
+            public override Color MenuItemBorder { get { return Theme.AccentSoft; } }
+            public override Color MenuItemSelected { get { return Theme.AccentSoft; } }
+            public override Color MenuItemSelectedGradientBegin { get { return Theme.AccentSoft; } }
+            public override Color MenuItemSelectedGradientEnd { get { return Theme.AccentSoft; } }
+            public override Color SeparatorDark { get { return Theme.Border; } }
+            public override Color SeparatorLight { get { return Theme.Surface; } }
+        }
+    }
+
+    /// <summary>
+    /// Live card canvas of Card Designer: shows the rendered side, outlines, the selection with 8 resize handles and snap guides.
+    /// Mouse: click selects, drag moves, handles resize (Shift keeps the shape). Works in mm; the form owns the design.
+    /// </summary>
+    internal sealed class DesignCanvas : Control
+    {
+        private const int Pad = 28;
+        private const float HandlePx = 8f;
+        private const float GridMm = 0.5f;
+        private const float SafeMm = 1.5f;
+
+        private Bitmap _image;
+        private CardElement _selected, _hover;
+        private bool _snap = true, _outlines = true;
+
+        // Drag state
+        private enum Drag { None, Move, Resize }
+        private Drag _drag;
+        private int _handle;
+        private PointF _startMm;
+        private RectangleF _startBounds;
+        private bool _moved;
+        private float? _guideX, _guideY;
+
+        public event EventHandler SelectionChanged, ElementMoving, ElementMoved, ContextMenuRequested;
+
+        public DesignCanvas()
+        {
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.ResizeRedraw |
+                     ControlStyles.UserPaint | ControlStyles.Selectable, true);
+            BackColor = Theme.AppBack;
+            TabStop = true;
+        }
+
+        public CardSideDesign Side { get; set; }
+
+        public CardElement Selected
+        {
+            get { return _selected; }
+            set { _selected = value; Invalidate(); }
+        }
+
+        public bool Snap { get { return _snap; } set { _snap = value; } }
+        public bool ShowOutlines { get { return _outlines; } set { _outlines = value; Invalidate(); } }
+
+        /// <summary>Takes ownership of the bitmap.</summary>
+        public void SetImage(Bitmap image)
+        {
+            Bitmap old = _image;
+            _image = image;
+            if (old != null) old.Dispose();
+            Invalidate();
+        }
+
+        /// <summary>Where the card is drawn, in pixels (as large as fits).</summary>
+        public RectangleF CardRect
+        {
+            get
+            {
+                float ratio = CardRenderer.CardWidthMm / CardRenderer.CardHeightMm;
+                float w = Math.Max(1f, Math.Min(Width - 2f * Pad, (Height - 2f * Pad) * ratio));
+                float h = w / ratio;
+                return new RectangleF((float)Math.Round((Width - w) / 2f), (float)Math.Round((Height - h) / 2f), (float)Math.Round(w), (float)Math.Round(h));
+            }
+        }
+
+        private float PxPerMm { get { return CardRect.Width / CardRenderer.CardWidthMm; } }
+
+        private RectangleF ToPx(RectangleF mm)
+        {
+            RectangleF c = CardRect;
+            float s = PxPerMm;
+            return new RectangleF(c.X + mm.X * s, c.Y + mm.Y * s, mm.Width * s, mm.Height * s);
+        }
+
+        private PointF ToMm(Point px)
+        {
+            RectangleF c = CardRect;
+            float s = PxPerMm;
+            return new PointF((px.X - c.X) / s, (px.Y - c.Y) / s);
+        }
+
+        // ---- Painting ----
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.Clear(Theme.AppBack);
+            Theme.HighQuality(g);
+            RectangleF card = CardRect;
+            float radius = card.Width * 3.18f / CardRenderer.CardWidthMm;
+
+            var shadow = card;
+            shadow.Offset(0f, 3f);
+            using (GraphicsPath sp = Theme.RoundRect(shadow, radius))
+            using (var b = new SolidBrush(Color.FromArgb(Theme.Dark ? 80 : 30, Color.Black)))
+                g.FillPath(b, sp);
+
+            using (GraphicsPath cp = Theme.RoundRect(card, radius))
+            {
+                Region oldClip = g.Clip;
+                g.SetClip(cp, CombineMode.Intersect);
+                g.FillRectangle(Brushes.White, card);
+                if (_image != null)
+                {
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.DrawImage(_image, card);
+                }
+                g.Clip = oldClip;
+                using (var pen = new Pen(Color.FromArgb(60, Theme.Dark ? Color.White : Color.Black))) g.DrawPath(pen, cp);
+            }
+
+            if (Side != null && _outlines)
+            {
+                // Safe margin: keep text inside it, the printer may shift the card a little
+                RectangleF safe = ToPx(new RectangleF(SafeMm, SafeMm, CardRenderer.CardWidthMm - 2 * SafeMm, CardRenderer.CardHeightMm - 2 * SafeMm));
+                using (var pen = new Pen(Color.FromArgb(70, 0, 150, 200)) { DashStyle = DashStyle.Dash })
+                    g.DrawRectangle(pen, safe.X, safe.Y, safe.Width, safe.Height);
+                using (var pen = new Pen(Color.FromArgb(90, 120, 120, 140)) { DashStyle = DashStyle.Dot })
+                    foreach (CardElement el in Side.Elements)
+                        if (el != _selected && el.Visible)
+                        {
+                            RectangleF r = ToPx(el.Bounds);
+                            g.DrawRectangle(pen, r.X, r.Y, r.Width, r.Height);
+                        }
+            }
+
+            if (_hover != null && _hover != _selected && Side != null && Side.Elements.Contains(_hover))
+            {
+                RectangleF r = ToPx(_hover.Bounds);
+                using (var pen = new Pen(Color.FromArgb(150, Theme.Accent), 1.2f)) g.DrawRectangle(pen, r.X, r.Y, r.Width, r.Height);
+            }
+
+            // Snap guides while dragging
+            using (var guide = new Pen(Color.FromArgb(230, 40, 160), 1f) { DashStyle = DashStyle.Dash })
+            {
+                if (_guideX.HasValue) { float x = card.X + _guideX.Value * PxPerMm; g.DrawLine(guide, x, card.Y - 10, x, card.Bottom + 10); }
+                if (_guideY.HasValue) { float y = card.Y + _guideY.Value * PxPerMm; g.DrawLine(guide, card.X - 10, y, card.Right + 10, y); }
+            }
+
+            if (_selected != null)
+            {
+                RectangleF r = ToPx(_selected.Bounds);
+                using (var pen = new Pen(Theme.Accent, 1.6f) { DashStyle = _selected.Locked ? DashStyle.Dash : DashStyle.Solid })
+                    g.DrawRectangle(pen, r.X, r.Y, r.Width, r.Height);
+                if (!_selected.Locked)
+                {
+                    using (var fill = new SolidBrush(Color.White))
+                    using (var pen = new Pen(Theme.Accent, 1.4f))
+                        foreach (RectangleF h in Handles(r))
+                        {
+                            g.FillRectangle(fill, h);
+                            g.DrawRectangle(pen, h.X, h.Y, h.Width, h.Height);
+                        }
+                }
+            }
+
+            if (Focused && ShowFocusCues)
+                using (var pen = new Pen(Theme.Border) { DashStyle = DashStyle.Dot })
+                    g.DrawRectangle(pen, 2, 2, Width - 5, Height - 5);
+        }
+
+        /// <summary>TL, T, TR, R, BR, B, BL, L.</summary>
+        private static RectangleF[] Handles(RectangleF r)
+        {
+            float h = HandlePx, o = h / 2f;
+            float cx = r.X + r.Width / 2f, cy = r.Y + r.Height / 2f;
+            return new[]
+            {
+                new RectangleF(r.Left - o, r.Top - o, h, h), new RectangleF(cx - o, r.Top - o, h, h),
+                new RectangleF(r.Right - o, r.Top - o, h, h), new RectangleF(r.Right - o, cy - o, h, h),
+                new RectangleF(r.Right - o, r.Bottom - o, h, h), new RectangleF(cx - o, r.Bottom - o, h, h),
+                new RectangleF(r.Left - o, r.Bottom - o, h, h), new RectangleF(r.Left - o, cy - o, h, h)
+            };
+        }
+
+        private int HandleAt(Point p)
+        {
+            if (_selected == null || _selected.Locked) return -1;
+            RectangleF[] hs = Handles(ToPx(_selected.Bounds));
+            for (int i = 0; i < hs.Length; i++)
+            {
+                RectangleF h = hs[i];
+                h.Inflate(3f, 3f);
+                if (h.Contains(p)) return i;
+            }
+            return -1;
+        }
+
+        /// <summary>Top-most visible, unlocked element under the point (a tiny element gets a few extra pixels).</summary>
+        private CardElement ElementAt(Point p)
+        {
+            if (Side == null) return null;
+            for (int i = Side.Elements.Count - 1; i >= 0; i--)
+            {
+                CardElement el = Side.Elements[i];
+                if (!el.Visible || el.Locked) continue;
+                RectangleF r = ToPx(el.Bounds);
+                r.Inflate(Math.Max(0f, 6f - r.Width) / 2f + 1f, Math.Max(0f, 6f - r.Height) / 2f + 1f);
+                if (r.Contains(p)) return el;
+            }
+            return null;
+        }
+
+        // ---- Mouse ----
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            Focus();
+            base.OnMouseDown(e);
+            int handle = e.Button == MouseButtons.Left ? HandleAt(e.Location) : -1;
+            if (handle < 0)
+            {
+                CardElement hit = ElementAt(e.Location);
+                // Clicking inside the selected (maybe locked) element keeps it selected
+                if (hit == null && _selected != null && ToPx(_selected.Bounds).Contains(e.Location)) hit = _selected;
+                if (hit != _selected)
+                {
+                    _selected = hit;
+                    SelectionChanged?.Invoke(this, EventArgs.Empty);
+                    Invalidate();
+                }
+            }
+
+            if (e.Button == MouseButtons.Right)
+            {
+                ContextMenuRequested?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+            if (e.Button != MouseButtons.Left || _selected == null || _selected.Locked) return;
+
+            _drag = handle >= 0 ? Drag.Resize : Drag.Move;
+            _handle = handle;
+            _startMm = ToMm(e.Location);
+            _startBounds = _selected.Bounds;
+            _moved = false;
+            Capture = true;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            if (_drag == Drag.None)
+            {
+                int h = HandleAt(e.Location);
+                Cursor = h >= 0 ? HandleCursor(h) : ElementAt(e.Location) != null ? Cursors.SizeAll : Cursors.Default;
+                CardElement hover = ElementAt(e.Location);
+                if (hover != _hover) { _hover = hover; Invalidate(); }
+                return;
+            }
+
+            PointF now = ToMm(e.Location);
+            float dx = now.X - _startMm.X, dy = now.Y - _startMm.Y;
+            if (!_moved && Math.Abs(dx) * PxPerMm < 2f && Math.Abs(dy) * PxPerMm < 2f) return;   // ignore click jitter
+            _moved = true;
+            bool shift = (ModifierKeys & Keys.Shift) != 0;
+
+            RectangleF r = _drag == Drag.Move ? MoveRect(dx, dy) : ResizeRect(dx, dy, shift);
+            _selected.Bounds = new RectangleF((float)Math.Round(r.X, 2), (float)Math.Round(r.Y, 2), (float)Math.Round(r.Width, 2), (float)Math.Round(r.Height, 2));
+            Invalidate();
+            ElementMoving?.Invoke(this, EventArgs.Empty);
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            if (_drag == Drag.None) return;
+            _drag = Drag.None;
+            Capture = false;
+            _guideX = _guideY = null;
+            Invalidate();
+            if (_moved) ElementMoved?.Invoke(this, EventArgs.Empty);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            if (_hover != null) { _hover = null; Invalidate(); }
+        }
+
+        protected override bool IsInputKey(Keys keyData)
+        {
+            switch (keyData & ~Keys.Shift)
+            {
+                case Keys.Left: case Keys.Right: case Keys.Up: case Keys.Down: return true;
+            }
+            return base.IsInputKey(keyData);
+        }
+
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+
+        private static Cursor HandleCursor(int h)
+        {
+            switch (h)
+            {
+                case 0: case 4: return Cursors.SizeNWSE;
+                case 2: case 6: return Cursors.SizeNESW;
+                case 1: case 5: return Cursors.SizeNS;
+                default: return Cursors.SizeWE;
+            }
+        }
+
+        // ---- Snapping ----
+        private RectangleF MoveRect(float dx, float dy)
+        {
+            var r = new RectangleF(_startBounds.X + dx, _startBounds.Y + dy, _startBounds.Width, _startBounds.Height);
+            _guideX = _guideY = null;
+            if (!_snap) return r;
+
+            float tol = 6f / PxPerMm;   // 6 px
+            float W = CardRenderer.CardWidthMm, H = CardRenderer.CardHeightMm;
+            float snapped;
+            if (SnapEdges(r.X, r.Width, new[] { 0f, SafeMm, W / 2f, W - SafeMm, W }, tol, out snapped, out _guideX)) r.X = snapped;
+            else r.X = Round(r.X);
+            if (SnapEdges(r.Y, r.Height, new[] { 0f, SafeMm, H / 2f, H - SafeMm, H }, tol, out snapped, out _guideY)) r.Y = snapped;
+            else r.Y = Round(r.Y);
+            return r;
+        }
+
+        /// <summary>Snaps the start, centre or end of a span to the nearest target line within tol.</summary>
+        private static bool SnapEdges(float start, float size, float[] targets, float tol, out float newStart, out float? guide)
+        {
+            newStart = start;
+            guide = null;
+            float best = tol;
+            float[] offsets = { 0f, size / 2f, size };
+            foreach (float t in targets)
+                foreach (float o in offsets)
+                {
+                    float d = Math.Abs(start + o - t);
+                    if (d < best) { best = d; newStart = t - o; guide = t; }
+                }
+            return guide.HasValue;
+        }
+
+        private float Round(float mm) { return _snap ? (float)Math.Round(mm / GridMm) * GridMm : mm; }
+
+        private RectangleF ResizeRect(float dx, float dy, bool keepRatio)
+        {
+            float l = _startBounds.Left, t = _startBounds.Top, r = _startBounds.Right, b = _startBounds.Bottom;
+            bool left = _handle == 0 || _handle == 6 || _handle == 7;
+            bool right = _handle == 2 || _handle == 3 || _handle == 4;
+            bool top = _handle == 0 || _handle == 1 || _handle == 2;
+            bool bottom = _handle == 4 || _handle == 5 || _handle == 6;
+            if (left) l = Round(l + dx);
+            if (right) r = Round(r + dx);
+            if (top) t = Round(t + dy);
+            if (bottom) b = Round(b + dy);
+
+            const float min = 0.5f;
+            if (r - l < min) { if (left) l = r - min; else r = l + min; }
+            if (b - t < min) { if (top) t = b - min; else b = t + min; }
+
+            bool corner = (left || right) && (top || bottom);
+            if (keepRatio && corner && _startBounds.Height > 0f)
+            {
+                float ratio = _startBounds.Width / _startBounds.Height;
+                float w = r - l, h = b - t;
+                if (w / ratio > h) h = w / ratio; else w = h * ratio;
+                if (left) l = r - w; else r = l + w;
+                if (top) t = b - h; else b = t + h;
+            }
+            _guideX = _guideY = null;
+            return RectangleF.FromLTRB(l, t, r, b);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && _image != null) { _image.Dispose(); _image = null; }
+            base.Dispose(disposing);
+        }
+    }
+}

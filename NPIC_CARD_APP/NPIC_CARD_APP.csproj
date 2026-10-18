@@ -112,6 +112,9 @@
     </Compile>
     <Compile Include="Branding.cs" />
     <Compile Include="SlimScroll.cs" />
+    <Compile Include="CardDesignerForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="CardTemplateForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -165,6 +168,8 @@
     <Compile Include="Rendering\FontInstaller.cs" />
     <Compile Include="Rendering\CardRenderer.cs" />
     <Compile Include="Rendering\CardRenderer.Templates.cs" />
+    <Compile Include="Rendering\CardRenderer.Custom.cs" />
+    <Compile Include="Rendering\CustomCard.cs" />
     <Compile Include="Rendering\CardTemplates.cs" />
     <Compile Include="Rendering\KhmerText.cs" />
     <Compile Include="Rendering\PositionGrid.cs" />

@@ -204,6 +204,15 @@ namespace NPIC_CARD_APP
         protected override string What { get { return "logo"; } }
     }
 
+    /// <summary>"…" for a custom-design image (Card Designer…); uploads go to %AppData%\NPIC_CARD_APP\CardImages.</summary>
+    public class CardImageFileEditor : ImageFileEditor
+    {
+        protected override string Title { get { return "Picture for the card"; } }
+        protected override string FolderName { get { return "CardImages"; } }
+        protected override string FilePrefix { get { return "image_"; } }
+        protected override string What { get { return "picture"; } }
+    }
+
     /// <summary>"…" for CardText.SignaturePath; uploads go to %AppData%\NPIC_CARD_APP\Signatures.</summary>
     public class SignatureFileEditor : ImageFileEditor
     {

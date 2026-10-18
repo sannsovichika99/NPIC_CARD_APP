@@ -225,7 +225,9 @@ namespace NPIC_CARD_APP
                 Nav("Remove Background…", Theme.IcoBrush, RemovePhotoBackground,
                     "Crop the selected student's photo and remove the wall / screen behind it (Ctrl+B)"),
                 Nav("Card Template…", Theme.IcoTemplate, ChooseCardTemplate,
-                    "Choose the card design (Classic, Modern, Minimal, Ribbon) with a live preview of front and back"),
+                    "Choose the card design (Classic, Modern, Minimal, Ribbon or your Custom design) with a live preview of front and back"),
+                Nav("Card Designer…", Theme.IcoEdit, ShowCardDesigner,
+                    "Design your own card: place text, student fields, photo, QR codes, images and shapes on the front and back"),
                 Nav("Card Text…", Theme.IcoFont, EditCardText,
                     "Edit the fixed text printed on the cards and choose the director signature"),
 
@@ -1523,7 +1525,11 @@ namespace NPIC_CARD_APP
             CardTemplate chosen;
             using (var dlg = new CardTemplateForm(CurrentStudent(), _settings))
             {
-                if (dlg.ShowDialog(this) != DialogResult.OK) return;   // Cancel / Esc / ✕: nothing changes
+                if (dlg.ShowDialog(this) != DialogResult.OK)   // Cancel / Esc / ✕: nothing changes
+                {
+                    if (dlg.OpenDesigner) ShowCardDesigner();
+                    return;
+                }
                 chosen = dlg.SelectedTemplate;
             }
             if (chosen == _settings.CardTemplate) return;
@@ -1531,6 +1537,28 @@ namespace NPIC_CARD_APP
             SaveSettings(false);
             UpdatePreview();
             SetStatus("Card template: " + CardTemplates.Find(chosen).Name + ". Preview and printing now use this design.");
+        }
+
+        /// <summary>Card Designer…: edit the custom card. Save &amp; Use also switches printing to the Custom template.</summary>
+        private void ShowCardDesigner()
+        {
+            bool saved, use;
+            using (var dlg = new CardDesignerForm(CurrentStudent(), _settings))
+            {
+                dlg.ShowDialog(this);
+                saved = dlg.Saved;
+                use = dlg.UseDesign;
+            }
+            if (use && _settings.CardTemplate != CardTemplate.Custom)
+            {
+                _settings.CardTemplate = CardTemplate.Custom;
+                SaveSettings(false);
+            }
+            if (!saved) return;
+            UpdatePreview();
+            SetStatus(_settings.CardTemplate == CardTemplate.Custom
+                ? "Custom card design saved. Preview and printing use it."
+                : "Custom card design saved. Choose Custom in Card Template… to print with it.");
         }
 
         private void EditCardText()
