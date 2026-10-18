@@ -42,7 +42,6 @@
     <DefineConstants>TRACE</DefineConstants>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
-
   <!-- The program this setup packages. -->
   <PropertyGroup>
     <AppOutputDir>$(MSBuildThisFileDirectory)..\..\Tools\SerialGenerator\bin\$(Configuration)\</AppOutputDir>
@@ -51,7 +50,6 @@
     <DistDir>$(MSBuildThisFileDirectory)..\..\dist\admin\</DistDir>
     <EngineDir>..\CardStudio.Setup\</EngineDir>
   </PropertyGroup>
-
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -65,8 +63,34 @@
       <Link>GeneratorVersion.cs</Link>
     </Compile>
     <!-- The shared setup engine (all of CardStudio.Setup except its ProductInfo.cs). -->
-    <Compile Include="$(EngineDir)*.cs" Exclude="$(EngineDir)ProductInfo.cs">
-      <Link>Engine\%(Filename)%(Extension)</Link>
+    <Compile Include="..\CardStudio.Setup\FontSetup.cs">
+      <Link>Engine\FontSetup.cs</Link>
+    </Compile>
+    <Compile Include="..\CardStudio.Setup\InstallEngine.cs">
+      <Link>Engine\InstallEngine.cs</Link>
+    </Compile>
+    <Compile Include="..\CardStudio.Setup\Program.cs">
+      <Link>Engine\Program.cs</Link>
+    </Compile>
+    <Compile Include="..\CardStudio.Setup\SetupForm.cs">
+      <Link>Engine\SetupForm.cs</Link>
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="..\CardStudio.Setup\SetupOptions.cs">
+      <Link>Engine\SetupOptions.cs</Link>
+    </Compile>
+    <Compile Include="..\CardStudio.Setup\SetupUi.cs">
+      <Link>Engine\SetupUi.cs</Link>
+    </Compile>
+    <Compile Include="..\CardStudio.Setup\Shortcut.cs">
+      <Link>Engine\Shortcut.cs</Link>
+    </Compile>
+    <Compile Include="..\CardStudio.Setup\UninstallEngine.cs">
+      <Link>Engine\UninstallEngine.cs</Link>
+    </Compile>
+    <Compile Include="..\CardStudio.Setup\UninstallForm.cs">
+      <Link>Engine\UninstallForm.cs</Link>
+      <SubType>Form</SubType>
     </Compile>
   </ItemGroup>
   <ItemGroup>
@@ -74,7 +98,6 @@
       <LogicalName>CardStudio.Setup.logo.png</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
-
   <!-- Builds the generator first (same Configuration) without referencing its assembly. -->
   <ItemGroup>
     <ProjectReference Include="..\..\Tools\SerialGenerator\SerialGenerator.csproj">
@@ -84,9 +107,7 @@
       <Private>false</Private>
     </ProjectReference>
   </ItemGroup>
-
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-
   <!--
     Payload: the generator's build output, zipped and embedded. A private key, serial log or remembered key path that
     was dropped into the output folder (e.g. to test "key next to the exe") is LEFT OUT, with a warning, so the setup
@@ -97,27 +118,22 @@
       <PayloadStageDir>$(MSBuildThisFileDirectory)$(IntermediateOutputPath)payload\</PayloadStageDir>
       <PayloadZip>$(MSBuildThisFileDirectory)$(IntermediateOutputPath)payload.zip</PayloadZip>
     </PropertyGroup>
-    <Error Condition="!Exists('$(AppOutputDir)$(AppExeName)')"
-           Text="Serial Generator build output not found: $(AppOutputDir)$(AppExeName)" />
+    <Error Condition="!Exists('$(AppOutputDir)$(AppExeName)')" Text="Serial Generator build output not found: $(AppOutputDir)$(AppExeName)" />
     <ItemGroup>
       <SecretFile Include="$(AppOutputDir)**\*.key;$(AppOutputDir)**\serials*.csv;$(AppOutputDir)**\key-path.txt" />
-      <PayloadFile Include="$(AppOutputDir)**\*"
-                   Exclude="$(AppOutputDir)**\*.pdb;$(AppOutputDir)**\*.vshost.*;@(SecretFile)" />
+      <PayloadFile Include="$(AppOutputDir)**\*" Exclude="$(AppOutputDir)**\*.pdb;$(AppOutputDir)**\*.vshost.*;@(SecretFile)" />
     </ItemGroup>
-    <Warning Condition="'@(SecretFile)' != ''"
-             Text="Left out of the setup (never ship the key or the serial log): @(SecretFile)" />
+    <Warning Condition="'@(SecretFile)' != ''" Text="Left out of the setup (never ship the key or the serial log): @(SecretFile)" />
     <RemoveDir Directories="$(PayloadStageDir)" />
-    <Copy SourceFiles="@(PayloadFile)"
-          DestinationFiles="@(PayloadFile->'$(PayloadStageDir)%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Copy SourceFiles="@(PayloadFile)" DestinationFiles="@(PayloadFile->'$(PayloadStageDir)%(RecursiveDir)%(Filename)%(Extension)')" />
     <ZipDirectory SourceDirectory="$(PayloadStageDir)" DestinationFile="$(PayloadZip)" Overwrite="true" />
     <ItemGroup>
       <EmbeddedResource Include="$(PayloadZip)">
         <LogicalName>CardStudio.Setup.payload.zip</LogicalName>
       </EmbeddedResource>
     </ItemGroup>
-    <Message Importance="high" Text="Payload: @(PayloadFile->Count()) files -> $(PayloadZip)" />
+    <Message Importance="high" Text="Payload: @(PayloadFile-&gt;Count()) files -&gt; $(PayloadZip)" />
   </Target>
-
   <!-- Release builds also drop the single-file setup into <repo>\dist\admin\. -->
   <Target Name="CopyToDist" AfterTargets="Build" Condition=" '$(Configuration)' == 'Release' ">
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(DistDir)" />

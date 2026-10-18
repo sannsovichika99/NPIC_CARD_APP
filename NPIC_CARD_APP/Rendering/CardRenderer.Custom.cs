@@ -14,10 +14,12 @@ namespace NPIC_CARD_APP.Rendering
         /// Draws one side of a custom design. <paramref name="s"/> = null for the back (student fields then print empty).
         /// <paramref name="dpi"/> below <see cref="Dpi"/> gives a faster, smaller bitmap for the designer's live canvas.
         /// </summary>
-        public static Bitmap RenderCustomSide(CardSideDesign side, Student s, AppSettings settings, float dpi = Dpi)
+        public static Bitmap RenderCustomSide(CardSideDesign side, Student s, AppSettings settings, float dpi = Dpi, bool designMode = false)
         {
             float old = _dpiOverride;
+            bool oldDesign = _designMode;
             _dpiOverride = dpi;
+            _designMode = designMode;
             try
             {
                 CardText t = settings.CardText ?? new CardText();
@@ -47,8 +49,12 @@ namespace NPIC_CARD_APP.Rendering
             finally
             {
                 _dpiOverride = old;
+                _designMode = oldDesign;
             }
         }
+
+        /// <summary>Card Designer canvas: a custom column the preview student does not have shows as [Column] (never printed).</summary>
+        [ThreadStatic] private static bool _designMode;
 
         private static void DrawElement(Graphics g, CardElement e, Student s, AppSettings settings, CardText t)
         {
@@ -121,7 +127,15 @@ namespace NPIC_CARD_APP.Rendering
 
         private static void DrawField(Graphics g, FieldElement e, Student s, CardText t)
         {
-            string value = FieldValue(e.Field, s, t);
+            string value;
+            if (e.Field == CardField.Custom)
+            {
+                value = s == null ? "" : s.Column(e.Column);
+                if (value.Length == 0 && _designMode && s != null)
+                    value = "[" + (string.IsNullOrWhiteSpace(e.Column) ? "column?" : e.Column.Trim()) + "]";
+                else value = FormatValue(value, e.Format);
+            }
+            else value = FormatValue(FieldValue(e.Field, s, t), e.Format);
             TextFormatFlags align = Flags(e.Align);
             bool hasLabel = !string.IsNullOrEmpty(e.Label);
 
@@ -139,6 +153,18 @@ namespace NPIC_CARD_APP.Rendering
             List<TextRun> runs = hasLabel ? Runs(e.Label, e, e.LabelColor) : new List<TextRun>();
             runs.AddRange(Runs(value, e, e.Color));
             DrawRuns(g, runs, e.SizePt, e.X, e.Y, e.Width, e.Height, align);
+        }
+
+        private static string FormatValue(string value, CardValueFormat format)
+        {
+            if (string.IsNullOrEmpty(value)) return value ?? "";
+            switch (format)
+            {
+                case CardValueFormat.Uppercase: return value.ToUpperInvariant();
+                case CardValueFormat.KhmerDigits: return KhmerText.Digits(value);
+                case CardValueFormat.KhmerDate: return KhmerText.Date(value);
+                default: return value;
+            }
         }
 
         /// <summary>Text of a field. Student fields are "" when there is no student (back side).</summary>

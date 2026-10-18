@@ -60,7 +60,7 @@ namespace NPIC_CARD_APP.Services
                 List<string> cells = rows[r];
                 if (IsBlank(cells)) continue;
                 string faculty = Get(cells, map, "Faculty");
-                students.Add(new Student
+                var student = new Student
                 {
                     StudentId = Get(cells, map, "StudentId"),
                     NameKh = Get(cells, map, "NameKh"),
@@ -72,7 +72,11 @@ namespace NPIC_CARD_APP.Services
                     Generation = Get(cells, map, "Generation"),
                     ValidUntil = Get(cells, map, "ValidUntil"),
                     QrData = Get(cells, map, "QrData")
-                });
+                };
+                // Keep every column, so Card Designer custom fields can print columns the app does not know.
+                foreach (KeyValuePair<string, int> col in map)
+                    student.Columns[col.Key] = col.Value < cells.Count ? (cells[col.Value] ?? "").Trim() : "";
+                students.Add(student);
             }
             return students;
         }

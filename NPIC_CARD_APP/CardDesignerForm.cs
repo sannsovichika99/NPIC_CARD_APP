@@ -110,8 +110,10 @@ namespace NPIC_CARD_APP
             adds.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
             adds.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
             adds.Controls.Add(AddButton("Text", "Fixed text, the same on every card", (b) => AddText()), 0, 0);
-            adds.Controls.Add(AddButton("Field ▾", "Student data (name, ID, date of birth…) or Card Text (director, address…)", (b) => ShowMenu(b, FieldMenu())), 1, 0);
-            adds.Controls.Add(AddButton("Image ▾", "Logo, stamp, signature, social icon or your own picture", (b) => ShowMenu(b, ImageMenu())), 0, 1);
+            adds.Controls.Add(AddButton("Field ▾", "Student data (name, ID, date of birth…), a custom field from any column of your list, " +
+                "or Card Text (director, address…)", (b) => ShowMenu(b, FieldMenu())), 1, 0);
+            adds.Controls.Add(AddButton("Image ▾", "Upload your own picture, paste one (Ctrl+V) or use a logo, stamp, signature or icon. " +
+                "You can also drag picture files onto the card.", (b) => ShowMenu(b, ImageMenu())), 0, 1);
             adds.Controls.Add(AddButton("Photo", "The student's photo from the photo folder", (b) => AddPhoto()), 1, 1);
             adds.Controls.Add(AddButton("QR ▾", "Student QR, back QR (Card Text) or a QR with your own text", (b) => ShowMenu(b, QrMenu())), 0, 2);
             adds.Controls.Add(AddButton("Shape ▾", "Rectangle, circle / ellipse or line", (b) => ShowMenu(b, ShapeMenu())), 1, 2);
@@ -169,6 +171,10 @@ namespace NPIC_CARD_APP
             _canvas.ElementMoved += (s, e) => { _grid.Refresh(); Commit(); };
             _canvas.ContextMenuRequested += (s, e) => ShowElementMenu(_canvas, _canvas.PointToClient(Cursor.Position));
             _canvas.Resize += (s, e) => RequestRender();
+            _canvas.AllowDrop = true;   // drop picture files on the card
+            _canvas.DragEnter += (s, e) => e.Effect = DroppedImages(e.Data).Count > 0 ? DragDropEffects.Copy : DragDropEffects.None;
+            _canvas.DragDrop += (s, e) =>
+                AddPictureFiles(DroppedImages(e.Data), _canvas.ClientToMm(_canvas.PointToClient(new Point(e.X, e.Y))));
             _status = new Label
             {
                 Dock = DockStyle.Bottom, Height = 30, Font = Theme.Small, ForeColor = Theme.TextSoft, BackColor = Theme.AppBack,
@@ -197,6 +203,13 @@ namespace NPIC_CARD_APP
             Controls.Add(footer);
 
             _renderTimer.Tick += (s, e) => { _renderTimer.Stop(); RenderNow(); };
+
+            // Column names offered for custom fields: the preview student's columns, extra (unknown) ones first.
+            StudentColumnConverter.Known.Clear();
+            var standard = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                { "StudentId", "NameKh", "NameEn", "Gender", "DateOfBirth", "Faculty", "Department", "Level", "Generation", "ValidUntil", "QrData" };
+            foreach (string col in _student.Columns.Keys) if (!standard.Contains(col)) StudentColumnConverter.Known.Add(col);
+            foreach (string col in _student.Columns.Keys) if (standard.Contains(col)) StudentColumnConverter.Known.Add(col);
 
             CustomCardDesign open = createNew ? null
                 : CustomCardStore.Find(designId) ?? CustomCardStore.Find(settings.CustomDesignId) ??
@@ -399,7 +412,7 @@ namespace NPIC_CARD_APP
             Bitmap bmp;
             try
             {
-                bmp = CardRenderer.RenderCustomSide(Side, _back ? null : _student, _settings, dpi);
+                bmp = CardRenderer.RenderCustomSide(Side, _back ? null : _student, _settings, dpi, true);
             }
             catch (Exception ex)
             {
@@ -532,14 +545,173 @@ namespace NPIC_CARD_APP
                     e.Width = e.Height = 2.5f; break;
                 case CardImageSource.BackQrPicture: e.RemoveWhite = false; break;
                 case CardImageSource.CustomFile:
-                    string path = new CardImageFileEditor().EditValue(null, null, "") as string;
-                    if (string.IsNullOrEmpty(path)) return;   // file dialog cancelled
-                    e.FilePath = path;
-                    e.Name = Path.GetFileNameWithoutExtension(path);
-                    e.Width = 20f; e.Height = 20f;
-                    break;
+                    UploadImages();
+                    return;
             }
             Add(e);
+        }
+
+        // =====================================================================
+        // YOUR OWN PICTURES — upload, drag & drop, paste
+        // =====================================================================
+        private const string CardImagesFolder = "CardImages";
+
+        /// <summary>Upload image…: pick one or more pictures; each becomes an image element.</summary>
+        private void UploadImages()
+        {
+            using (var dlg = new OpenFileDialog
+            {
+                Title = "Upload image to the card", Multiselect = true,
+                Filter = "Images (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp"
+            })
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                AddPictureFiles(new List<string>(dlg.FileNames), null);
+            }
+        }
+
+        /// <summary>Copies the pictures into the app's settings folder and adds them, centred on atMm (null = card centre).</summary>
+        private void AddPictureFiles(List<string> files, PointF? atMm)
+        {
+            var failed = new List<string>();
+            float offset = 0f;
+            foreach (string file in files)
+            {
+                string stored;
+                try
+                {
+                    stored = ImageFileEditor.Import(file, CardImagesFolder, "image_");
+                }
+                catch (Exception ex)
+                {
+                    failed.Add(Path.GetFileName(file) + ": " + ex.Message);
+                    continue;
+                }
+                AddPicture(stored, Path.GetFileNameWithoutExtension(file), atMm, offset);
+                offset += 2f;
+            }
+            if (failed.Count > 0)
+                AppDialog.Show(this, "These files are not pictures the card can use:\n\n" + string.Join("\n", failed),
+                    "Add image", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        /// <summary>Ctrl+V with a picture or picture files on the clipboard (e.g. a screenshot or a copied logo).</summary>
+        private bool PastePictureFromClipboard()
+        {
+            try
+            {
+                if (Clipboard.ContainsData(ElementClipboardFormat)) return false;   // an element copied here: paste that
+                if (Clipboard.ContainsImage())
+                {
+                    using (Image img = Clipboard.GetImage())
+                    {
+                        if (img == null) return false;
+                        AddPicture(ImageFileEditor.SavePng(img, CardImagesFolder, "pasted_"), "Pasted picture", null, 0f);
+                    }
+                    return true;
+                }
+                List<string> files = DroppedImages(Clipboard.GetDataObject());
+                if (files.Count > 0) { AddPictureFiles(files, null); return true; }
+            }
+            catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException || ex is IOException ||
+                                       ex is UnauthorizedAccessException || ex is ArgumentException)
+            {
+                _status.Text = "Could not paste the picture: " + ex.Message;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>Picture files in a drag &amp; drop or clipboard data object.</summary>
+        private static List<string> DroppedImages(IDataObject data)
+        {
+            var list = new List<string>();
+            var files = data == null ? null : data.GetData(DataFormats.FileDrop) as string[];
+            if (files == null) return list;
+            foreach (string f in files)
+                if (Array.IndexOf(ImageFileEditor.ImageExtensions, Path.GetExtension(f).ToLowerInvariant()) >= 0) list.Add(f);
+            return list;
+        }
+
+        /// <summary>Adds a picture element that keeps the picture's proportions (about 20 mm on its long side).</summary>
+        private void AddPicture(string storedPath, string name, PointF? atMm, float offset)
+        {
+            SizeF size = PictureSize(CardText.ResolveAppPath(storedPath), 20f);
+            var e = new ImageElement
+            {
+                Source = CardImageSource.CustomFile, FilePath = storedPath, Name = name, RemoveWhite = false,
+                Width = size.Width, Height = size.Height
+            };
+            if (!atMm.HasValue) { Add(e); return; }
+
+            e.X = Math.Max(0f, Math.Min(CardRenderer.CardWidthMm - e.Width, atMm.Value.X - e.Width / 2f + offset));
+            e.Y = Math.Max(0f, Math.Min(CardRenderer.CardHeightMm - e.Height, atMm.Value.Y - e.Height / 2f + offset));
+            Side.Elements.Add(e);
+            RefreshLayers();
+            SelectElement(e);
+            RenderNow();
+            Commit();
+            _canvas.Focus();
+        }
+
+        /// <summary>Element size in mm: longSideMm on the long side, the picture's own proportions.</summary>
+        private static SizeF PictureSize(string path, float longSideMm)
+        {
+            try
+            {
+                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                using (Image img = Image.FromStream(fs, false, false))
+                {
+                    if (img.Width <= 0 || img.Height <= 0) return new SizeF(longSideMm, longSideMm);
+                    return img.Width >= img.Height
+                        ? new SizeF(longSideMm, (float)Math.Round(longSideMm * img.Height / img.Width, 2))
+                        : new SizeF((float)Math.Round(longSideMm * img.Width / img.Height, 2), longSideMm);
+                }
+            }
+            catch (Exception ex) when (ex is IOException || ex is ArgumentException || ex is UnauthorizedAccessException)
+            {
+                return new SizeF(longSideMm, longSideMm);
+            }
+        }
+
+        /// <summary>Change picture…: another file for the selected image element (its box stays; the picture fits inside).</summary>
+        private void ChangePicture()
+        {
+            var img = _selected as ImageElement;
+            if (img == null) return;
+            using (var dlg = new OpenFileDialog { Title = "Change picture", Filter = "Images (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp" })
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                try
+                {
+                    img.FilePath = ImageFileEditor.Import(dlg.FileName, CardImagesFolder, "image_");
+                }
+                catch (Exception ex)
+                {
+                    AppDialog.Show(this, "Could not use this file:\n\n" + ex.Message, "Change picture", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                img.Source = CardImageSource.CustomFile;
+                if (string.IsNullOrWhiteSpace(img.Name) || img.Name == "Pasted picture") img.Name = Path.GetFileNameWithoutExtension(dlg.FileName);
+                _grid.Refresh();
+                _layers.Invalidate();
+                RenderNow();
+                Commit();
+            }
+        }
+
+        // =====================================================================
+        // CUSTOM FIELD — any column of the student list
+        // =====================================================================
+        private void AddCustomField()
+        {
+            string column, label;
+            if (!CustomFieldPrompt.Ask(this, _student, out column, out label)) return;
+            Add(new FieldElement
+            {
+                Field = CardField.Custom, Column = column, Label = label, LabelWidth = string.IsNullOrEmpty(label) ? 0f : 13.8f,
+                LabelColor = CardColors.Navy, Color = CardColors.Navy, SizePt = 7f, Width = 56f, Height = 4f, Name = column
+            });
         }
 
         private void AddPhoto()
@@ -582,6 +754,12 @@ namespace NPIC_CARD_APP
             m.Items.Add(Item("Generation  ·  ជំនាន់ទី", () => AddField(CardField.Generation, "ជំនាន់ទី: ", 0f, CardColors.Navy, 18f)));
             m.Items.Add(Item("Expiry date  ·  ផុតកំណត់", () => AddField(CardField.ExpiryDate, "", 0f, CardColors.IdRed, 26f)));
             m.Items.Add(new ToolStripSeparator());
+            m.Items.Add(Header("ANY COLUMN OF YOUR LIST"));
+            ToolStripMenuItem custom = Item("Custom field (any column)…", AddCustomField);
+            custom.Font = new Font(custom.Font, FontStyle.Bold);
+            custom.ToolTipText = "Print a column the app does not know, e.g. Phone, BloodType, Department";
+            m.Items.Add(custom);
+            m.Items.Add(new ToolStripSeparator());
             m.Items.Add(Header("CARD TEXT (same on every card)"));
             m.Items.Add(Item("Issue line 1", () => AddField(CardField.IssueLine1, "", 0f, CardColors.Blue, 48f)));
             m.Items.Add(Item("Issue line 2", () => AddField(CardField.IssueLine2, "", 0f, CardColors.Blue, 44f)));
@@ -596,8 +774,17 @@ namespace NPIC_CARD_APP
         private ContextMenuStrip ImageMenu()
         {
             ContextMenuStrip m = NewMenu();
-            m.Items.Add(Item("From file…", () => AddImage(CardImageSource.CustomFile)));
+            m.Items.Add(Header("YOUR OWN PICTURE"));
+            ToolStripMenuItem upload = Item("Upload image…", UploadImages);
+            upload.Font = new Font(upload.Font, FontStyle.Bold);
+            m.Items.Add(upload);
+            bool canPaste;
+            try { canPaste = Clipboard.ContainsImage() || DroppedImages(Clipboard.GetDataObject()).Count > 0; }
+            catch (System.Runtime.InteropServices.ExternalException) { canPaste = false; }
+            m.Items.Add(Item("Paste copied picture\tCtrl+V", () => PastePictureFromClipboard(), canPaste));
+            m.Items.Add(Header("Tip: you can also drag picture files onto the card"));
             m.Items.Add(new ToolStripSeparator());
+            m.Items.Add(Header("BUILT-IN"));
             m.Items.Add(Item("NPIC logo", () => AddImage(CardImageSource.NpicLogo)));
             m.Items.Add(Item("Ministry logo", () => AddImage(CardImageSource.MinistryLogo)));
             m.Items.Add(Item("Stamp", () => AddImage(CardImageSource.Stamp)));
@@ -675,9 +862,15 @@ namespace NPIC_CARD_APP
             PasteElement(_selected.Clone(), 1.5f);
         }
 
+        /// <summary>Marks the Windows clipboard as "an element copied in Card Designer", so Ctrl+V pastes the element, not a picture.</summary>
+        private const string ElementClipboardFormat = "NPIC_CARD_APP.CardElement";
+
         private void CopySelected()
         {
-            if (_selected != null) _clipboard = _selected.Clone();
+            if (_selected == null) return;
+            _clipboard = _selected.Clone();
+            try { Clipboard.SetData(ElementClipboardFormat, "1"); }
+            catch (System.Runtime.InteropServices.ExternalException) { }   // clipboard busy: Ctrl+V still pastes the element
         }
 
         private void Paste()
@@ -748,6 +941,7 @@ namespace NPIC_CARD_APP
             m.Items.Add(Item("Duplicate\tCtrl+D", DuplicateSelected, has));
             m.Items.Add(Item("Copy\tCtrl+C", CopySelected, has));
             m.Items.Add(Item("Paste\tCtrl+V", Paste, _clipboard != null));
+            if (_selected is ImageElement) m.Items.Add(Item("Change picture…", ChangePicture));
             m.Items.Add(Item(has && _selected.Locked ? "Unlock" : "Lock", ToggleLock, has));
             m.Items.Add(Item("Centre horizontally", () => Centre(true, false), has));
             m.Items.Add(Item("Centre vertically", () => Centre(false, true), has));
@@ -879,7 +1073,7 @@ namespace NPIC_CARD_APP
                     case Keys.Control | Keys.Shift | Keys.Z: Redo(); return true;
                     case Keys.Control | Keys.D: DuplicateSelected(); return true;
                     case Keys.Control | Keys.C: CopySelected(); return true;
-                    case Keys.Control | Keys.V: Paste(); return true;
+                    case Keys.Control | Keys.V: if (!PastePictureFromClipboard()) Paste(); return true;
                     case Keys.Control | Keys.OemCloseBrackets: BringForward(); return true;
                     case Keys.Control | Keys.OemOpenBrackets: SendBackward(); return true;
                     case Keys.Delete: DeleteSelected(); return true;
@@ -1101,6 +1295,121 @@ namespace NPIC_CARD_APP
         }
     }
 
+    /// <summary>
+    /// Custom field…: choose the column of the student list to print (any header, also ones the app does not know) and an
+    /// optional label. Shows the value of the preview student, so the right column is easy to spot.
+    /// </summary>
+    internal sealed class CustomFieldPrompt : ModalForm
+    {
+        private readonly ComboBox _column;
+        private readonly TextBox _label;
+        private readonly Label _sample;
+        private readonly Student _student;
+        private bool _labelEdited;
+
+        private CustomFieldPrompt(Student student)
+        {
+            _student = student;
+            Text = "Custom field";
+            Subtitle = "Print any column of your student list (Excel, CSV, Google Sheet, API or SQL)";
+            Glyph = Theme.IcoEdit;
+            Resizable = false;
+            DimOwner = false;
+            Size = new Size(540, 360);
+            Font = new Font(CardFonts.UI, 9.75f);
+
+            var body = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Padding = new Padding(22, 14, 22, 0), BackColor = Theme.Surface
+            };
+            for (int i = 0; i < 6; i++) body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            body.Controls.Add(Caption("Column  (header of the column in your list — pick one or type it)"), 0, 0);
+            _column = new ComboBox { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDown, Margin = new Padding(0, 2, 0, 4) };
+            foreach (string c in StudentColumnConverter.Known) _column.Items.Add(c);
+            body.Controls.Add(_column, 0, 1);
+
+            _sample = new Label
+            {
+                Dock = DockStyle.Top, Height = 22, ForeColor = Theme.TextSoft, BackColor = Theme.Surface, UseMnemonic = false,
+                Margin = new Padding(0, 0, 0, 10), AutoEllipsis = true
+            };
+            body.Controls.Add(_sample, 0, 2);
+
+            body.Controls.Add(Caption("Label printed in front  (optional, e.g. លេខទូរស័ព្ទ)"), 0, 3);
+            _label = new TextBox { Dock = DockStyle.Top, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(0, 2, 0, 4) };
+            _label.TextChanged += (s, e) => { if (_label.Focused) _labelEdited = true; };
+            body.Controls.Add(_label, 0, 4);
+
+            var footer = ModalUi.Footer();
+            Button ok = ModalUi.Button("Add Field", PillKind.Primary, (s, e) =>
+            {
+                if (_column.Text.Trim().Length == 0)
+                {
+                    AppDialog.Show(this, "Type or pick the column to print.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    _column.Focus();
+                    return;
+                }
+                DialogResult = DialogResult.OK;
+            });
+            Button cancel = ModalUi.Button("Cancel", PillKind.Secondary, (s, e) => DialogResult = DialogResult.Cancel);
+            footer.Controls.Add(ok);
+            footer.Controls.Add(cancel);
+
+            Controls.Add(body);
+            Controls.Add(footer);
+            AcceptButton = ok;
+            CancelButton = cancel;
+
+            _column.TextChanged += (s, e) => ColumnChanged();
+            if (_column.Items.Count > 0) _column.SelectedIndex = 0;
+            ColumnChanged();
+        }
+
+        private Label Caption(string text)
+        {
+            return new Label { Text = text, AutoSize = true, ForeColor = Theme.TextMain, BackColor = Theme.Surface, Margin = new Padding(0, 4, 0, 0) };
+        }
+
+        private void ColumnChanged()
+        {
+            string col = _column.Text.Trim();
+            if (col.Length == 0)
+                _sample.Text = StudentColumnConverter.Known.Count == 0
+                    ? "No student list loaded: type the column header exactly as it is in your list."
+                    : "";
+            else if (_student.Columns.ContainsKey(col))
+            {
+                string v = _student.Column(col);
+                _sample.Text = "Example (" + (_student.StudentId ?? "") + "):  " + (v.Length == 0 ? "(empty)" : v);
+            }
+            else
+                _sample.Text = StudentColumnConverter.Known.Count == 0
+                    ? "Shown as [" + col + "] in the designer until a list with this column is loaded."
+                    : "The loaded list has no column “" + col + "”: it prints empty until a list with it is loaded.";
+            if (!_labelEdited) _label.Text = col;
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            _column.Focus();
+            _column.SelectAll();
+        }
+
+        /// <summary>False when cancelled.</summary>
+        public static bool Ask(IWin32Window owner, Student student, out string column, out string label)
+        {
+            using (var form = new CustomFieldPrompt(student))
+            {
+                bool ok = form.ShowDialog(owner) == DialogResult.OK;
+                column = form._column.Text.Trim();
+                label = form._label.Text.Trim();
+                return ok;
+            }
+        }
+    }
+
     /// <summary>Small popup asking for a design name (Rename… in Card Designer and Card Template).</summary>
     internal sealed class DesignNamePrompt : ModalForm
     {
@@ -1223,6 +1532,9 @@ namespace NPIC_CARD_APP
             float s = PxPerMm;
             return new RectangleF(c.X + mm.X * s, c.Y + mm.Y * s, mm.Width * s, mm.Height * s);
         }
+
+        /// <summary>A point on the canvas (client pixels) in card millimetres.</summary>
+        public PointF ClientToMm(Point px) { return ToMm(px); }
 
         private PointF ToMm(Point px)
         {

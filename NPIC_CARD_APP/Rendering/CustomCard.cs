@@ -34,7 +34,35 @@ namespace NPIC_CARD_APP.Rendering
     public enum CardField
     {
         StudentId, NameKhmer, NameLatin, Gender, DateOfBirth, Faculty, Level, Generation, ExpiryDate,
-        IssueLine1, IssueLine2, DirectorTitle, DirectorName, Address, Email, Website
+        IssueLine1, IssueLine2, DirectorTitle, DirectorName, Address, Email, Website,
+        /// <summary>Any column of the student list, named in <see cref="FieldElement.Column"/> (e.g. Phone, BloodType).</summary>
+        Custom
+    }
+
+    /// <summary>How a field's value is printed.</summary>
+    public enum CardValueFormat
+    {
+        /// <summary>As it is in the list / Card Text.</summary>
+        AsIs,
+        /// <summary>CAPITAL LETTERS.</summary>
+        Uppercase,
+        /// <summary>Digits as Khmer digits: 2025 → ២០២៥.</summary>
+        KhmerDigits,
+        /// <summary>A dd/MM/yyyy date in Khmer: 24/01/2008 → ២៤ មករា ២០០៨.</summary>
+        KhmerDate
+    }
+
+    /// <summary>
+    /// Drop-down of the column names in the loaded student list for <see cref="FieldElement.Column"/> (any other name can be typed).
+    /// Card Designer fills <see cref="Known"/> when it opens.
+    /// </summary>
+    public sealed class StudentColumnConverter : StringConverter
+    {
+        public static readonly List<string> Known = new List<string>();
+
+        public override bool GetStandardValuesSupported(ITypeDescriptorContext context) { return Known.Count > 0; }
+        public override bool GetStandardValuesExclusive(ITypeDescriptorContext context) { return false; }
+        public override StandardValuesCollection GetStandardValues(ITypeDescriptorContext context) { return new StandardValuesCollection(Known.ToArray()); }
     }
 
     public enum CardImageSource
@@ -178,14 +206,27 @@ namespace NPIC_CARD_APP.Rendering
         public FieldElement()
         {
             Field = CardField.NameKhmer;
+            Column = "";
             Label = "";
             LabelColor = CardColors.Navy;
+            Format = CardValueFormat.AsIs;
         }
 
         [Category("3. Text"), DisplayName("Field"),
          Description("Data printed here. Student fields come from the student list; Issue lines, Director, Address, Email and Website from Card Text. " +
+                     "Custom = any column of the student list, named in Column. " +
                      "On the back, student fields print empty (the back is the same for every student).")]
         public CardField Field { get; set; }
+
+        [Category("3. Text"), DisplayName("Column"),
+         Description("Used when Field is Custom: the column header in your Excel / CSV / Google Sheet / SQL list, e.g. Phone or BloodType " +
+                     "(capital letters do not matter). Pick one from the list or type it."),
+         TypeConverter(typeof(StudentColumnConverter))]
+        public string Column { get; set; }
+
+        [Category("3. Text"), DisplayName("Format"),
+         Description("AsIs = as in the list. Uppercase = CAPITALS. KhmerDigits = 2025 → ២០២៥. KhmerDate = 24/01/2008 → ២៤ មករា ២០០៨.")]
+        public CardValueFormat Format { get; set; }
 
         [Category("4. Label"), DisplayName("Label"), Description("Optional text in front of the value, e.g. អត្តលេខ or ភេទ. Empty = value only.")]
         public string Label { get; set; }
@@ -201,10 +242,14 @@ namespace NPIC_CARD_APP.Rendering
         public string LabelColorHex { get { return ToHex(LabelColor); } set { LabelColor = FromHex(value); } }
 
         public override string Kind { get { return "Field"; } }
-        protected override string Describe() { return "{" + Field + "}" + (string.IsNullOrEmpty(Label) ? "" : "  " + Label); }
+        protected override string Describe()
+        {
+            string what = Field == CardField.Custom ? (string.IsNullOrWhiteSpace(Column) ? "(no column)" : Column.Trim()) : Field.ToString();
+            return "{" + what + "}" + (string.IsNullOrEmpty(Label) ? "" : "  " + Label);
+        }
 
         [Browsable(false), XmlIgnore]
-        public bool IsStudentField { get { return Field <= CardField.ExpiryDate; } }
+        public bool IsStudentField { get { return Field <= CardField.ExpiryDate || Field == CardField.Custom; } }
     }
 
     public sealed class ImageElement : CardElement

@@ -163,27 +163,7 @@ namespace NPIC_CARD_APP
 
                 try
                 {
-                    // Make sure it really is an image before keeping it
-                    using (var fs = new FileStream(dlg.FileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                    using (Image.FromStream(fs)) { }
-
-                    // A picture shipped in Assets travels with the app: keep it relative (like the defaults) instead of copying it.
-                    string assets = Path.GetFullPath(AssetStore.Folder).TrimEnd('\\') + "\\";
-                    string picked = Path.GetFullPath(dlg.FileName);
-                    if (picked.StartsWith(assets, StringComparison.OrdinalIgnoreCase))
-                        return "Assets\\" + picked.Substring(assets.Length);
-
-                    // Already one of our copies (picked the current file again): nothing to copy.
-                    string folder = Path.Combine(Path.GetDirectoryName(AppSettings.FilePath), FolderName);
-                    if (string.Equals(Path.GetDirectoryName(picked), Path.GetFullPath(folder), StringComparison.OrdinalIgnoreCase))
-                        return picked;
-
-                    Directory.CreateDirectory(folder);
-                    // Unique name: Cancel in Card Text must not change the image already in use
-                    string target = Path.Combine(folder, FilePrefix + DateTime.Now.ToString("yyyyMMdd_HHmmss") +
-                                                         Path.GetExtension(dlg.FileName).ToLowerInvariant());
-                    File.Copy(dlg.FileName, target, true);
-                    return target;
+                    return Import(dlg.FileName, FolderName, FilePrefix);
                 }
                 catch (Exception ex)
                 {
@@ -192,6 +172,57 @@ namespace NPIC_CARD_APP
                     return value;
                 }
             }
+        }
+
+        /// <summary>Picture formats accepted for card images.</summary>
+        public static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg", ".bmp" };
+
+        /// <summary>
+        /// Checks that the file is a picture and returns the path to save: "Assets\…" for a picture shipped with the app,
+        /// otherwise a copy in %AppData%\NPIC_CARD_APP\{folderName} (so the card still prints if the original is moved).
+        /// </summary>
+        /// <exception cref="Exception">Not a picture, or it could not be copied.</exception>
+        public static string Import(string file, string folderName, string prefix)
+        {
+            // Make sure it really is an image before keeping it
+            using (var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (Image.FromStream(fs)) { }
+
+            // A picture shipped in Assets travels with the app: keep it relative (like the defaults) instead of copying it.
+            string assets = Path.GetFullPath(AssetStore.Folder).TrimEnd('\\') + "\\";
+            string picked = Path.GetFullPath(file);
+            if (picked.StartsWith(assets, StringComparison.OrdinalIgnoreCase))
+                return "Assets\\" + picked.Substring(assets.Length);
+
+            // Already one of our copies (picked the current file again): nothing to copy.
+            string folder = Path.Combine(Path.GetDirectoryName(AppSettings.FilePath), folderName);
+            if (string.Equals(Path.GetDirectoryName(picked), Path.GetFullPath(folder), StringComparison.OrdinalIgnoreCase))
+                return picked;
+
+            Directory.CreateDirectory(folder);
+            // Unique name: Cancel must not change the image already in use
+            string target = UniqueTarget(folder, prefix, Path.GetExtension(file).ToLowerInvariant());
+            File.Copy(file, target, false);
+            return target;
+        }
+
+        /// <summary>Saves a picture (e.g. pasted from the clipboard) as PNG in %AppData%\NPIC_CARD_APP\{folderName}.</summary>
+        public static string SavePng(Image image, string folderName, string prefix)
+        {
+            string folder = Path.Combine(Path.GetDirectoryName(AppSettings.FilePath), folderName);
+            Directory.CreateDirectory(folder);
+            string target = UniqueTarget(folder, prefix, ".png");
+            using (var copy = new Bitmap(image))   // clipboard images can be locked to their source
+                copy.Save(target, System.Drawing.Imaging.ImageFormat.Png);
+            return target;
+        }
+
+        private static string UniqueTarget(string folder, string prefix, string extension)
+        {
+            string stamp = prefix + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string target = Path.Combine(folder, stamp + extension);
+            for (int i = 2; File.Exists(target); i++) target = Path.Combine(folder, stamp + "_" + i + extension);
+            return target;
         }
     }
 
