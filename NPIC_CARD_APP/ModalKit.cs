@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Media;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using Microsoft.Win32;
 using NPIC_CARD_APP.Rendering;
 
 namespace NPIC_CARD_APP
@@ -14,7 +16,7 @@ namespace NPIC_CARD_APP
     ///     optional subtitle and close / maximize buttons. Drag it to move, double-click to maximize;
     ///   - the normal Windows frame on the other sides, so resizing, snapping, the shadow and the
     ///     Windows 11 rounded corners keep working;
-    ///   - a dimmed backdrop over the owner window while the popup is open with ShowDialog.
+    ///   - a dimmed backdrop over every screen while the popup is open with ShowDialog (see ModalBackdrop).
     /// Derived forms add their controls as usual: docking starts below the header (see DisplayRectangle).
     /// </summary>
     public class ModalForm : Form
@@ -226,12 +228,12 @@ namespace NPIC_CARD_APP
 
         private void ShowBackdrop()
         {
+            // Owned windows hide with a minimized owner, so there is nothing to dim then.
             Form owner = FromHandle(Native.GetWindow(Handle, Native.GW_OWNER)) as Form;
             if (owner == null || !owner.Visible || owner.WindowState == FormWindowState.Minimized) return;
             try
             {
-                _backdrop = new ModalBackdrop(owner);
-                _backdrop.Show(owner);   // shown before the popup, so the popup stays above it
+                _backdrop = ModalBackdrop.Show(owner, this);   // shown before the popup, so the popup stays above it
             }
             catch (Exception)
             {
@@ -244,7 +246,6 @@ namespace NPIC_CARD_APP
             if (_backdrop == null) return;
             ModalBackdrop b = _backdrop;
             _backdrop = null;
-            b.Close();
             b.Dispose();
         }
 
@@ -720,45 +721,235 @@ namespace NPIC_CARD_APP
         }
     }
 
-    /// <summary>Translucent veil over the owner window while a popup is open. Never takes focus.</summary>
-    internal sealed class ModalBackdrop : Form
+    /// <summary>
+    /// Translucent veil over every display while a popup is open, like a web modal:
+    ///   - one borderless window per monitor, sized to the whole screen (any resolution, DPI or layout);
+    ///   - fades in quickly, never takes focus; a click on it brings the popup back to the front;
+    ///   - rebuilt when a monitor is plugged in / removed or the resolution changes while the popup is open;
+    ///   - nested popups hand the dim over instead of stacking it, so the screen never gets darker and darker.
+    /// </summary>
+    internal sealed class ModalBackdrop : IDisposable
     {
-        private readonly bool _round;
+        private const int FadeMs = 140, TickMs = 15;
 
-        public ModalBackdrop(Form owner)
+        /// <summary>Open backdrops, outermost first. Only the last one is dimmed.</summary>
+        private static readonly List<ModalBackdrop> Open = new List<ModalBackdrop>();
+
+        private readonly Form _owner, _dialog;
+        private readonly List<Veil> _veils = new List<Veil>();
+        private Timer _fade;
+        private int _fadeStart;
+        private double _opacity;
+        private bool _disposed;
+
+        private ModalBackdrop(Form owner, Form dialog)
         {
-            FormBorderStyle = FormBorderStyle.None;
-            ShowInTaskbar = false;
-            StartPosition = FormStartPosition.Manual;
-            BackColor = Theme.Backdrop;
-            Opacity = Theme.BackdropOpacity;
-            Bounds = Native.VisibleBounds(owner);
-            _round = owner.WindowState == FormWindowState.Normal;
-            Text = "";
+            _owner = owner;
+            _dialog = dialog;
         }
 
-        protected override bool ShowWithoutActivation { get { return true; } }
-
-        protected override CreateParams CreateParams
+        /// <summary>Dims every screen under <paramref name="dialog"/>. Call before the dialog becomes visible.</summary>
+        public static ModalBackdrop Show(Form owner, Form dialog)
         {
-            get
+            var b = new ModalBackdrop(owner, dialog);
+            ModalBackdrop outer = Open.Count > 0 ? Open[Open.Count - 1] : null;
+            Open.Add(b);
+            try
             {
-                CreateParams cp = base.CreateParams;
-                cp.ExStyle |= Native.WS_EX_NOACTIVATE | Native.WS_EX_TOOLWINDOW;
-                return cp;
+                if (outer == null)
+                {
+                    b.Build(0);
+                    b.FadeIn();
+                }
+                else
+                {
+                    // Nested popup: the new veils (above the outer popup) take over the dim at once.
+                    b.Build(Theme.BackdropOpacity);
+                    outer.SetOpacity(0);
+                }
+                SystemEvents.DisplaySettingsChanged += b.OnDisplaySettingsChanged;
+            }
+            catch
+            {
+                b.Dispose();
+                throw;
+            }
+            return b;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+            StopFade();
+
+            int i = Open.IndexOf(this);
+            if (i >= 0)
+            {
+                Open.RemoveAt(i);
+                // Closing the innermost popup: the outer popup's veils dim the screens again.
+                if (i == Open.Count && i > 0) Open[i - 1].SetOpacity(Theme.BackdropOpacity);
+            }
+            CloseVeils();
+        }
+
+        // ---- Veils ----
+
+        private void Build(double opacity)
+        {
+            _opacity = opacity;
+            foreach (Screen screen in Screen.AllScreens)
+            {
+                var veil = new Veil(this, screen.Bounds, opacity);   // whole monitor, not just its working area
+                _veils.Add(veil);
+                veil.Show(_owner);
             }
         }
 
-        protected override void OnHandleCreated(EventArgs e)
+        private void CloseVeils()
         {
-            base.OnHandleCreated(e);
-            Native.SetCorners(Handle, _round);   // match the owner's rounded corners on Windows 11
+            foreach (Veil v in _veils)
+            {
+                if (v.IsDisposed) continue;
+                v.Close();
+                v.Dispose();
+            }
+            _veils.Clear();
         }
 
-        protected override void WndProc(ref Message m)
+        /// <summary>Monitor added / removed, resolution or scaling changed: cover the new layout.</summary>
+        private void OnDisplaySettingsChanged(object sender, EventArgs e)
         {
-            if (m.Msg == Native.WM_MOUSEACTIVATE) { m.Result = (IntPtr)Native.MA_NOACTIVATE; return; }
-            base.WndProc(ref m);
+            if (_disposed) return;
+            try
+            {
+                double opacity = _fade != null ? Theme.BackdropOpacity : _opacity;
+                StopFade();
+                CloseVeils();
+                Build(opacity);
+                // The new veils were shown last, so put the popup (and anything it owns) back on top.
+                if (_dialog.IsHandleCreated)
+                    Native.SetWindowPos(_dialog.Handle, IntPtr.Zero, 0, 0, 0, 0,
+                        Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+            }
+            catch (Exception)
+            {
+                CloseVeils();   // purely visual: never break the dialog
+            }
+        }
+
+        /// <summary>Click on the dimmed area: the popup still needs an answer, so bring it forward.</summary>
+        private void Nudge()
+        {
+            if (_dialog.IsDisposed || !_dialog.Visible) return;
+            _dialog.Activate();
+            SystemSounds.Beep.Play();
+        }
+
+        // ---- Opacity ----
+
+        private void FadeIn()
+        {
+            _fadeStart = Environment.TickCount;
+            _fade = new Timer { Interval = TickMs };
+            _fade.Tick += (s, e) =>
+            {
+                double t = Math.Min(1.0, (Environment.TickCount - _fadeStart) / (double)FadeMs);
+                double eased = 1 - Math.Pow(1 - t, 3);   // ease-out
+                ApplyOpacity(Theme.BackdropOpacity * eased);
+                if (t >= 1) StopFade();
+            };
+            _fade.Start();
+        }
+
+        private void StopFade()
+        {
+            if (_fade == null) return;
+            _fade.Stop();
+            _fade.Dispose();
+            _fade = null;
+        }
+
+        private void SetOpacity(double opacity)
+        {
+            StopFade();
+            ApplyOpacity(opacity);
+        }
+
+        private void ApplyOpacity(double opacity)
+        {
+            _opacity = opacity;
+            foreach (Veil v in _veils)
+                if (!v.IsDisposed) v.Opacity = opacity;   // always < 1, so the window stays layered
+        }
+
+        /// <summary>One monitor's worth of dim. Never activates, never shows in the taskbar or Alt+Tab.</summary>
+        private sealed class Veil : Form
+        {
+            private readonly ModalBackdrop _host;
+            private readonly Rectangle _area;
+
+            public Veil(ModalBackdrop host, Rectangle area, double opacity)
+            {
+                _host = host;
+                _area = area;
+                FormBorderStyle = FormBorderStyle.None;
+                ShowInTaskbar = false;
+                ControlBox = false;
+                StartPosition = FormStartPosition.Manual;
+                AutoScaleMode = AutoScaleMode.None;
+                BackColor = Theme.Backdrop;
+                Opacity = opacity;
+                Bounds = area;
+                Text = "";
+            }
+
+            protected override bool ShowWithoutActivation { get { return true; } }
+
+            protected override CreateParams CreateParams
+            {
+                get
+                {
+                    CreateParams cp = base.CreateParams;
+                    cp.ExStyle |= Native.WS_EX_NOACTIVATE | Native.WS_EX_TOOLWINDOW;
+                    return cp;
+                }
+            }
+
+            protected override void OnHandleCreated(EventArgs e)
+            {
+                base.OnHandleCreated(e);
+                Native.SetCorners(Handle, false);   // square: it is the whole screen
+                FitArea();
+            }
+
+            /// <summary>Exact screen rectangle, bypassing the WinForms size clamp.</summary>
+            private void FitArea()
+            {
+                Native.SetWindowPos(Handle, IntPtr.Zero, _area.X, _area.Y, _area.Width, _area.Height,
+                    Native.SWP_NOZORDER | Native.SWP_NOACTIVATE | Native.SWP_NOOWNERZORDER);
+            }
+
+            protected override void WndProc(ref Message m)
+            {
+                switch (m.Msg)
+                {
+                    case Native.WM_MOUSEACTIVATE:
+                        m.Result = (IntPtr)Native.MA_NOACTIVATE;
+                        return;
+                    case Native.WM_LBUTTONDOWN:
+                    case Native.WM_RBUTTONDOWN:
+                    case Native.WM_MBUTTONDOWN:
+                        _host.Nudge();
+                        return;
+                    case Native.WM_DPICHANGED:
+                        FitArea();   // keep covering this monitor exactly, whatever its scaling
+                        m.Result = IntPtr.Zero;
+                        return;
+                }
+                base.WndProc(ref m);
+            }
         }
     }
 
@@ -767,6 +958,7 @@ namespace NPIC_CARD_APP
         public const int WS_CAPTION = 0x00C00000, WS_THICKFRAME = 0x00040000;
         public const int WS_EX_NOACTIVATE = 0x08000000, WS_EX_TOOLWINDOW = 0x00000080;
         public const int WM_NCCALCSIZE = 0x0083, WM_NCHITTEST = 0x0084, WM_MOUSEACTIVATE = 0x0021;
+        public const int WM_LBUTTONDOWN = 0x0201, WM_RBUTTONDOWN = 0x0204, WM_MBUTTONDOWN = 0x0207, WM_DPICHANGED = 0x02E0;
         public const int MA_NOACTIVATE = 3;
         public const int HTCLIENT = 1, HTCAPTION = 2, HTLEFT = 10, HTTOP = 12, HTTOPLEFT = 13, HTTOPRIGHT = 14,
                          HTBOTTOMRIGHT = 17, HTBORDER = 18;
@@ -774,7 +966,7 @@ namespace NPIC_CARD_APP
         public const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010,
                           SWP_FRAMECHANGED = 0x0020, SWP_NOOWNERZORDER = 0x0200;
 
-        private const int DWMWA_EXTENDED_FRAME_BOUNDS = 9, DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+        private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
         private const int DWMWCP_DONOTROUND = 1, DWMWCP_ROUND = 2;
 
@@ -809,9 +1001,6 @@ namespace NPIC_CARD_APP
 
         [DllImport("dwmapi.dll")]
         private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
-
-        [DllImport("dwmapi.dll")]
-        private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out RECT value, int size);
 
         [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
         private static extern int SetWindowTheme(IntPtr hwnd, string subAppName, string subIdList);
@@ -852,19 +1041,5 @@ namespace NPIC_CARD_APP
             catch (EntryPointNotFoundException) { }
         }
 
-        /// <summary>The window as drawn on screen, without the invisible resize borders of Windows 10 / 11.</summary>
-        public static Rectangle VisibleBounds(Form form)
-        {
-            try
-            {
-                RECT r;
-                if (DwmGetWindowAttribute(form.Handle, DWMWA_EXTENDED_FRAME_BOUNDS, out r, Marshal.SizeOf(typeof(RECT))) == 0 &&
-                    r.Right > r.Left && r.Bottom > r.Top)
-                    return Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
-            }
-            catch (DllNotFoundException) { }
-            catch (EntryPointNotFoundException) { }
-            return form.Bounds;
-        }
     }
 }
