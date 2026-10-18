@@ -212,15 +212,11 @@ namespace NPIC_CARD_APP
                     "Load the student list from Excel, CSV, Google Sheets, the web API or SQL Server, or save an Excel template (Ctrl+L)"),
                 Nav("CSV Files…", Theme.IcoDocument, ShowCsvFiles,
                     "Student CSV files in one folder: check, preview, create, rename, delete or load them (Ctrl+Shift+C)"),
-                Nav("Google Sheets", Theme.IcoCloud, ImportGoogleSheet,
-                    "Connect a shared Google Sheet, preview its students and import them (Ctrl+Shift+G)"),
                 _navGallery,
                 _navHistory,
                 Nav("RFID Cards", Theme.IcoList, ShowRfidList,
                     "Card numbers saved for printed cards, and loaded students who have no card yet (Ctrl+Shift+R)"),
                 Nav("Print Queue", Theme.IcoPrint, ShowPrintQueue, "See or cancel jobs waiting in Windows"),
-                Nav("Epson Driver Setup…", Theme.IcoSettings, DriverSetup,
-                    "Choose the Epson card printer and save its paper source, paper type and quality (Ctrl+Shift+E)"),
 
                 Section("CARD"),
                 Nav("Photo Folder…", Theme.IcoFolder, ShowPhotoFolderPage,
@@ -235,6 +231,7 @@ namespace NPIC_CARD_APP
                 Nav("Full Screen", Theme.IcoFullScreen, () => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"),
                 Nav("Settings & Help…", Theme.IcoSettings, ShowSettingsHub,
                     (Theme.Dark ? "Light Mode" : "Dark Mode") + ", Theme Color, Folders (Ctrl+Shift+F), All Settings (Ctrl+,), " +
+                    "Epson Driver Setup (Ctrl+Shift+E), " +
                     "System Info (Ctrl+Shift+I), Check for Updates (Ctrl+U) and Help & About (F1) in one page · ការណែនាំប្រើប្រាស់ជាភាសាខ្មែរ"),
                 Spacer(10)
             };
@@ -1913,7 +1910,8 @@ namespace NPIC_CARD_APP
         }
 
         /// <summary>
-        /// Settings &amp; Help page: Dark / Light Mode, Theme Color, Folders, All Settings, System Info, Help &amp; About.
+        /// Settings &amp; Help page: Dark / Light Mode, Theme Color, Folders, All Settings, Epson Driver Setup, System Info,
+        /// Updates, License, Help &amp; About.
         /// Runs the command picked there.
         /// </summary>
         private void ShowSettingsHub()
@@ -1931,6 +1929,7 @@ namespace NPIC_CARD_APP
                 case SettingsHubChoice.ThemeColor: ChangeThemeColor(); break;
                 case SettingsHubChoice.Folders: ShowFolders(); break;
                 case SettingsHubChoice.AllSettings: ShowAllSettings(); break;
+                case SettingsHubChoice.DriverSetup: DriverSetup(); break;
                 case SettingsHubChoice.SystemInfo: ShowHelp(HelpForm.Page.SystemInfo); break;
                 case SettingsHubChoice.Updates: ShowUpdates(); break;
                 case SettingsHubChoice.HelpAbout: ShowHelp(HelpForm.Page.Overview); break;

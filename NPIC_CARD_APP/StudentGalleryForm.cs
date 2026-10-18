@@ -21,7 +21,8 @@ namespace NPIC_CARD_APP
     /// large photo and every field of the selected student. Shows at a glance whose photo is missing and
     /// whose card is already printed (from <see cref="PrintHistory"/>).
     /// Thumbnails load in the background, so long lists open immediately.
-    ///   Enter / double-click = select the student in the main list, F5 = reload photos, Ctrl+F = search, Esc = close
+    ///   Enter / double-click = select the student in the main list, F5 = reload photos, Ctrl+F = search,
+    ///   Ctrl+B = remove background, Esc = close
     /// </summary>
     public class StudentGalleryForm : ModalForm
     {
@@ -77,7 +78,7 @@ namespace NPIC_CARD_APP
         private readonly PictureBox _picPhoto;
         private readonly TableLayoutPanel _fields;
         private readonly Label _lblDetailTitle;
-        private readonly Button _btnSelect, _btnOpenPhoto, _btnShowFile;
+        private readonly Button _btnSelect, _btnOpenPhoto, _btnShowFile, _btnRemoveBg;
 
         /// <summary>StudentId the user chose with Enter / double-click / "Select in List" (DialogResult = OK).</summary>
         public string SelectedStudentId { get; private set; }
@@ -170,6 +171,7 @@ namespace NPIC_CARD_APP
             _btnSelect.Margin = new Padding(0, 0, 6, 6);
             _btnOpenPhoto = MakeButton("Open Photo", (s, e) => OpenPhoto());
             _btnShowFile = MakeButton("Show in Folder", (s, e) => ShowPhotoInFolder());
+            _btnRemoveBg = MakeButton("Remove Background… (Ctrl+B)", (s, e) => RemoveBackground());
             var detailButtons = new FlowLayoutPanel
             {
                 Dock = DockStyle.Bottom, AutoSize = true, WrapContents = true, BackColor = Surface, Padding = new Padding(0, 6, 0, 0)
@@ -177,6 +179,7 @@ namespace NPIC_CARD_APP
             detailButtons.Controls.Add(_btnSelect);
             detailButtons.Controls.Add(_btnOpenPhoto);
             detailButtons.Controls.Add(_btnShowFile);
+            detailButtons.Controls.Add(_btnRemoveBg);
 
             var fieldsScroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Surface };
             fieldsScroll.Controls.Add(_fields);
@@ -252,6 +255,7 @@ namespace NPIC_CARD_APP
             }
             else if (e.KeyCode == Keys.F5) { Reload(); e.Handled = true; }
             else if (e.KeyData == (Keys.Control | Keys.F)) { _txtSearch.Focus(); _txtSearch.SelectAll(); e.Handled = true; }
+            else if (e.KeyData == (Keys.Control | Keys.B)) { RemoveBackground(); e.Handled = e.SuppressKeyPress = true; }
         }
 
         // ===================== Data =====================
@@ -561,7 +565,7 @@ namespace NPIC_CARD_APP
             {
                 _lblDetailTitle.Text = "";
                 ReplacePhoto(null);
-                _btnSelect.Enabled = _btnOpenPhoto.Enabled = _btnShowFile.Enabled = false;
+                _btnSelect.Enabled = _btnOpenPhoto.Enabled = _btnShowFile.Enabled = _btnRemoveBg.Enabled = false;
                 _fields.ResumeLayout();
                 return;
             }
@@ -593,6 +597,14 @@ namespace NPIC_CARD_APP
             _fields.ResumeLayout(true);
             _btnSelect.Enabled = true;
             _btnOpenPhoto.Enabled = _btnShowFile.Enabled = photo != null;
+            _btnRemoveBg.Enabled = CanRemoveBackground(s);
+        }
+
+        /// <summary>True when there is a photo (or a kept original to restore) in an existing photo folder.</summary>
+        private bool CanRemoveBackground(Student s)
+        {
+            if (s == null || _photoFolder.Length == 0 || !Directory.Exists(_photoFolder)) return false;
+            return PhotoPath(s) != null || BackgroundRemovalForm.FindOriginal(_photoFolder, s.StudentId) != null;
         }
 
         private void AddField(string label, string value, Color? color = null)
@@ -661,6 +673,41 @@ namespace NPIC_CARD_APP
             if (path == null) return;
             try { Process.Start("explorer.exe", "/select,\"" + path + "\""); }
             catch (Exception ex) { ShowError("Could not open the folder", ex); }
+        }
+
+        /// <summary>Opens the background-removal dialog for the selected student, then refreshes their photo and tile.</summary>
+        private void RemoveBackground()
+        {
+            Student s = CurrentStudent();
+            if (!CanRemoveBackground(s)) return;
+            string id = s.StudentId ?? "";
+
+            // The loader may be reading this photo right now; stop it so the dialog can replace the file.
+            if (_loaderCts != null) _loaderCts.Cancel();
+            ReplacePhoto(null);
+
+            BackgroundRemovalForm dlg = null;
+            Cursor = Cursors.WaitCursor;
+            try { dlg = new BackgroundRemovalForm(_photoFolder, id); }
+            catch (Exception ex) { ShowError("Could not open the photo", ex); }
+            finally { Cursor = Cursors.Default; }
+
+            bool changed = false;
+            if (dlg != null)
+                using (dlg) changed = dlg.ShowDialog(this) == DialogResult.OK;
+
+            if (changed)
+            {
+                // The saved photo may have a new extension (.jpg → .png), so look it up again.
+                _photoPaths[id] = CardRenderer.FindPhoto(_photoFolder, id);
+                lock (_thumbLock)
+                {
+                    Bitmap old;
+                    if (_thumbs.TryGetValue(id, out old)) { _thumbs.Remove(id); old.Dispose(); }
+                }
+            }
+            _detailStudent = null;   // reload the large photo
+            ShowStudents(id);        // also restarts the thumbnail loader
         }
 
         private void ShowError(string what, Exception ex)
