@@ -136,7 +136,9 @@ namespace NPIC_CARD_APP
 
         public const string IcoColor = "", IcoCheck = "";   // Color (palette) / CheckMark
 
-        public const string IcoKey = "";   // Permissions (key): Activate Card Studio
+        public const string IcoTemplate = "";   // ViewAll (grid of cards): Card Template…
+
+        public const string IcoKey ="";   // Permissions (key): Activate Card Studio
 
         // Popup header / message icons
         public const string IcoInfo = "", IcoWarning = "", IcoError = "", IcoQuestion = "",

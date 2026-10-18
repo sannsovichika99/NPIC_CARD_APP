@@ -224,6 +224,8 @@ namespace NPIC_CARD_APP
                     "or download photos into it from Google Drive (Ctrl+Shift+D) or OneDrive (Ctrl+Shift+O)"),
                 Nav("Remove Background…", Theme.IcoBrush, RemovePhotoBackground,
                     "Crop the selected student's photo and remove the wall / screen behind it (Ctrl+B)"),
+                Nav("Card Template…", Theme.IcoTemplate, ChooseCardTemplate,
+                    "Choose the card design (Classic, Modern, Minimal, Ribbon) with a live preview of front and back"),
                 Nav("Card Text…", Theme.IcoFont, EditCardText,
                     "Edit the fixed text printed on the cards and choose the director signature"),
 
@@ -1513,6 +1515,22 @@ namespace NPIC_CARD_APP
                     ? "Original photo restored: " + Path.GetFileName(dlg.SavedPath)
                     : "Background removed: " + Path.GetFileName(dlg.SavedPath) + "  (original kept in _original)");
             }
+        }
+
+        /// <summary>Card Template…: picks the card design; preview, full screen and printing use it from now on.</summary>
+        private void ChooseCardTemplate()
+        {
+            CardTemplate chosen;
+            using (var dlg = new CardTemplateForm(CurrentStudent(), _settings))
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;   // Cancel / Esc / ✕: nothing changes
+                chosen = dlg.SelectedTemplate;
+            }
+            if (chosen == _settings.CardTemplate) return;
+            _settings.CardTemplate = chosen;
+            SaveSettings(false);
+            UpdatePreview();
+            SetStatus("Card template: " + CardTemplates.Find(chosen).Name + ". Preview and printing now use this design.");
         }
 
         private void EditCardText()

@@ -232,6 +232,21 @@ namespace NPIC_CARD_APP.Services
 
         public CardText CardText { get; set; }
 
+        /// <summary>
+        /// Saved form of <see cref="CardTemplate"/>. Kept as text so a template name from a newer version does not make the
+        /// whole settings file unreadable; empty = Classic.
+        /// </summary>
+        [XmlElement("CardTemplate")]
+        public string CardTemplateText { get; set; }
+
+        /// <summary>Card design used for preview and printing (Card Template…).</summary>
+        [XmlIgnore]
+        public CardTemplate CardTemplate
+        {
+            get { return CardTemplates.Parse(CardTemplateText); }
+            set { CardTemplateText = value.ToString(); }
+        }
+
         public AppSettings()
         {
             PrinterName = "";
@@ -271,6 +286,7 @@ namespace NPIC_CARD_APP.Services
             SlotModeText = "";
             CardOrientation = CardOrientation.VerticalRight;
             CardText = new CardText();
+            CardTemplateText = "";
         }
 
         public bool IsCardPrinter(string printerName)

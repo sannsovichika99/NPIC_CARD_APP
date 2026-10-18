@@ -19,7 +19,7 @@ namespace NPIC_CARD_APP.Rendering
     /// Khmer text uses TextRenderer (GDI/Uniscribe) so subscript consonants render correctly.
     /// All positions are in millimetres.
     /// </summary>
-    public static class CardRenderer
+    public static partial class CardRenderer
     {
         public const float CardWidthMm = 84.6f;
         public const float CardHeightMm = 54f;
@@ -59,9 +59,45 @@ namespace NPIC_CARD_APP.Rendering
         public static string MuolFont { get { return CardFonts.Muol; } }
 
         // =====================================================================
-        // FRONT — student information (card_front.png)
+        // TEMPLATE DISPATCH — the design is chosen with Card Template… (AppSettings.CardTemplate)
         // =====================================================================
         public static Bitmap RenderFront(Student s, AppSettings settings)
+        {
+            return RenderFront(s, settings, settings.CardTemplate);
+        }
+
+        public static Bitmap RenderBack(AppSettings settings)
+        {
+            return RenderBack(settings, settings.CardTemplate);
+        }
+
+        /// <summary>Front in a given design (Card Template… previews every design before one is saved).</summary>
+        public static Bitmap RenderFront(Student s, AppSettings settings, CardTemplate template)
+        {
+            switch (template)
+            {
+                case CardTemplate.Modern: return RenderModernFront(s, settings);
+                case CardTemplate.Minimal: return RenderMinimalFront(s, settings);
+                case CardTemplate.Ribbon: return RenderRibbonFront(s, settings);
+                default: return RenderClassicFront(s, settings);
+            }
+        }
+
+        public static Bitmap RenderBack(AppSettings settings, CardTemplate template)
+        {
+            switch (template)
+            {
+                case CardTemplate.Modern: return RenderModernBack(settings);
+                case CardTemplate.Minimal: return RenderMinimalBack(settings);
+                case CardTemplate.Ribbon: return RenderRibbonBack(settings);
+                default: return RenderClassicBack(settings);
+            }
+        }
+
+        // =====================================================================
+        // CLASSIC FRONT — student information (card_front.png)
+        // =====================================================================
+        private static Bitmap RenderClassicFront(Student s, AppSettings settings)
         {
             CardText t = settings.CardText ?? new CardText();
             Bitmap bmp = CreateCanvas();
@@ -116,9 +152,9 @@ namespace NPIC_CARD_APP.Rendering
         }
 
         // =====================================================================
-        // BACK — institution information (card_back.png), same for every student
+        // CLASSIC BACK — institution information (card_back.png), same for every student
         // =====================================================================
-        public static Bitmap RenderBack(AppSettings settings)
+        private static Bitmap RenderClassicBack(AppSettings settings)
         {
             CardText t = settings.CardText ?? new CardText();
             Bitmap bmp = CreateCanvas();
@@ -297,11 +333,12 @@ namespace NPIC_CARD_APP.Rendering
         }
 
         /// <summary>"អត្តលេខ:" (Khmer OS Siemreap, navy) + ID (Times New Roman, red) — one size, one baseline.</summary>
-        private static void DrawIdLine(Graphics g, string id, float xMm, float yMm, float wMm, float hMm)
+        private static void DrawIdLine(Graphics g, string id, float xMm, float yMm, float wMm, float hMm,
+            TextFormatFlags align = TextFormatFlags.Left)
         {
             var runs = CardFonts.Split("អត្តលេខ: ", CardFonts.KhmerSiemreap, FontStyle.Regular, Navy);
             runs.AddRange(CardFonts.Split(id, CardFonts.KhmerSiemreap, FontStyle.Regular, IdRed));
-            DrawRuns(g, runs, FieldPt, xMm, yMm, wMm, hMm, TextFormatFlags.Left);
+            DrawRuns(g, runs, FieldPt, xMm, yMm, wMm, hMm, align);
         }
 
         private static void DrawWatermarkText(Graphics g)
