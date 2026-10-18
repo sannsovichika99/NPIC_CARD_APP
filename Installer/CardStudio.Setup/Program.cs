@@ -35,7 +35,7 @@ namespace CardStudio.Setup
             catch (ArgumentException ex)
             {
                 MessageBox.Show(ex.Message + Environment.NewLine + Environment.NewLine +
-                                "CardStudio-Setup.exe [/S] [/D=folder] [/NoDesktop] [/NoStartMenu] [/WaitForApp]" + Environment.NewLine +
+                                ProductInfo.SetupExeName + " [/S] [/D=folder] [/NoDesktop] [/NoStartMenu] [/WaitForApp]" + Environment.NewLine +
                                 "uninstall.exe /uninstall [/S] [/purge]",
                                 ProductInfo.Name + " Setup", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return ExitCodes.BadArguments;
@@ -45,12 +45,12 @@ namespace CardStudio.Setup
             Environment.CurrentDirectory = Path.GetTempPath();
 
             bool firstInstance;
-            using (new Mutex(true, @"Global\CardStudio.Setup", out firstInstance))
+            using (new Mutex(true, ProductInfo.MutexName, out firstInstance))
             {
                 if (!firstInstance)
                 {
                     if (!options.Silent)
-                        MessageBox.Show("Card Studio Setup is already running.", ProductInfo.Name + " Setup",
+                        MessageBox.Show(ProductInfo.Name + " Setup is already running.", ProductInfo.Name + " Setup",
                                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return ExitCodes.AlreadyRunning;
                 }

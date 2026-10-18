@@ -63,7 +63,7 @@ namespace CardStudio.Setup
             return running.Length > 0;
         }
 
-        /// <summary>Waits until Card Studio is no longer running, or until <paramref name="timeout"/>; true = it closed.</summary>
+        /// <summary>Waits until the app is no longer running, or until <paramref name="timeout"/>; true = it closed.</summary>
         public static bool WaitForAppToClose(TimeSpan timeout)
         {
             Stopwatch clock = Stopwatch.StartNew();
@@ -71,7 +71,7 @@ namespace CardStudio.Setup
             {
                 if (clock.Elapsed >= timeout)
                 {
-                    Log.Write("Card Studio still running after " + timeout.TotalSeconds + " s");
+                    Log.Write(ProductInfo.Name + " still running after " + timeout.TotalSeconds + " s");
                     return false;
                 }
                 System.Threading.Thread.Sleep(250);
@@ -107,9 +107,12 @@ namespace CardStudio.Setup
 
                 // Staff replace card images in Assets\ without admin rights, so BUILTIN\Users get Modify there.
                 // Set before extracting so every file inherits it.
-                string assets = Path.Combine(dir, ProductInfo.UserEditableFolder);
-                Directory.CreateDirectory(assets);
-                GrantUsersModify(assets);
+                if (ProductInfo.UserEditableFolder != null)
+                {
+                    string assets = Path.Combine(dir, ProductInfo.UserEditableFolder);
+                    Directory.CreateDirectory(assets);
+                    GrantUsersModify(assets);
+                }
 
                 List<string> oldFiles = upgrade ? ReadManifest(dir) : new List<string>();
                 var newFiles = new List<string>();
@@ -151,8 +154,11 @@ namespace CardStudio.Setup
                 if (!File.Exists(manifest)) created.Add(manifest);
                 File.WriteAllLines(manifest, newFiles);
 
-                Report(progress, 86, "Installing fonts");
-                FontSetup.InstallMissing(dir);    // never throws: a font that fails is installed by the app instead
+                if (ProductInfo.InstallFonts)
+                {
+                    Report(progress, 86, "Installing fonts");
+                    FontSetup.InstallMissing(dir);    // never throws: a font that fails is installed by the app instead
+                }
 
                 Report(progress, 88, "Writing the uninstaller");
                 string uninstaller = Path.Combine(dir, ProductInfo.UninstallerName);
@@ -167,11 +173,11 @@ namespace CardStudio.Setup
                 string exe = Path.Combine(dir, ProductInfo.ExeName);
                 UninstallEngine.RemoveShortcuts();     // a reinstall may turn a shortcut off
                 if (o.DesktopShortcut)
-                    Shortcut.Create(ProductInfo.DesktopShortcut, exe, dir, "Design and print student ID cards");
+                    Shortcut.Create(ProductInfo.DesktopShortcut, exe, dir, ProductInfo.Description);
                 if (o.StartMenuShortcut)
                 {
                     Shortcut.Create(Path.Combine(ProductInfo.StartMenuFolder, ProductInfo.Name + ".lnk"),
-                                    exe, dir, "Design and print student ID cards");
+                                    exe, dir, ProductInfo.Description);
                     Shortcut.Create(Path.Combine(ProductInfo.StartMenuFolder, "Uninstall " + ProductInfo.Name + ".lnk"),
                                     uninstaller, dir, "Remove " + ProductInfo.Name, "/uninstall");
                 }
@@ -219,7 +225,8 @@ namespace CardStudio.Setup
 
         internal static bool IsUserEditable(string relativePath)
         {
-            return relativePath.StartsWith(ProductInfo.UserEditableFolder + "\\", StringComparison.OrdinalIgnoreCase);
+            return ProductInfo.UserEditableFolder != null &&
+                   relativePath.StartsWith(ProductInfo.UserEditableFolder + "\\", StringComparison.OrdinalIgnoreCase);
         }
 
         internal static bool PathsEqual(string a, string b)
@@ -333,10 +340,10 @@ namespace CardStudio.Setup
         }
     }
 
-    /// <summary>Plain-text log in %TEMP%\CardStudio-Setup.log (useful for silent installs).</summary>
+    /// <summary>Plain-text log in %TEMP%\<see cref="ProductInfo.LogFileName"/> (useful for silent installs).</summary>
     internal static class Log
     {
-        public static readonly string FilePath = Path.Combine(Path.GetTempPath(), "CardStudio-Setup.log");
+        public static readonly string FilePath = Path.Combine(Path.GetTempPath(), ProductInfo.LogFileName);
         private static readonly object Gate = new object();
 
         public static void Write(string line)

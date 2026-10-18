@@ -34,12 +34,12 @@ namespace CardStudio.Setup
                 "•  its entry in Settings > Apps", 24, 46, soft: true);
             _purge = new CheckBox
             {
-                Text = "Also delete my settings, print history and uploaded images", AutoSize = true,
+                Text = ProductInfo.PurgeOptionText, AutoSize = true,
                 Location = new Point(24, 132), Checked = purge
             };
             _confirmPage.Controls.Add(_purge);
             SetupUi.Text(_confirmPage, ProductInfo.UserDataFolder + Environment.NewLine +
-                                       "Leave this unchecked if you plan to reinstall Card Studio.", 42, 156, soft: true);
+                                       "Leave this unchecked if you plan to reinstall " + ProductInfo.Name + ".", 42, 156, soft: true);
 
             _progressPage = SetupUi.Page();
             SetupUi.Text(_progressPage, "Removing " + ProductInfo.Name + "…", 24, 28);
@@ -97,7 +97,7 @@ namespace CardStudio.Setup
                 List<string> leftovers = await Task.Run(() => UninstallEngine.Uninstall(_dir, purge, progress));
                 ExitCode = ExitCodes.Success;
                 _doneDetail.Text = leftovers.Count == 0
-                    ? (purge ? "Your settings and print history were deleted too." : "Your settings and print history in " + ProductInfo.UserDataFolder + " were kept.")
+                    ? (purge ? ProductInfo.PurgeDoneText : string.Format(ProductInfo.PurgeKeptText, ProductInfo.UserDataFolder))
                     : "Some items could not be removed (they may be open in another program):" + Environment.NewLine +
                       string.Join(Environment.NewLine, leftovers);
                 ShowPage(_donePage);

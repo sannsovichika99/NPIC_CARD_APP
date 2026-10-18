@@ -52,7 +52,7 @@ namespace CardStudio.Setup
                 browse.Enabled = false;
                 SetupUi.Text(_optionsPage,
                     ProductInfo.Name + " " + (existingVersion ?? "") + " is already installed here. Setup will update it to " +
-                    ProductInfo.Version + ". Your settings, print history and card images in Assets are kept.",
+                    ProductInfo.Version + ". " + ProductInfo.UpdateKeepsText,
                     24, 100, soft: true);
             }
 
@@ -140,7 +140,9 @@ namespace CardStudio.Setup
                                    (_desktop.Checked || _startMenu.Checked
                                        ? "Open it from the " + (_desktop.Checked && _startMenu.Checked ? "desktop or Start Menu" : _desktop.Checked ? "desktop" : "Start Menu") + " shortcut."
                                        : "") + Environment.NewLine +
-                                   "Remove it any time from Settings > Apps > Installed apps.";
+                                   "Remove it any time from Settings > Apps > Installed apps." +
+                                   (ProductInfo.FinishedNote.Length > 0 ? Environment.NewLine + Environment.NewLine + ProductInfo.FinishedNote : "");
+                _launch.Top = Math.Max(_launch.Top, _doneDetail.Bottom + 16);   // below the text, however long it is
                 ShowPage(_donePage);
                 _primary.Text = "Finish";
                 _primary.Enabled = true;

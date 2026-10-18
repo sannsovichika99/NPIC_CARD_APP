@@ -5,7 +5,8 @@ namespace CardStudio.Setup
     /// <summary>
     /// Command line:
     ///   CardStudio-Setup.exe                         interactive install
-    ///   CardStudio-Setup.exe /S [/D=path]            silent install (both shortcuts unless /NoDesktop, /NoStartMenu)
+    ///   CardStudio-Setup.exe /S [/D=path]            silent install (both shortcuts unless /NoDesktop, /NoStartMenu;
+    ///                                                /Desktop adds the desktop one where it is off by default)
     ///   uninstall.exe /uninstall [/S] [/purge]       uninstall; /purge also deletes %AppData%\NPIC_CARD_APP
     ///   CardStudio-Setup.exe /WaitForApp             first wait (up to 30 s) for Card Studio to close: the app's
     ///                                                Check for Updates starts the setup this way, then exits
@@ -16,7 +17,7 @@ namespace CardStudio.Setup
         public bool Silent;
         public bool Purge;
         public string InstallDir;          // null = existing install location or Program Files\Card Studio
-        public bool DesktopShortcut = true;
+        public bool DesktopShortcut = ProductInfo.DesktopShortcutByDefault;
         public bool StartMenuShortcut = true;
         public bool WaitForApp;
 
@@ -32,6 +33,7 @@ namespace CardStudio.Setup
                 else if (Is(a, "/S") || Is(a, "/silent") || Is(a, "/quiet")) o.Silent = true;
                 else if (Is(a, "/purge")) o.Purge = true;
                 else if (Is(a, "/NoDesktop")) o.DesktopShortcut = false;
+                else if (Is(a, "/Desktop")) o.DesktopShortcut = true;
                 else if (Is(a, "/NoStartMenu")) o.StartMenuShortcut = false;
                 else if (Is(a, "/WaitForApp")) o.WaitForApp = true;
                 else if (a.StartsWith("/D=", StringComparison.OrdinalIgnoreCase)) o.InstallDir = a.Substring(3).Trim('"');

@@ -49,10 +49,20 @@ Installer\
     SetupUi.cs                       ← shared header/footer/colours
     SetupForm.cs                     ← install wizard (Options → Progress → Finished)
     UninstallForm.cs                 ← uninstall dialog (Confirm → Progress → Finished)
+  build-serial-generator.ps1         ← builds the Serial Generator's setup (admin tool, see section 11)
+  SerialGenerator.Setup\
+    SerialGenerator.Setup.csproj     ← same engine files as CardStudio.Setup, generator payload, never the private key
+    ProductInfo.cs                   ← the generator's name, paths, texts (replaces CardStudio.Setup\ProductInfo.cs)
+Tools\SerialGenerator\               ← the Serial Generator (GeneratorVersion.cs = its own version number)
 dist\
   CardStudio-Setup.exe               ← build output (git-ignored)
   update.json                        ← version + SHA-256 + notes, read by the app's Check for Updates
+  admin\SerialGenerator-Setup.exe    ← Serial Generator setup: NOT for the Card Studio release
 ```
+
+Both setups share one engine: `SerialGenerator.Setup` compiles every `.cs` file of `CardStudio.Setup` except
+`ProductInfo.cs`. Anything that differs between the two products (name, paths, shortcut text, fonts, the Assets folder,
+uninstall texts) belongs in `ProductInfo.cs`. Keep the members of the two `ProductInfo` classes the same.
 
 ---
 
@@ -296,17 +306,44 @@ It works offline, and every serial works on one PC only.
 2. On your PC, make that PC's serial with the **Serial Generator** (`Tools\SerialGenerator`): paste the Machine ID
    (or the whole message it came in), type who it is for, press **Enter**. The serial is copied to the clipboard and
    logged to `serials.csv` beside the key; **Copy Message** gives a ready-to-send text with instructions in English and Khmer.
-   Build it once with Visual Studio (it is in `NPIC_CARD_APP.sln`) or:
+   Install it with its own setup (see *Installing the Serial Generator* below), or run it straight from the repo:
    ```powershell
    & "<MSBuild.exe>" Tools\SerialGenerator\SerialGenerator.csproj /p:Configuration=Release
    Tools\SerialGenerator\bin\Release\CardStudio.SerialGenerator.exe
    ```
-   It finds `Installer\serial-private.key` by itself; elsewhere, use **Open Key…** (Ctrl+O) or put the key next to the exe.
+   From the repo it finds `Installer\serial-private.key` by itself; elsewhere, use **Open Key…** (Ctrl+O) once: the location is remembered.
    The same can be done from the command line (same log file):
    ```powershell
    powershell -ExecutionPolicy Bypass -File Installer\serial.ps1 -MachineId EM3S-QXMF-403A-5466 -Name "Office PC 1"
    ```
 3. Send the serial back; the user pastes it and clicks **Activate**. It is saved to `%ProgramData%\NPIC_CARD_APP\license.txt` (all Windows users of the PC) and checked again on every start.
+
+### Installing the Serial Generator
+
+For the PC (or PCs) of whoever makes serials, not for Card Studio users.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File Installer\build-serial-generator.ps1                  # -> dist\admin\SerialGenerator-Setup.exe
+powershell -ExecutionPolicy Bypass -File Installer\build-serial-generator.ps1 -Version 1.1.0   # also stamps GeneratorVersion.cs
+```
+
+`SerialGenerator-Setup.exe` works like Card Studio's setup (same engine): it installs to
+`C:\Program Files\Card Studio Serial Generator`, adds a Start Menu shortcut (the desktop one is optional, off by default),
+registers *Card Studio Serial Generator* in Settings > Apps with its own uninstaller, updates in place, and supports
+`/S`, `/D=folder`, `/Desktop`, `/NoStartMenu`, and `uninstall.exe /uninstall [/S] [/purge]`. Log: `%TEMP%\SerialGenerator-Setup.log`.
+It is separate from Card Studio: installing, updating or uninstalling one never touches the other.
+
+- **The private key is not in the setup.** After installing, open the generator, click **Open Key…** and choose your copy
+  of `serial-private.key` (e.g. from a USB stick or a protected folder). The generator remembers where it is; `serials.csv`
+  is kept beside the key. If a key, `serials*.csv` or `key-path.txt` is ever left in `Tools\SerialGenerator\bin`, the
+  build leaves it out of the setup and warns.
+- **Keep it out of the Card Studio release.** It is written to `dist\admin\`, not `dist\`. Without the key it cannot make
+  serials, but it is an admin tool and has no place on users' PCs.
+- **Uninstall** keeps the remembered key location unless *Also forget the remembered key location* (`/purge`) is ticked.
+  It never deletes the key file or `serials.csv`.
+- **Version:** `Tools\SerialGenerator\GeneratorVersion.cs`, separate from Card Studio's `Version.cs`. Rebuild the generator
+  (and its setup) whenever `serial-private.key` is replaced with `serial.ps1 -NewKey`: the generator checks that its key
+  matches the public key it was built with.
 
 ### Expiry date
 
@@ -328,7 +365,7 @@ signed text, so it cannot be edited; changing it makes the serial invalid.
 
 | | |
 |---|---|
-| Serial Generator | Admin only: **never give it to users** and never add it to the setup (the installer packs only `NPIC_CARD_APP\bin`). It shares `SerialFormat.cs` and `LicenseService.cs` with the app, so its serials always pass the app's check; it warns when its key does not match the app's public key |
+| Serial Generator | Admin only: **never give it to users** and never add it to Card Studio's setup (that one packs only `NPIC_CARD_APP\bin`); it has its own, `dist\admin\SerialGenerator-Setup.exe`. It shares `SerialFormat.cs` and `LicenseService.cs` with the app, so its serials always pass the app's check; it warns when its key does not match the app's public key |
 | Private key | `Installer\serial-private.key`. **Git-ignored. Back it up**: without it no new serials can be made for the builds already out there |
 | Public key | `PublicKey` in `NPIC_CARD_APP\Services\LicenseService.cs`; only the public key ships, so serials cannot be forged from the source or the exe |
 | New key pair | `serial.ps1 -NewKey` (add `-Force` to replace one). Writes the new public key into the source; rebuild. **All serials made with the old key stop working** |

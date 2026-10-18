@@ -4,7 +4,7 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Card Studio Serial Generator")]
 [assembly: AssemblyProduct("Card Studio")]
-[assembly: AssemblyVersion("1.0.0.0")]
+// Version: GeneratorVersion.cs (shared with its setup, Installer\SerialGenerator.Setup).
 
 namespace CardStudio.SerialGenerator
 {

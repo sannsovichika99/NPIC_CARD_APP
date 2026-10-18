@@ -54,6 +54,7 @@
       <Link>Shared\LicenseService.cs</Link>
     </Compile>
     <Compile Include="Program.cs" />
+    <Compile Include="GeneratorVersion.cs" />
     <Compile Include="SigningKey.cs" />
     <Compile Include="SerialLog.cs" />
     <Compile Include="GeneratorForm.cs">

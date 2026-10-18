@@ -48,7 +48,7 @@ namespace CardStudio.Setup
 
             if (purgeUserData)
             {
-                Report(progress, 90, "Removing settings and print history");
+                Report(progress, 90, ProductInfo.PurgeProgressText);
                 string data = ProductInfo.UserDataFolder;
                 try { if (Directory.Exists(data)) Directory.Delete(data, true); }
                 catch (Exception ex) { Log.Write("Could not delete " + data + ": " + ex.Message); leftovers.Add(data); }
