@@ -151,6 +151,9 @@ namespace CardStudio.Setup
                 if (!File.Exists(manifest)) created.Add(manifest);
                 File.WriteAllLines(manifest, newFiles);
 
+                Report(progress, 86, "Installing fonts");
+                FontSetup.InstallMissing(dir);    // never throws: a font that fails is installed by the app instead
+
                 Report(progress, 88, "Writing the uninstaller");
                 string uninstaller = Path.Combine(dir, ProductInfo.UninstallerName);
                 string self = Assembly.GetEntryAssembly().Location;

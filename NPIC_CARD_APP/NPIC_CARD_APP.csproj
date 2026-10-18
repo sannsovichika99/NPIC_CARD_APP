@@ -159,6 +159,7 @@
     <Compile Include="Rendering\BackgroundRemover.cs" />
     <Compile Include="Rendering\CardFonts.cs" />
     <Compile Include="Rendering\CardGridOverlay.cs" />
+    <Compile Include="Rendering\FontInstaller.cs" />
     <Compile Include="Rendering\CardRenderer.cs" />
     <Compile Include="Rendering\KhmerText.cs" />
     <Compile Include="Rendering\PositionGrid.cs" />
@@ -207,6 +208,24 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Assets\tiktok.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <!-- Card fonts: installed at start-up (per user) and by the setup (all users) when missing. See Rendering\FontInstaller.cs. -->
+  <ItemGroup>
+    <Content Include="Assets\Fonts\KhmerOSmuol.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Fonts\KhmerOSmuollight.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Fonts\KhmerOSsiemreap.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Fonts\Siemreap.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\Fonts\Tacteing.TTF">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

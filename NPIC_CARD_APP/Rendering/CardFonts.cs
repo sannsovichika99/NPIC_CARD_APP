@@ -57,6 +57,12 @@ namespace NPIC_CARD_APP.Rendering
             return _installed.Contains(family);
         }
 
+        /// <summary>Forgets the cached font list (after <see cref="FontInstaller"/> has added fonts).</summary>
+        public static void Refresh()
+        {
+            _installed = null;
+        }
+
         public static string[] Missing()
         {
             return Required.Where(f => !IsInstalled(f)).ToArray();
@@ -71,7 +77,8 @@ namespace NPIC_CARD_APP.Rendering
             AppDialog.Show(owner,
                 "These fonts are not installed, so the card will not match the design:\n\n  • " +
                 string.Join("\n  • ", missing) +
-                "\n\nInstall them (right-click the .ttf → Install for all users), then restart the app.",
+                "\n\nCard Studio could not install them automatically from:\n  " + FontInstaller.FontsFolder +
+                "\n\nInstall them by hand (right-click the .ttf → Install for all users), then restart the app.",
                 "Missing fonts", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 

@@ -60,6 +60,7 @@
     </Compile>
     <Compile Include="SetupOptions.cs" />
     <Compile Include="InstallEngine.cs" />
+    <Compile Include="FontSetup.cs" />
     <Compile Include="UninstallEngine.cs" />
     <Compile Include="Shortcut.cs" />
     <Compile Include="SetupUi.cs" />

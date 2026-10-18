@@ -887,8 +887,10 @@ namespace NPIC_CARD_APP
                   "ឈ្មោះឯកសារត្រូវតែដូចអត្តលេខនិស្សិតទាំងស្រុង (ឧ. NPIC24001.jpg) ហើយស្ថិតក្នុងថតរូបថត។ " +
                   "**Gallery** បង្ហាញថាអ្នកណាគ្មានរូបថត។"));
             Problem(w, T("Khmer text looks wrong or uses another font", "អក្សរខ្មែរមើលទៅខុស ឬប្រើពុម្ពអក្សរផ្សេង"),
-                T("A card font is missing. Check **System info**, install the font for all users, then restart the app.",
-                  "ខ្វះពុម្ពអក្សរកាត។ ពិនិត្យ **ព័ត៌មានប្រព័ន្ធ** ដំឡើងពុម្ពអក្សរសម្រាប់អ្នកប្រើទាំងអស់ រួចបើកកម្មវិធីឡើងវិញ។"));
+                T("A card font is missing. Card Studio installs missing card fonts from **Assets\\Fonts** by itself when it starts. " +
+                  "If one is still missing, check **System info**, install it from Assets\\Fonts for all users, then restart the app.",
+                  "ខ្វះពុម្ពអក្សរកាត។ Card Studio ដំឡើងពុម្ពអក្សរកាតដែលខ្វះដោយស្វ័យប្រវត្តិពីថត **Assets\\Fonts** ពេលបើកកម្មវិធី។ " +
+                  "បើនៅតែខ្វះ ពិនិត្យ **ព័ត៌មានប្រព័ន្ធ** ដំឡើងពុម្ពអក្សរពីថត Assets\\Fonts សម្រាប់អ្នកប្រើទាំងអស់ រួចបើកកម្មវិធីឡើងវិញ។"));
             Problem(w, T("“Missing in …\\Assets: …” in the status line", "“Missing in …\\Assets: …” នៅបន្ទាត់ស្ថានភាព"),
                 T("Card images are missing next to the app. Reinstall Card Studio or copy the files back into the Assets folder.",
                   "រូបភាពកាតបាត់ពីថតកម្មវិធី។ ដំឡើង Card Studio ឡើងវិញ ឬចម្លងឯកសារត្រលប់ទៅថត Assets វិញ។"));
