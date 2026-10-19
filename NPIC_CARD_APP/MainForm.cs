@@ -533,6 +533,8 @@ namespace NPIC_CARD_APP
                 "Show / hide a millimetre grid on the front and back previews (not printed)");
 
             return MakeCard("Card preview", tiles, _btnGrid,
+                MakeButton("3D View", PillKind.Ghost, (s, e) => Show3DPreview(),
+                    "Turn the card in 3D: drag to rotate it, flip between front and back (Shift+F11)"),
                 MakeButton("Enlarge", PillKind.Ghost, (s, e) => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"));
         }
 
@@ -1710,6 +1712,7 @@ namespace NPIC_CARD_APP
             {
                 case Keys.F1: ShowHelp(_students.Count == 0 ? HelpForm.Page.QuickStart : HelpForm.Page.Overview); return true;
                 case Keys.F11: ShowFullScreen(PreviewSide.Both); return true;
+                case Keys.Shift | Keys.F11: Show3DPreview(); return true;
                 case Keys.Control | Keys.F: _txtSearch.Focus(); _txtSearch.SelectAll(); return true;
                 case Keys.Control | Keys.L: ShowImportPage(); return true;
                 case Keys.Control | Keys.O: ImportCsv(); return true;
@@ -1742,6 +1745,18 @@ namespace NPIC_CARD_APP
             {
                 form.ShowDialog(this);
                 SetPreviewGrid(form.ShowGrid);   // keep whatever was chosen in full screen
+                if (_view.Count > 0 && form.CurrentIndex != index)
+                    SelectRow(form.CurrentIndex);
+            }
+        }
+
+        /// <summary>3D View: the current student's card as a real card that can be turned, flipped and zoomed.</summary>
+        private void Show3DPreview()
+        {
+            int index = _grid.CurrentRow != null ? _grid.CurrentRow.Index : 0;
+            using (var form = new CardPreview3DForm(_view, index, _settings))
+            {
+                form.ShowDialog(this);
                 if (_view.Count > 0 && form.CurrentIndex != index)
                     SelectRow(form.CurrentIndex);
             }

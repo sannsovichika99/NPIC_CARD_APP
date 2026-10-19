@@ -641,6 +641,10 @@ namespace NPIC_CARD_APP
                        "**ចុច** លើរូបមើលជាមុន ដើម្បីកំណត់ផ្នែកនោះជាផ្នែកត្រូវបោះពុម្ព (ស៊ុមពណ៌ស្វាយ)។ **ចុចពីរដង** ដើម្បីពង្រីក។"));
             w.Bullet(T("**Enlarge** or F11 opens the full-screen preview; double-clicking a row in the list does the same.",
                        "**Enlarge** ឬ F11 បើកការមើលជាមុនពេញអេក្រង់។ ការចុចពីរដងលើជួរក្នុងបញ្ជីក៏ធ្វើដូចគ្នាដែរ។"));
+            w.Bullet(T("**3D View** or Shift+F11 shows the card in 3D: drag to turn it, double-click or Space to flip it, " +
+                       "the mouse wheel zooms and A spins it on its own.",
+                       "**3D View** ឬ Shift+F11 បង្ហាញកាតជា 3D៖ អូសដើម្បីបង្វិល ចុចពីរដង ឬ Space ដើម្បីត្រឡប់ " +
+                       "កង់កណ្ដុរពង្រីក/បង្រួម ហើយ A បង្វិលដោយស្វ័យប្រវត្តិ។"));
             w.Bullet(T("**Grid** puts a millimetre grid over the preview to check positions. The grid is never printed.",
                        "**Grid** បង្ហាញក្រឡាចត្រង្គមីលីម៉ែត្រលើការមើលជាមុន ដើម្បីពិនិត្យទីតាំង។ ក្រឡាចត្រង្គនេះមិនត្រូវបានបោះពុម្ពទេ។"));
         }
@@ -849,6 +853,7 @@ namespace NPIC_CARD_APP
             w.Key("Ctrl+F", T("Search the student list", "ស្វែងរកក្នុងបញ្ជីនិស្សិត"));
             w.Key("Ctrl+P", T("Print the selected students", "បោះពុម្ពនិស្សិតដែលបានជ្រើស"));
             w.Key("F11", T("Full-screen card preview", "មើលកាតជាមុនពេញអេក្រង់"));
+            w.Key("Shift+F11", T("3D card preview", "មើលកាតជាមុន 3D"));
             w.Key("Ctrl+L", T("Import Students page", "ទំព័រ Import Students"));
             w.Key("Ctrl+E / Ctrl+O", T("Import from Excel / CSV", "នាំចូលពី Excel / CSV"));
             w.Key("Ctrl+I / Ctrl+D", T("Import from the web API / SQL Server", "នាំចូលពី Web API / SQL Server"));

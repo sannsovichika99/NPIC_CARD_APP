@@ -127,6 +127,14 @@ namespace NPIC_CARD_APP
             A(" · grid", " · ក្រឡា");
             A("    |    Space: switch side    G: grid    ← →: student    Esc: close",
                 "    |    Space៖ ប្ដូរផ្នែក    G៖ ក្រឡា    ← →៖ និស្សិត    Esc៖ បិទ");
+
+            // ---- 3D Card Preview ----
+            A("3D Card Preview", "មើលកាតជាមុន 3D");
+            A("Flip   Space", "ត្រឡប់   Space");
+            A("Auto spin   A", "បង្វិលស្វ័យប្រវត្តិ   A");
+            A("Reset   R", "កំណត់ឡើងវិញ   R");
+            A("    |    Drag: turn    Wheel: zoom    Space: flip    ← →: student    Esc: close",
+                "    |    អូស៖ បង្វិល    កង់កណ្ដុរ៖ ពង្រីក/បង្រួម    Space៖ ត្រឡប់    ← →៖ និស្សិត    Esc៖ បិទ");
         }
     }
 }

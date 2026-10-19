@@ -205,6 +205,9 @@ namespace NPIC_CARD_APP
             A("Show / hide a millimetre grid on the front and back previews (not printed)",
                 "បង្ហាញ / លាក់ក្រឡាមីលីម៉ែត្រលើការមើលជាមុនផ្នែកមុខ និងក្រោយ (មិនបោះពុម្ព)");
             A("Enlarge", "ពង្រីក");
+            A("3D View", "មើល 3D");
+            A("Turn the card in 3D: drag to rotate it, flip between front and back (Shift+F11)",
+                "បង្វិលកាតជា 3D៖ អូសដើម្បីបង្វិល ត្រឡប់រវាងផ្នែកមុខ និងក្រោយ (Shift+F11)");
 
             // ---- Print setup: Printer ----
             A("Print setup", "ការកំណត់បោះពុម្ព");

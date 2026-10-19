@@ -170,6 +170,7 @@ printer, and saves the RFID chip number of every card it prints.
 * QR code, director signature, stamp and logos on the card
 * Card Text editor for fixed text, issue date and signature
 * Full-screen preview and millimetre grid for checking positions
+* 3D card preview: turn, flip and zoom the card (Shift+F11)
 * Print front and back, 1 or 2 cards per tray load
 * Tray calibration: slot X / Y, test print, card orientation, rotate 180°
 * Check Printer and Print Queue before printing
