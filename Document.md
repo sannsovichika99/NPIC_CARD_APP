@@ -1,3 +1,41 @@
+### v1.0.0.8
+
+Release date: 2026-10-19
+
+This version redesigns Settings & Help and All Settings, moves the language switch to the top bar, and adjusts the Classic card layout.
+
+## Feature
+* Language menu in the top bar: a flag button (🇬🇧 EN ▾ / 🇰🇭 KH ▾) opens a menu with English and Khmer, the language in use ticked. Ctrl+Shift+L still works
+* Settings & Help is now a grouped list: Appearance · Settings & files · Printer · Help & system. Use ↑ ↓ to move between rows
+* Each Settings & Help row shows its current state on the right: dark mode switch, theme colour swatch, language flag, installed version, and license status (Active / Expires soon / Expired / Not activated)
+* New Language row in Settings & Help
+* All Settings: a left column with All Settings, Needs attention, and one item per section. Sections with problems show how many in orange
+* All Settings: "Needs attention" shows only the settings that have a problem ("Nothing needs attention." when all is fine)
+* All Settings: one card per section. Rows that need attention are tinted orange, and rows with a file or folder get an open button
+* All Settings: right-click a row to Copy value, Copy setting and value, or Open in Explorer. Ctrl+C copies "Setting: value"
+* All Settings: ↑ ↓ Home End move between rows, and Enter or double-click opens a file or folder
+* Card Designer: new "Space left (mm)" and "Space right (mm)" for text and fields, to keep empty space around the value
+* Card Designer: new "Map" picture (a map pin) in the Image menu
+
+## Change
+* Classic card, front: the label column is wider, so the colons line up and the values start 0.6 mm after them
+* Classic card, front: "ជំនាន់ទី" (generation) has its own aligned colon
+* Classic card, front: the director stamp, signature and name moved a little to the left
+* Classic card, back: a map pin is added after the Facebook, Telegram, YouTube and TikTok icons, which are now 3 mm apart
+* A Classic design copied into My designs matches these changes, and the social icons and map pin are grouped so they move together
+* The sidebar header (logo and app name) stays at the top while the commands below it scroll
+* The Language item was removed from the sidebar
+
+## Known issue
+* Cards printed in Classic before and after this update look slightly different. Finish a batch before updating
+* Export video needs Windows Media Foundation. Windows N / KN editions need the Media Feature Pack first
+* Notifications are kept only until Card Studio is closed
+* The user guide (F1) does not explain Card Template… or Card Designer… yet, and notifications only appear in the shortcut list
+* The user guide (F1 → Overview) still lists driver setup as a sidebar command
+* Help still lists .xls files, but import only accepts .xlsx / .xlsm
+
+---
+
 ### v1.0.0.7
 
 Release date: 2026-10-19
@@ -34,7 +72,7 @@ This version adds a 3D card preview with video export, a notification bell, a co
 ## Known issue
 * Export video needs Windows Media Foundation. Windows N / KN editions need the Media Feature Pack first
 * Notifications are kept only until Card Studio is closed
-* The user guide (F1) does not explain Card Template…, Card Designer…, 3D View or notifications yet
+* The user guide (F1) does not explain Card Template… or Card Designer… yet, and notifications only appear in the shortcut list
 * The user guide (F1 → Overview) still lists driver setup as a sidebar command
 * Help still lists .xls files, but import only accepts .xlsx / .xlsm
 
