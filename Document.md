@@ -1,3 +1,35 @@
+### v1.0.0.9
+
+Release date: 2026-10-19
+
+This version adds Backup & Restore: all Card Studio data can be saved to one file and put back on the same or another PC.
+
+## Feature
+* Backup & Restore… (Settings & Help, or Ctrl+Shift+B): saves everything to one .zip file
+* A backup holds settings, print history, RFID cards, logos, signatures, card designs, and optionally the student photos (with their _original copies) and the student CSV files
+* The RFID file is included even when it is kept outside the app data folder, for example on a network share
+* The license is never backed up: each PC keeps its own serial
+* Back Up Now (Ctrl+S), Restore (Enter or double-click), Restore From File…, Copy To… (e.g. a USB drive), Show in Explorer, Delete (Del, to the Recycle Bin), Refresh (F5)
+* Daily automatic backup when Card Studio starts (on by default). It runs in the background, has no photos, and keeps the last 10
+* If the daily backup fails, the status bar says so and it tries again at the next start
+* Before a restore, the current data is saved as a "before-restore" backup (the last 5 are kept). Nothing is restored if that safety backup fails
+* A restore keeps files added since the backup, then restarts Card Studio
+* Backups are kept in %AppData%\NPIC_CARD_APP\Backups
+* Default folders: the Photo Folder is %AppData%\NPIC_CARD_APP\Photos and the CSV folder is %AppData%\NPIC_CARD_APP\CSV until you choose others. They are created when missing
+* Folders… and CSV Files…: new "Use Default" button to go back to the default folder (files are not moved)
+* Folders… lists the Backups folder, and marks the Photo and CSV folders when they are the defaults
+
+## Known issue
+* PCs that never chose a CSV folder now see the new, empty default CSV folder in CSV Files…, not the folder of their student file. Click Change Folder… to pick it again
+* Cards printed in Classic before and after v1.0.0.8 look slightly different
+* Export video needs Windows Media Foundation. Windows N / KN editions need the Media Feature Pack first
+* Notifications are kept only until Card Studio is closed
+* The user guide (F1) does not explain Card Template…, Card Designer… or Backup & Restore… yet, and notifications only appear in the shortcut list
+* The user guide (F1 → Overview) still lists driver setup as a sidebar command
+* Help still lists .xls files, but import only accepts .xlsx / .xlsm
+
+---
+
 ### v1.0.0.8
 
 Release date: 2026-10-19
