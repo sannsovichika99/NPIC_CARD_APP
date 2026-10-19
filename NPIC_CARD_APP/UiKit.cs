@@ -157,6 +157,7 @@ namespace NPIC_CARD_APP
         public const string IcoColor = "", IcoCheck = "";   // Color (palette) / CheckMark
 
         public const string IcoTemplate = "";   // ViewAll (grid of cards): Card Template…
+        public const string IcoPaneClose = "", IcoPaneOpen = "";   // ClosePane / OpenPane: sidebar icons only / full
 
         public const string IcoKey ="";   // Permissions (key): Activate Card Studio
 
@@ -484,6 +485,10 @@ namespace NPIC_CARD_APP
         public bool Active { get { return _active; } set { _active = value; Invalidate(); } }
         public string Badge { get { return _badge; } set { if (_badge != value) { _badge = value; Invalidate(); } } }
 
+        private bool _compact;
+        /// <summary>Icon-only sidebar: the icon is centred, the label hidden and the badge becomes a small pill on the icon.</summary>
+        public bool Compact { get { return _compact; } set { if (_compact != value) { _compact = value; Invalidate(); } } }
+
         /// <summary>Label of the item, in the app's language.</summary>
         public override string Text { get { return base.Text; } set { base.Text = Lang.T(value); Invalidate(); } }
 
@@ -531,6 +536,22 @@ namespace NPIC_CARD_APP
             }
 
             Color fore = _active ? Theme.Accent : _hover ? Theme.TextMain : Theme.TextSoft;
+            if (_compact)
+            {
+                Theme.DrawIcon(g, Glyph, 18f, _active ? Theme.Accent : _hover ? Theme.TextMain : Theme.TextMuted,
+                               new RectangleF(0, 0, Width, Height));
+                if (!string.IsNullOrEmpty(_badge))
+                {
+                    string text = _badge.Length > 3 ? "99+" : _badge;
+                    float w = Math.Max(16f, g.MeasureString(text, Theme.Small).Width + 4f);
+                    var pill = new RectangleF(Math.Min(Width / 2f + 2f, Width - w - 4f), 3f, w, 15f);
+                    using (GraphicsPath p = Theme.RoundRect(pill, 7.5f))
+                    using (var brush = new SolidBrush(Theme.Accent))
+                        g.FillPath(brush, p);
+                    Theme.DrawText(g, text, Theme.Small, Color.White, pill, StringAlignment.Center);
+                }
+                return;
+            }
             Theme.DrawIcon(g, Glyph, 16f, _active ? Theme.Accent : Theme.TextMuted, new RectangleF(18, 0, 30, Height));
 
             float badgeW = string.IsNullOrEmpty(_badge) ? 0 : g.MeasureString(_badge, Theme.NavBold).Width + 8;
@@ -855,13 +876,17 @@ namespace NPIC_CARD_APP
             Height = 96;
         }
 
+        private bool _compact;
+        /// <summary>Icon-only sidebar: just the logo badge, centred.</summary>
+        public bool Compact { get { return _compact; } set { if (_compact != value) { _compact = value; Invalidate(); } } }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
             g.Clear(Theme.Surface);
             Theme.HighQuality(g);
 
-            var badge = new RectangleF(18, 24, 48, 48);
+            var badge = new RectangleF(_compact ? (Width - 44) / 2f : 18, _compact ? 26 : 24, _compact ? 44 : 48, _compact ? 44 : 48);
             Theme.DrawShadow(g, badge, 12, _logo != null ? Theme.BrandBlue : Theme.Accent, 6, 14, 3f);
             using (GraphicsPath p = Theme.RoundRect(badge, 12))
             {
@@ -886,10 +911,18 @@ namespace NPIC_CARD_APP
                 }
             }
 
-            Theme.DrawText(g, Text, Theme.Brand, Theme.TextMain, new RectangleF(76, 28, Width - 82, 22));
-            Theme.DrawText(g, _subtitle, Theme.Small, Theme.TextMuted, new RectangleF(76, 49, Width - 82, 18));
+            int inset = 20;
+            if (!_compact)
+            {
+                Theme.DrawText(g, Text, Theme.Brand, Theme.TextMain, new RectangleF(76, 28, Width - 82, 22));
+                Theme.DrawText(g, _subtitle, Theme.Small, Theme.TextMuted, new RectangleF(76, 49, Width - 82, 18));
+            }
+            else
+            {
+                inset = 14;
+            }
             using (var pen = new Pen(Theme.GridLine))
-                g.DrawLine(pen, 20, Height - 1, Width - 20, Height - 1);
+                g.DrawLine(pen, inset, Height - 1, Width - inset, Height - 1);
         }
     }
 

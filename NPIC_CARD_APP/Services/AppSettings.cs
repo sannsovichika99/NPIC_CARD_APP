@@ -39,6 +39,8 @@ namespace NPIC_CARD_APP.Services
 
         /// <summary>Dark colour theme for the app windows (never the printed cards). Read once at start-up.</summary>
         public bool DarkMode { get; set; }
+        /// <summary>Main window sidebar shows only icons (true) or icons with labels (false, the default).</summary>
+        public bool SidebarCollapsed { get; set; }
         /// <summary>
         /// Primary (accent) colour of the app windows as "#RRGGBB", chosen with Theme Color…; empty = the default violet.
         /// Never affects the printed cards. Read once at start-up.

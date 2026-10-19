@@ -72,6 +72,17 @@ namespace NPIC_CARD_APP
         private bool _refreshOnActivate;   // photo folder opened in Explorer: re-read photos when the user comes back
         private NavItem _navGallery, _navHistory;
 
+        // Sidebar: full (icons + names) or compact (icons only); Ctrl+\ or the button at its bottom switches.
+        private const int SidebarFullWidth = 232, SidebarCompactWidth = 68;
+        private Panel _sidebar;
+        private BrandBlock _brand;
+        private NavItem _navToggle, _navLanguage;
+        private Control _languageRow;
+        private Label _languageSection;
+        private readonly List<Label> _sections = new List<Label>();
+        private readonly List<KeyValuePair<NavItem, string>> _navTips = new List<KeyValuePair<NavItem, string>>();
+        private bool _sidebarCompact;
+
         // RFID tab of the Print setup card: save the printed card's chip UID to the RFID CSV file
         private PillTabs _setupTabs;
         private TextBox _txtRfid;
@@ -100,6 +111,7 @@ namespace NPIC_CARD_APP
             ForeColor = TextMain;
 
             BuildUi();
+            SetSidebarCompact(_settings.SidebarCollapsed, false);
             Lang.Apply(this);           // Khmer only: labels, buttons, columns and status text, also when they change later
             DarkControls.Apply(this);   // dark mode only; before the handles exist, so restyling recreates nothing
             SlimScroll.Apply(this);     // slim scroll bars on every grid, list and scrolling panel
@@ -184,14 +196,19 @@ namespace NPIC_CARD_APP
             ResumeLayout(true);
         }
 
-        /// <summary>White sidebar: brand, then every command grouped like the sample's navigation.</summary>
+        /// <summary>
+        /// White sidebar: brand, then every command grouped like the sample's navigation (scrolls when the window is short),
+        /// and the icons-only / full switch pinned at the bottom.
+        /// </summary>
         private Control BuildSidebar()
         {
-            var side = new Panel { Dock = DockStyle.Left, Width = 232, BackColor = Surface, AutoScroll = true };
+            var side = new Panel { Dock = DockStyle.Left, Width = SidebarFullWidth, BackColor = Surface, Padding = new Padding(0, 0, 1, 0) };
             side.Paint += (s, e) =>
             {
                 using (var pen = new Pen(GridLine)) e.Graphics.DrawLine(pen, side.Width - 1, 0, side.Width - 1, side.Height);
             };
+            _sidebar = side;
+            var scroll = new Panel { Dock = DockStyle.Fill, BackColor = Surface, AutoScroll = true };
 
             // App logo embedded in the exe; null (unreadable resource) makes the badge fall back to initials.
             Image logo = Branding.Logo;
@@ -204,9 +221,17 @@ namespace NPIC_CARD_APP
             _navHistory = Nav("Print History", Theme.IcoHistory, ShowPrintHistory,
                 "Cards already printed: who, which side, when (Ctrl+H)");
 
+            _brand = new BrandBlock("Card Studio", "ID Card Printer", logo);
+            _languageSection = Section("LANGUAGE");
+            _languageRow = BuildLanguageSwitch();
+            // Icons-only sidebar: the EN | KH pills do not fit, a globe item switches the language instead.
+            _navLanguage = Nav("Language", Theme.IcoGlobe, () => SwitchLanguage(!Lang.Khmer),
+                "Language: switch between English and Khmer (Ctrl+Shift+L)");
+            _navLanguage.Visible = false;
+
             var items = new List<Control>
             {
-                new BrandBlock("Card Studio", "ID Card Printer", logo),
+                _brand,
                 Spacer(14),
                 dashboard,
                 Nav("Import Students…", Theme.IcoDownload, ShowImportPage,
@@ -239,8 +264,9 @@ namespace NPIC_CARD_APP
                     "Epson Driver Setup (Ctrl+Shift+E), System Info (Ctrl+Shift+I), Check for Updates (Ctrl+U) and Help & About (F1) " +
                     "in one page", Lang.T(Theme.Dark ? "Light Mode" : "Dark Mode"))),
 
-                Section("LANGUAGE"),
-                BuildLanguageSwitch(),
+                _languageSection,
+                _languageRow,
+                _navLanguage,
                 Spacer(10)
             };
 
@@ -248,9 +274,80 @@ namespace NPIC_CARD_APP
             for (int i = items.Count - 1; i >= 0; i--)
             {
                 items[i].Dock = DockStyle.Top;
-                side.Controls.Add(items[i]);
+                scroll.Controls.Add(items[i]);
             }
+
+            _navToggle = new NavItem("Collapse sidebar", Theme.IcoPaneClose, (s, e) => ToggleSidebar())
+            {
+                Dock = DockStyle.Bottom, Height = 44
+            };
+            var divider = new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Surface };
+            divider.Paint += (s, e) =>
+            {
+                int inset = _sidebarCompact ? 14 : 20;
+                using (var pen = new Pen(GridLine)) e.Graphics.DrawLine(pen, inset, 0, divider.Width - inset, 0);
+            };
+
+            side.Controls.Add(scroll);       // fill first, bottom edge last
+            side.Controls.Add(divider);
+            side.Controls.Add(_navToggle);
             return side;
+        }
+
+        private void ToggleSidebar()
+        {
+            SetSidebarCompact(!_sidebarCompact, true);
+        }
+
+        /// <summary>
+        /// Icons only (compact) or icons with names (full). In compact mode each icon's tooltip starts with its name,
+        /// section titles become thin dividers and the language pills become a globe item.
+        /// </summary>
+        private void SetSidebarCompact(bool compact, bool save)
+        {
+            _sidebarCompact = compact;
+            SuspendLayout();
+            _sidebar.SuspendLayout();
+
+            _sidebar.Width = compact ? SidebarCompactWidth : SidebarFullWidth;
+            _brand.Compact = compact;
+            _tip.SetToolTip(_brand, compact ? Lang.T("Card Studio") + " · " + Lang.T("ID Card Printer") : null);
+
+            foreach (KeyValuePair<NavItem, string> nav in _navTips)
+            {
+                nav.Key.Compact = compact;
+                string tip = Lang.T(nav.Value);
+                _tip.SetToolTip(nav.Key, compact ? nav.Key.Text + Environment.NewLine + tip : tip);
+            }
+
+            foreach (Label section in _sections)
+            {
+                section.Text = compact ? "" : (string)section.Tag;   // English: Lang translates it again
+                section.Height = compact ? 17 : 32;
+            }
+            _languageSection.Visible = !compact;
+            _languageRow.Visible = !compact;
+            _navLanguage.Visible = compact;
+
+            _navToggle.Compact = compact;
+            _navToggle.Glyph = compact ? Theme.IcoPaneOpen : Theme.IcoPaneClose;
+            _navToggle.Text = compact ? "Expand sidebar" : "Collapse sidebar";
+            _tip.SetTip(_navToggle, compact ? "Show icons and names (Ctrl+\\)" : "Show icons only (Ctrl+\\)");
+
+            _sidebar.ResumeLayout(true);
+            ResumeLayout(true);
+            _sidebar.Invalidate(true);
+
+            if (!save) return;
+            _settings.SidebarCollapsed = compact;
+            try
+            {
+                _settings.Save();
+            }
+            catch (Exception ex)
+            {
+                SetStatus("Could not save settings: " + ex.Message);
+            }
         }
 
         /// <summary>EN | KH pills: the language of every window. Picking the other one asks, saves it and restarts the app.</summary>
@@ -280,16 +377,26 @@ namespace NPIC_CARD_APP
         {
             var item = new NavItem(text, glyph, (s, e) => action());
             _tip.SetTip(item, tooltip);
+            _navTips.Add(new KeyValuePair<NavItem, string>(item, tooltip));
             return item;
         }
 
-        private static Label Section(string text)
+        /// <summary>Small-caps group title; a thin divider while the sidebar shows icons only.</summary>
+        private Label Section(string text)
         {
-            return new Label
+            var label = new Label
             {
-                Text = text, Font = Theme.SmallCaps, ForeColor = TextMuted, BackColor = Surface, AutoSize = false,
+                Text = text, Tag = text, Font = Theme.SmallCaps, ForeColor = TextMuted, BackColor = Surface, AutoSize = false,
                 Height = 32, TextAlign = ContentAlignment.BottomLeft, Padding = new Padding(22, 0, 0, 5)
             };
+            label.Paint += (s, e) =>
+            {
+                if (!_sidebarCompact) return;
+                int y = label.Height / 2;
+                using (var pen = new Pen(GridLine)) e.Graphics.DrawLine(pen, 14, y, label.Width - 14, y);
+            };
+            _sections.Add(label);
+            return label;
         }
 
         private static Control Spacer(int height)
@@ -1734,6 +1841,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.Shift | Keys.I: ShowHelp(HelpForm.Page.SystemInfo); return true;
                 case Keys.Control | Keys.U: ShowUpdates(); return true;
                 case Keys.Control | Keys.Shift | Keys.L: SwitchLanguage(!Lang.Khmer); return true;
+                case Keys.Control | Keys.Oem5: ToggleSidebar(); return true;   // Ctrl+\
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }

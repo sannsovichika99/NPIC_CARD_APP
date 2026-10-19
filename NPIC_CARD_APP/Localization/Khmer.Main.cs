@@ -129,6 +129,11 @@ namespace NPIC_CARD_APP
                 "កែអត្ថបទថេរដែលបោះពុម្ពលើកាត និងជ្រើសហត្ថលេខានាយក");
             A("APP", "កម្មវិធី");
             A("Full Screen", "អេក្រង់ពេញ");
+            A("Collapse sidebar", "បង្រួមរបារចំហៀង");
+            A("Expand sidebar", "ពង្រីករបារចំហៀង");
+            A("Show icons only (Ctrl+\\)", "បង្ហាញតែរូបតំណាង (Ctrl+\\)");
+            A("Show icons and names (Ctrl+\\)", "បង្ហាញរូបតំណាង និងឈ្មោះ (Ctrl+\\)");
+            A("Language: switch between English and Khmer (Ctrl+Shift+L)", "ភាសា៖ ប្ដូររវាងអង់គ្លេស និងខ្មែរ (Ctrl+Shift+L)");
             A("Full-screen card preview (F11)", "មើលកាតជាមុនពេញអេក្រង់ (F11)");
             A("Settings & Help…", "ការកំណត់ និងជំនួយ…");
             A("{0}, Theme Color, Language (Ctrl+Shift+L), Folders (Ctrl+Shift+F), All Settings (Ctrl+,), " +
