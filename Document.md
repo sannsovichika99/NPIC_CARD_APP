@@ -1,3 +1,41 @@
+### v1.0.1.0
+
+Release date: 2026-10-19
+
+This version adds picture export to 3D View, and removes a student from the list once their RFID card is saved. Card Studio shows this version as 1.0.1 (in Settings > Apps and in Check for Updates).
+
+## Feature
+* 3D View: Export image (I) saves a picture of the card as it is shown, with the same angle, zoom and framing
+* The picture is made larger than the screen, so the card keeps the detail of the card images
+* Three file types: PNG with a transparent background, PNG with a dark background, or JPEG with a dark background. The type used last is remembered
+* A transparent PNG is cropped to the card and its shadow, so it can be placed straight into a poster or document
+* Export all images (Shift+I): saves the same picture for every student in the list, one file per student (e.g. NPIC24001-3D.png), into one folder
+* The batch shows each card as it goes and a progress bar. Esc stops it, and the pictures already saved are kept
+* If files with the same names are already in the folder, Card Studio asks before replacing them
+* When the batch ends, it says how many pictures were saved, lists any that failed, and offers to open the folder
+* After you save one picture, Card Studio offers to open it
+* Video and image exports share one progress bar, and the toolbar drops the shortcut keys from the button names when the window is too narrow
+* RFID: when a card is saved, the student is removed from the loaded list and the next student is selected, so the next card can be tapped straight away
+* The status line says "removed from the list" after each saved card. This also applies when the card was already saved, or replaced
+* Khmer translations for all of the above
+
+## Change
+* The student is removed only from the list on screen, not from the Excel, CSV, Google Sheet, API or SQL source. A list opened from a file comes back in full the next time Card Studio starts
+* After cards are saved, the Total students tile and the Student Gallery show fewer students
+
+## Known issue
+* After an RFID card is saved, that student is gone from the list until the next start. To reprint a card first, reload the list with Import Students… (Ctrl+L). Print both sides before saving RFID numbers
+* PCs that never chose a CSV folder now see the new, empty default CSV folder in CSV Files…, not the folder of their student file. Click Change Folder… to pick it again
+* Cards printed in Classic before and after v1.0.0.8 look slightly different
+* Export video needs Windows Media Foundation. Windows N / KN editions need the Media Feature Pack first
+* Notifications are kept only until Card Studio is closed
+* The user guide (F1) does not explain Card Template…, Card Designer… or Backup & Restore… yet, and notifications only appear in the shortcut list
+* The user guide (F1) does not mention that a student leaves the list after the RFID card is saved
+* The user guide (F1 → Overview) still lists driver setup as a sidebar command
+* Help still lists .xls files, but import only accepts .xlsx / .xlsm
+
+---
+
 ### v1.0.0.9
 
 Release date: 2026-10-19
