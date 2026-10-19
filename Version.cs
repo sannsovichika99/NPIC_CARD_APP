@@ -6,5 +6,5 @@ using System.Reflection;
 //
 // Bump it for every release, or let the build stamp it:
 //     powershell -ExecutionPolicy Bypass -File Installer\build.ps1 -Version 1.2.0
-[assembly: AssemblyVersion("1.0.0.6")]
-[assembly: AssemblyFileVersion("1.0.0.6")]
+[assembly: AssemblyVersion("1.0.0.7")]
+[assembly: AssemblyFileVersion("1.0.0.7")]

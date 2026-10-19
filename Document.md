@@ -1,3 +1,44 @@
+### v1.0.0.7
+
+Release date: 2026-10-19
+
+This version adds a 3D card preview with video export, a notification bell, a collapsible sidebar, and much stronger Card Designer tools.
+
+## Feature
+* 3D View (sidebar, or Shift+F11): the card is shown as a real card (CR80, 0.76 mm thick, rounded corners) that you can turn, flip and zoom
+* 3D View controls: drag to turn, double-click or Space to flip, F / B to face front / back, A auto-spin, R reset, mouse wheel or + − to zoom
+* In 3D View, ← → (or PageUp / PageDown) move to the previous / next student, Home / End to the first / last. Esc closes
+* Export video (V): records the card turning as a 1920 × 1080, 30 fps, 8-second .mp4 file. Esc cancels, and an unfinished file is deleted
+* Notification bell: warnings, errors and finished jobs are kept in a list under the bell (Ctrl+Shift+N)
+* The bell shows an unread badge, red when there is an unread warning or error
+* Click a notification to open the page it is about. The × removes one, and Clear all empties the list
+* Sidebar: show icons only or icons with names (Ctrl+\). The choice is remembered. In icon-only mode a tooltip shows each name
+* Card Template…: right-click a built-in design (or click "Copy as new design") to copy it into My designs, then edit it in Card Designer or use it as it is
+* Card Designer: new shapes, Triangle and Curve, which point Up / Down / Left / Right
+* Card Designer: rotate shapes with the rotate knob (Shift = 15° steps, snaps to 0 / 90 / 180 / 270°) or Rotate 90° left / right. Resizing follows the turned shape
+* Card Designer: select several elements (Ctrl / Shift + click, drag a box, Ctrl+A) and edit their shared properties at once
+* Card Designer: Group (Ctrl+G) and Ungroup (Ctrl+Shift+G). Double-click a grouped element to edit it alone
+* Card Designer: Align left / centre / right and top / middle / bottom, distribute with equal gaps, and same width / height as the key element
+* Card Designer: "Line up with the card" aligns to the card instead of to each other
+* Card Designer: layers move together, and copies are added just above the top selected layer
+* System Info: Windows edition and build (Windows 11 is detected correctly), processor, memory and free disk space
+* System Info: the card design in use and the number of saved designs, and the web API, Google Sheet and SQL Server sources. Passwords, tokens and keys are never shown
+* Khmer translations for all of the above
+
+## Change
+* Popups now dim every monitor, not just the one they are on. The dim follows when a monitor is plugged in or removed
+* Sidebar: the language switch is now a globe item in icon-only mode
+* Copy System Info includes the new PC, card design and source details
+
+## Known issue
+* Export video needs Windows Media Foundation. Windows N / KN editions need the Media Feature Pack first
+* Notifications are kept only until Card Studio is closed
+* The user guide (F1) does not explain Card Template…, Card Designer…, 3D View or notifications yet
+* The user guide (F1 → Overview) still lists driver setup as a sidebar command
+* Help still lists .xls files, but import only accepts .xlsx / .xlsm
+
+---
+
 ### v1.0.0.6
 
 Release date: 2026-10-18
