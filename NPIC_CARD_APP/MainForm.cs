@@ -70,6 +70,12 @@ namespace NPIC_CARD_APP
         private StatCard _statStudents, _statSelected, _statPrinted;
         private TableLayoutPanel _dashboard;
         private bool _refreshOnActivate;   // photo folder opened in Explorer: re-read photos when the user comes back
+
+        /// <summary>
+        /// A backup was restored: the files on disk are newer than <see cref="_settings"/>, so nothing may save them
+        /// again before the restart (closing the window normally saves the settings).
+        /// </summary>
+        private bool _settingsReplaced;
         private NavItem _navGallery, _navHistory;
 
         // Sidebar: full (icons + names) or compact (icons only); Ctrl+\ or the button at its bottom switches.
@@ -165,6 +171,7 @@ namespace NPIC_CARD_APP
             base.OnShown(e);
             WarnIfLicenseExpiresSoon();
             CheckForUpdatesQuietly();
+            AutoBackupQuietly();
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
@@ -1223,6 +1230,7 @@ namespace NPIC_CARD_APP
 
         private void SaveSettings(bool notify)
         {
+            if (_settingsReplaced) return;   // a restored backup is on disk: keep it
             ReadUiToSettings();
             try
             {
@@ -1878,6 +1886,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.G: ShowGallery(); return true;
                 case Keys.Control | Keys.Oemcomma: ShowAllSettings(); return true;
                 case Keys.Control | Keys.Shift | Keys.F: ShowFolders(); return true;
+                case Keys.Control | Keys.Shift | Keys.B: ShowBackup(); return true;
                 case Keys.Control | Keys.Shift | Keys.C: ShowCsvFiles(); return true;
                 case Keys.Control | Keys.Shift | Keys.E: DriverSetup(); return true;
                 case Keys.Control | Keys.Shift | Keys.R: ShowRfidList(); return true;
@@ -2270,6 +2279,7 @@ namespace NPIC_CARD_APP
                 case SettingsHubChoice.Language: SwitchLanguage(!Lang.Khmer); break;
                 case SettingsHubChoice.ThemeColor: ChangeThemeColor(); break;
                 case SettingsHubChoice.Folders: ShowFolders(); break;
+                case SettingsHubChoice.Backup: ShowBackup(); break;
                 case SettingsHubChoice.AllSettings: ShowAllSettings(); break;
                 case SettingsHubChoice.DriverSetup: DriverSetup(); break;
                 case SettingsHubChoice.SystemInfo: ShowHelp(HelpForm.Page.SystemInfo); break;
@@ -2419,6 +2429,53 @@ namespace NPIC_CARD_APP
             SaveSettings(false);
             UpdatePreview();
             SetStatus("Photo folder: " + _settings.PhotoFolder);
+        }
+
+        /// <summary>
+        /// Backup &amp; Restore page (Ctrl+Shift+B). After a restore the app restarts without saving: the restored settings,
+        /// history and card files on disk must not be overwritten by the ones this window still holds.
+        /// </summary>
+        private void ShowBackup()
+        {
+            ReadUiToSettings();   // a backup saves the settings as they are now, tray values included
+            bool restored, changed;
+            using (var form = new BackupForm(_settings))
+            {
+                form.ShowDialog(this);
+                restored = form.Restored;
+                changed = form.SettingsChanged;
+            }
+            if (restored)
+            {
+                _settingsReplaced = true;
+                Application.Restart();
+                return;
+            }
+            if (changed) SaveSettings(false);
+        }
+
+        /// <summary>
+        /// Daily automatic backup at start-up (settings, history, RFID, logos, signatures, designs and CSV files; no photos),
+        /// in the background. Quiet when it works; a failure is shown in the status bar and tried again at the next start.
+        /// </summary>
+        private async void AutoBackupQuietly()
+        {
+            if (!BackupService.IsAutoBackupDue(_settings)) return;
+            SaveSettings(false);   // the backup reads settings.xml from disk
+            if (_settingsReplaced) return;
+            BackupSources src = BackupSources.From(_settings, false, _settings.BackupIncludeCsv);
+            try
+            {
+                await System.Threading.Tasks.Task.Run(() => BackupService.Create(src, BackupKind.Auto, null, CancellationToken.None));
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is InvalidOperationException)
+            {
+                if (!IsDisposed) SetStatus("Daily backup failed: " + ex.Message);
+                return;
+            }
+            if (IsDisposed || _settingsReplaced) return;
+            _settings.LastAutoBackup = DateTime.Now;
+            SaveSettings(false);
         }
 
         /// <summary>CSV Files page: the student CSVs of one folder. The file picked with Load Students is loaded here.</summary>

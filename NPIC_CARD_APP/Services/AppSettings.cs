@@ -63,7 +63,7 @@ namespace NPIC_CARD_APP.Services
 
         public string LastCsvPath { get; set; }
 
-        /// <summary>Folder listed by CSV Files…. Empty = the folder of <see cref="LastCsvPath"/>.</summary>
+        /// <summary>Folder listed by CSV Files…. Empty (older settings) = <see cref="DefaultCsvFolder"/>, set on load.</summary>
         public string CsvFolder { get; set; }
 
         /// <summary>Web API address for Import API… (remembered between runs).</summary>
@@ -168,6 +168,19 @@ namespace NPIC_CARD_APP.Services
         /// </summary>
         public string AvailableUpdateVersion { get; set; }
 
+        // ---- Backup & Restore page ----
+        /// <summary>Back up the app data once a day when Card Studio starts (photos not included; the last 10 are kept).</summary>
+        public bool AutoBackup { get; set; }
+
+        /// <summary>Last time the daily automatic backup succeeded (local time; MinValue = never).</summary>
+        public DateTime LastAutoBackup { get; set; }
+
+        /// <summary>Back Up Now also saves the student photos of the Photo Folder.</summary>
+        public bool BackupIncludePhotos { get; set; }
+
+        /// <summary>Back Up Now (and the daily backup) also save the student CSV files of the CSV folder.</summary>
+        public bool BackupIncludeCsv { get; set; }
+
         private static readonly byte[] SqlPasswordEntropy = Encoding.UTF8.GetBytes("NPIC_CARD_APP.SqlPassword");
 
         private static string Protect(string value, byte[] entropy)
@@ -267,10 +280,10 @@ namespace NPIC_CARD_APP.Services
             CardPrinterKeywords = "L8050;L8058;L18050;Card;PVC";
             ShowAllPrinters = false;
             DevModeBase64 = "";
-            PhotoFolder = "";
+            PhotoFolder = DefaultPhotoFolder;
             SignaturePath = "";
             LastCsvPath = "";
-            CsvFolder = "";
+            CsvFolder = DefaultCsvFolder;
             ApiUrl = "";
             ApiTokenProtected = "";
             GoogleSheetUrl = "";
@@ -293,6 +306,10 @@ namespace NPIC_CARD_APP.Services
             LastUpdateCheck = DateTime.MinValue;
             SkippedUpdateVersion = "";
             AvailableUpdateVersion = "";
+            AutoBackup = true;
+            LastAutoBackup = DateTime.MinValue;
+            BackupIncludePhotos = true;
+            BackupIncludeCsv = true;
             Slot1X = 0f;
             Slot1Y = 0f;
             Slot2X = 0f;
@@ -327,8 +344,53 @@ namespace NPIC_CARD_APP.Services
             }
         }
 
+        /// <summary>%AppData%\NPIC_CARD_APP\Photos — the Photo Folder until another one is chosen.</summary>
+        public static string DefaultPhotoFolder
+        {
+            get { return Path.Combine(Path.GetDirectoryName(FilePath), "Photos"); }
+        }
+
+        /// <summary>%AppData%\NPIC_CARD_APP\CSV — the folder listed by CSV Files… until another one is chosen.</summary>
+        public static string DefaultCsvFolder
+        {
+            get { return Path.Combine(Path.GetDirectoryName(FilePath), "CSV"); }
+        }
+
+        /// <summary>True when <paramref name="folder"/> is <see cref="DefaultPhotoFolder"/> (case and trailing \ ignored).</summary>
+        public static bool IsDefaultPhotoFolder(string folder) { return SameFolderPath(folder, DefaultPhotoFolder); }
+
+        /// <summary>True when <paramref name="folder"/> is <see cref="DefaultCsvFolder"/> (case and trailing \ ignored).</summary>
+        public static bool IsDefaultCsvFolder(string folder) { return SameFolderPath(folder, DefaultCsvFolder); }
+
+        /// <summary>Same folder, ignoring case, spaces around and a trailing \; false when either is empty.</summary>
+        public static bool SameFolderPath(string a, string b)
+        {
+            return !string.IsNullOrEmpty(a) && !string.IsNullOrEmpty(b) &&
+                string.Equals(a.Trim().TrimEnd('\\'), b.Trim().TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// No Photo Folder / CSV folder set (first run, older settings file, imported file) = the default folder in
+        /// %AppData%\NPIC_CARD_APP. A default folder is created when missing, so files can go into it straight away.
+        /// </summary>
+        private void ApplyFolderDefaults()
+        {
+            if (string.IsNullOrWhiteSpace(PhotoFolder)) PhotoFolder = DefaultPhotoFolder;
+            if (string.IsNullOrWhiteSpace(CsvFolder)) CsvFolder = DefaultCsvFolder;
+            if (IsDefaultPhotoFolder(PhotoFolder)) TryCreate(PhotoFolder);
+            if (IsDefaultCsvFolder(CsvFolder)) TryCreate(CsvFolder);
+        }
+
+        /// <summary>Creates <paramref name="folder"/>; false (no error) when Windows refuses — the Folders page shows it as missing.</summary>
+        public static bool TryCreate(string folder)
+        {
+            try { Directory.CreateDirectory(folder); return true; }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException) { return false; }
+        }
+
         public static AppSettings Load()
         {
+            AppSettings settings = null;
             try
             {
                 if (File.Exists(FilePath))
@@ -336,18 +398,19 @@ namespace NPIC_CARD_APP.Services
                     var serializer = new XmlSerializer(typeof(AppSettings));
                     using (FileStream fs = File.OpenRead(FilePath))
                     {
-                        var settings = (AppSettings)serializer.Deserialize(fs);
+                        settings = (AppSettings)serializer.Deserialize(fs);
                         if (settings.CardText == null) settings.CardText = new CardText();
                         settings.MigrateSignature();
-                        return settings;
                     }
                 }
             }
             catch
             {
-                // Corrupt settings file: fall back to defaults.
+                settings = null;   // Corrupt settings file: fall back to defaults.
             }
-            return new AppSettings { SlotMode = SlotMode.Auto };   // first run
+            if (settings == null) settings = new AppSettings { SlotMode = SlotMode.Auto };   // first run
+            settings.ApplyFolderDefaults();
+            return settings;
         }
 
         public void Save()
@@ -374,6 +437,9 @@ namespace NPIC_CARD_APP.Services
             copy.DriveApiKeyProtected = "";
             copy.OneDriveRefreshTokenProtected = "";
             copy.OneDriveAccount = "";
+            // The default folders are under this Windows user's AppData: the PC that imports the file uses its own defaults.
+            if (IsDefaultPhotoFolder(copy.PhotoFolder)) copy.PhotoFolder = "";
+            if (IsDefaultCsvFolder(copy.CsvFolder)) copy.CsvFolder = "";
             WriteTo(path, copy);
         }
 
@@ -389,6 +455,7 @@ namespace NPIC_CARD_APP.Services
                     var settings = (AppSettings)serializer.Deserialize(fs);
                     if (settings.CardText == null) settings.CardText = new CardText();
                     settings.MigrateSignature();
+                    settings.ApplyFolderDefaults();
                     return settings;
                 }
             }

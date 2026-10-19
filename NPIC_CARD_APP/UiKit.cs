@@ -161,6 +161,8 @@ namespace NPIC_CARD_APP
 
         public const string IcoKey ="";   // Permissions (key): Activate Card Studio
 
+        public const string IcoBackup = "";   // SaveLocal: Backup & Restore…
+
         // Popup header / message icons
         public const string IcoInfo = "", IcoWarning = "", IcoError = "", IcoQuestion = "",
             IcoLocation = "", IcoMove = "";

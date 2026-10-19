@@ -7,10 +7,10 @@ using System.Windows.Forms;
 namespace NPIC_CARD_APP
 {
     /// <summary>Page picked on the <see cref="SettingsHubForm"/>.</summary>
-    public enum SettingsHubChoice { None, DarkMode, ThemeColor, Folders, AllSettings, DriverSetup, SystemInfo, Updates, HelpAbout, License, Language }
+    public enum SettingsHubChoice { None, DarkMode, ThemeColor, Folders, Backup, AllSettings, DriverSetup, SystemInfo, Updates, HelpAbout, License, Language }
 
     /// <summary>
-    /// "Settings &amp; Help" page: Dark Mode, Theme Color…, Language, All Settings…, Folders…, Epson Driver Setup…,
+    /// "Settings &amp; Help" page: Dark Mode, Theme Color…, Language, All Settings…, Folders…, Backup &amp; Restore…, Epson Driver Setup…,
     /// Help &amp; About, System Info, Check for Updates and License… as a grouped list (Appearance · Settings &amp; files ·
     /// Printer · Help &amp; system), each row showing its current state on the right (dark mode switch, colour swatch,
     /// language flag, installed version, licence status). Picking a row closes the page and sets <see cref="Choice"/>; the
@@ -65,6 +65,9 @@ namespace NPIC_CARD_APP
                 "Every setting of the app and this PC: printer, tray, files, API, card text, fonts. Export, import or back them up.");
             HubRow folders = Row(SettingsHubChoice.Folders, "Folders…", Theme.IcoFolder, "Ctrl+Shift+F",
                 "Every folder the app uses: photos, backups, app data, card images. Open, change or create them.");
+            HubRow backup = Row(SettingsHubChoice.Backup, "Backup & Restore…", Theme.IcoBackup, "Ctrl+Shift+B",
+                "Save settings, print history, RFID cards, logos, signatures, card designs, photos and CSV files to one file, " +
+                "and bring them back. A daily backup runs by itself.");
 
             // ---- Printer ----
             HubRow driver = Row(SettingsHubChoice.DriverSetup, "Epson Driver Setup…", Theme.IcoPrint, "Ctrl+Shift+E",
@@ -89,7 +92,7 @@ namespace NPIC_CARD_APP
 
             var sections = new List<Control>();
             AddGroup(sections, "APPEARANCE", _first, color, language);
-            AddGroup(sections, "SETTINGS & FILES", all, folders);
+            AddGroup(sections, "SETTINGS & FILES", all, folders, backup);
             AddGroup(sections, "PRINTER", driver);
             AddGroup(sections, "HELP & SYSTEM", help, info, updates, licenseRow);
 
@@ -124,6 +127,7 @@ namespace NPIC_CARD_APP
             {
                 case Keys.Control | Keys.Oemcomma: Pick(SettingsHubChoice.AllSettings); return true;
                 case Keys.Control | Keys.Shift | Keys.F: Pick(SettingsHubChoice.Folders); return true;
+                case Keys.Control | Keys.Shift | Keys.B: Pick(SettingsHubChoice.Backup); return true;
                 case Keys.Control | Keys.Shift | Keys.E: Pick(SettingsHubChoice.DriverSetup); return true;
                 case Keys.Control | Keys.Shift | Keys.I: Pick(SettingsHubChoice.SystemInfo); return true;
                 case Keys.Control | Keys.U: Pick(SettingsHubChoice.Updates); return true;

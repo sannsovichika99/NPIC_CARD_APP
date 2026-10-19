@@ -21,7 +21,8 @@ namespace NPIC_CARD_APP
     ///   Load Students (Enter / double-click) = load the file into the main window
     ///   New… (Ctrl+N)   Add Files… (or drop .csv files on the list)   Edit (Ctrl+E) = open in Excel
     ///   Rename… (F2)    Duplicate    Delete (Del) = to the Recycle Bin    Copy Path (Ctrl+C)    Refresh (F5)
-    /// The folder is <see cref="AppSettings.CsvFolder"/>, or the folder of the last student file when none is chosen.
+    /// The folder is <see cref="AppSettings.CsvFolder"/> — by default %AppData%\NPIC_CARD_APP\CSV (Use Default goes back to
+    /// it) — or the folder of the last student file when none is set.
     /// </summary>
     public class CsvFilesForm : ModalForm
     {
@@ -61,7 +62,7 @@ namespace NPIC_CARD_APP
         private readonly DataGridView _grid, _preview;
         private readonly SplitContainer _split;
         private readonly Label _lblFolder, _lblDetails, _lblEmpty, _lblPreview;
-        private readonly Button _btnNew, _btnAdd, _btnEdit, _btnRename, _btnDuplicate, _btnDelete, _btnLoad, _btnExplorer;
+        private readonly Button _btnNew, _btnAdd, _btnEdit, _btnRename, _btnDuplicate, _btnDelete, _btnLoad, _btnExplorer, _btnDefault;
         private string _previewPath;
         private bool _refreshOnActivate;   // a file was opened in Excel / Explorer: it may have changed
 
@@ -91,19 +92,22 @@ namespace NPIC_CARD_APP
             };
             _btnExplorer = ModalUi.ToolButton("Show in Explorer", (s, e) => ShowInExplorer());
             Button btnFolder = ModalUi.ToolButton("Change Folder…", (s, e) => ChangeFolder());
-            _btnExplorer.Anchor = btnFolder.Anchor = AnchorStyles.Right;
+            _btnDefault = ModalUi.ToolButton("Use Default", (s, e) => UseDefaultFolder());
+            _btnExplorer.Anchor = btnFolder.Anchor = _btnDefault.Anchor = AnchorStyles.Right;
             var folderBar = new TableLayoutPanel
             {
-                Dock = DockStyle.Top, Height = 46, ColumnCount = 3, RowCount = 1, BackColor = Surface,
+                Dock = DockStyle.Top, Height = 46, ColumnCount = 4, RowCount = 1, BackColor = Surface,
                 Padding = new Padding(16, 8, 10, 0)
             };
             folderBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
             folderBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             folderBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            folderBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             folderBar.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
             folderBar.Controls.Add(_lblFolder, 0, 0);
             folderBar.Controls.Add(btnFolder, 1, 0);
-            folderBar.Controls.Add(_btnExplorer, 2, 0);
+            folderBar.Controls.Add(_btnDefault, 2, 0);
+            folderBar.Controls.Add(_btnExplorer, 3, 0);
 
             // ---- Toolbar ----
             _txtSearch = new TextBox { Width = 200, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(0, 5, 12, 0) };
@@ -135,6 +139,7 @@ namespace NPIC_CARD_APP
             tip.SetTip(_btnDuplicate, "Make a copy of the selected file in this folder");
             tip.SetTip(_btnDelete, "Move the selected file to the Recycle Bin (Del)");
             tip.SetTip(btnFolder, "Choose the folder this page lists");
+            tip.SetTip(_btnDefault, "List the default CSV folder in the app data folder:\n" + AppSettings.DefaultCsvFolder);
             tip.SetTip(_btnExplorer, "Open the folder in Windows Explorer with the selected file highlighted");
 
             // ---- File list ----
@@ -343,6 +348,8 @@ namespace NPIC_CARD_APP
 
         private void UpdateFolderLabel()
         {
+            bool isDefault = AppSettings.IsDefaultCsvFolder(_folder);
+            _btnDefault.Enabled = !(isDefault && Directory.Exists(_folder));
             if (_folder == null)
             {
                 _lblFolder.Text = "Folder: not chosen";
@@ -354,7 +361,8 @@ namespace NPIC_CARD_APP
             _lblFolder.Text = Lang.F("Folder: {0}", _folder) + (exists
                 ? "     " + Plural(_all.Count, "CSV file") + (_all.Count > 0 ? Lang.F(", {0} ready to load", ready) : "")
                 : Lang.T("     (not found)")) +
-                (string.IsNullOrEmpty(_settings.CsvFolder) ? Lang.T("     · folder of the last student file") : "");
+                (isDefault ? Lang.T("     · default folder")
+                    : string.IsNullOrEmpty(_settings.CsvFolder) ? Lang.T("     · folder of the last student file") : "");
             _lblFolder.ForeColor = exists ? TextMuted : Warning;
         }
 
@@ -664,13 +672,33 @@ namespace NPIC_CARD_APP
             using (var dlg = new FolderBrowserDialog
             {
                 Description = Lang.T("Folder with the student CSV files"),
-                SelectedPath = _folder != null && Directory.Exists(_folder) ? _folder : "",
+                SelectedPath = _folder != null && Directory.Exists(_folder) ? _folder
+                    : Directory.Exists(AppSettings.DefaultCsvFolder) ? AppSettings.DefaultCsvFolder : "",
                 ShowNewFolderButton = true
             })
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
                 if (string.Equals(dlg.SelectedPath, _settings.CsvFolder, StringComparison.OrdinalIgnoreCase)) return;
                 _settings.CsvFolder = dlg.SelectedPath;
+                SettingsChanged = true;
+            }
+            _txtSearch.Clear();
+            Reload();
+            if (_grid.Rows.Count > 0) _grid.Focus();
+        }
+
+        /// <summary>Lists %AppData%\NPIC_CARD_APP\CSV again (created if missing). Files are not moved.</summary>
+        private void UseDefaultFolder()
+        {
+            string folder = AppSettings.DefaultCsvFolder;
+            if (!AppSettings.TryCreate(folder))
+            {
+                AppDialog.Show(this, "Could not create the folder:\n" + folder, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            if (!AppSettings.IsDefaultCsvFolder(_settings.CsvFolder))
+            {
+                _settings.CsvFolder = folder;
                 SettingsChanged = true;
             }
             _txtSearch.Clear();

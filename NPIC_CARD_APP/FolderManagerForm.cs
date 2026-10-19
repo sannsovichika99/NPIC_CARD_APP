@@ -17,6 +17,7 @@ namespace NPIC_CARD_APP
     /// QR logos, card images, program folder, folders of the signature and the last student file), with its status
     /// and what is inside.
     ///   Open (Enter / double-click) = show in Explorer     Change… = choose another Photo Folder
+    ///   Use Default = Photo Folder back to %AppData%\NPIC_CARD_APP\Photos
     ///   Create = make a missing folder                     Copy Path (Ctrl+C)     Refresh (F5)
     /// Nothing is ever deleted from here. When the Photo Folder changes, <see cref="PhotoFolderChanged"/> tells the
     /// main window to save the settings and redraw the card.
@@ -58,7 +59,7 @@ namespace NPIC_CARD_APP
         private readonly TextBox _txtSearch;
         private readonly DataGridView _grid;
         private readonly Label _lblDetails, _lblEmpty;
-        private readonly Button _btnOpen, _btnChange, _btnCreate, _btnCopy;
+        private readonly Button _btnOpen, _btnChange, _btnDefault, _btnCreate, _btnCopy;
         private bool _refreshOnActivate;   // a folder was opened in Explorer: its contents may change
 
         /// <summary>True when Change… picked another Photo Folder (already stored in the settings, not saved yet).</summary>
@@ -87,6 +88,7 @@ namespace NPIC_CARD_APP
 
             _btnOpen   = ModalUi.ToolButton("Open", (s, e) => OpenSelected());
             _btnChange = ModalUi.ToolButton("Change…", (s, e) => ChangeSelected());
+            _btnDefault = ModalUi.ToolButton("Use Default", (s, e) => UseDefaultPhotoFolder());
             _btnCreate = ModalUi.ToolButton("Create", (s, e) => CreateSelected());
             _btnCopy   = ModalUi.ToolButton("Copy Path", (s, e) => CopySelectedPath());
 
@@ -94,6 +96,7 @@ namespace NPIC_CARD_APP
             toolbar.Controls.Add(_txtSearch);
             toolbar.Controls.Add(_btnOpen);
             toolbar.Controls.Add(_btnChange);
+            toolbar.Controls.Add(_btnDefault);
             toolbar.Controls.Add(_btnCreate);
             toolbar.Controls.Add(_btnCopy);
             toolbar.Controls.Add(ModalUi.ToolButton("Refresh", (s, e) => Reload()));
@@ -101,6 +104,7 @@ namespace NPIC_CARD_APP
             var tip = new ToolTip();
             tip.SetTip(_btnOpen, "Open the selected folder in Windows Explorer (Enter or double-click)");
             tip.SetTip(_btnChange, "Choose another folder for the selected row");
+            tip.SetTip(_btnDefault, "Use the default Photo Folder in the app data folder:\n" + AppSettings.DefaultPhotoFolder);
             tip.SetTip(_btnCreate, "Create the selected folder if it does not exist");
             tip.SetTip(_btnCopy, "Copy the folder path to the clipboard (Ctrl+C)");
 
@@ -278,6 +282,8 @@ namespace NPIC_CARD_APP
             Entry x = Selected;
             _btnOpen.Enabled = x != null && (x.State == FolderState.Ok || x.State == FolderState.Online);
             _btnChange.Enabled = x != null && x.Change != ChangeKind.None;
+            _btnDefault.Enabled = x != null && x.Change == ChangeKind.PhotoFolder &&
+                !(AppSettings.IsDefaultPhotoFolder(_settings.PhotoFolder) && x.State == FolderState.Ok);
             _btnCreate.Enabled = x != null && x.CanCreate && (x.State == FolderState.Missing || x.State == FolderState.NotCreated);
             _btnCopy.Enabled = x != null && !string.IsNullOrEmpty(x.Path);
 
@@ -325,13 +331,38 @@ namespace NPIC_CARD_APP
             using (var dlg = new FolderBrowserDialog
             {
                 Description = "Folder with photos named {StudentId}.jpg / .png",
-                SelectedPath = Directory.Exists(_settings.PhotoFolder ?? "") ? _settings.PhotoFolder : "",
+                SelectedPath = Directory.Exists(_settings.PhotoFolder ?? "") ? _settings.PhotoFolder
+                    : Directory.Exists(AppSettings.DefaultPhotoFolder) ? AppSettings.DefaultPhotoFolder : "",
                 ShowNewFolderButton = true
             })
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
                 if (string.Equals(dlg.SelectedPath, _settings.PhotoFolder, StringComparison.OrdinalIgnoreCase)) return;
                 _settings.PhotoFolder = dlg.SelectedPath;
+                PhotoFolderChanged = true;
+            }
+            Reload();
+        }
+
+        /// <summary>Photo Folder back to %AppData%\NPIC_CARD_APP\Photos (created if missing). Photos are not moved.</summary>
+        private void UseDefaultPhotoFolder()
+        {
+            Entry x = Selected;
+            if (x == null || x.Change != ChangeKind.PhotoFolder) return;
+            string folder = AppSettings.DefaultPhotoFolder;
+            try
+            {
+                Directory.CreateDirectory(folder);
+            }
+            catch (Exception ex)
+            {
+                AppDialog.Show(this, "Could not create the folder:\n" + folder + "\n\n" + ex.Message, Text,
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            if (!AppSettings.IsDefaultPhotoFolder(_settings.PhotoFolder))
+            {
+                _settings.PhotoFolder = folder;
                 PhotoFolderChanged = true;
             }
             Reload();
@@ -379,10 +410,13 @@ namespace NPIC_CARD_APP
             // ---- Photos ----
             const string photos = "Photos";
             bool hasPhotos = !string.IsNullOrEmpty(s.PhotoFolder);
+            bool isDefault = AppSettings.IsDefaultPhotoFolder(s.PhotoFolder);
             Entry photo = Make(photos, "Photo folder", s.PhotoFolder,
-                "Student photos named {StudentId}.jpg / .png — the cards read photos from here.", true, true);
+                "Student photos named {StudentId}.jpg / .png — the cards read photos from here. " +
+                "Default: the Photos folder in the app data folder.", true, true);
             photo.Change = ChangeKind.PhotoFolder;
-            if (photo.State == FolderState.Ok) photo.Contents = CountPhotos(s.PhotoFolder);
+            if (photo.State == FolderState.Ok)
+                photo.Contents = (isDefault ? Lang.T("Default") + "  ·  " : "") + CountPhotos(s.PhotoFolder);
             list.Add(photo);
 
             Entry backup = Make(photos, "Original photos", hasPhotos ? Path.Combine(s.PhotoFolder, BackupFolderName) : null,
@@ -424,6 +458,18 @@ namespace NPIC_CARD_APP
                 "Copies of the signature images chosen in Card Text… → Front → Director signature.", false, true);
             if (signatures.State == FolderState.Missing) signatures.State = FolderState.NotCreated;
             list.Add(signatures);
+            Entry backups = Make(data, "Backups", BackupService.BackupFolder,
+                "Backups made by Backup & Restore…: by hand, once a day by themselves, and just before a restore.", false, true);
+            if (backups.State == FolderState.Missing) backups.State = FolderState.NotCreated;
+            else if (backups.State == FolderState.Ok)
+            {
+                List<BackupFile> made = BackupService.List();
+                backups.Contents = Plural(made.Count, "backup") +
+                    (made.Count > 0 ? "  ·  " + Lang.T("newest") + " " + made[0].Created.ToString("yyyy-MM-dd HH:mm") +
+                                      "  ·  " + FormatSize(made.Sum(b => b.Size)) : "");
+            }
+            backups.ChangeHint = "Open Backup & Restore… with Ctrl+Shift+B.";
+            list.Add(backups);
 
             // ---- Program ----
             const string program = "Program";
@@ -455,9 +501,11 @@ namespace NPIC_CARD_APP
             list.Add(signature);
             list.Add(Make(files, "Last student file folder", ParentOf(s.LastCsvPath),
                 "Folder of the Excel / CSV file the students were last imported from.", false, false));
+            bool csvDefault = AppSettings.IsDefaultCsvFolder(s.CsvFolder);
             Entry csv = Make(files, "CSV folder", s.CsvFolder,
-                "Folder listed by CSV Files… When it is not set, CSV Files… lists the last student file folder.", false, false);
-            csv.ChangeHint = "Change it in CSV Files… → Change Folder… (Ctrl+Shift+C).";
+                "Folder listed by CSV Files… Default: the CSV folder in the app data folder.", false, csvDefault);
+            if (csv.State == FolderState.Ok && csvDefault) csv.Contents = Lang.T("Default") + "  ·  " + csv.Contents;
+            csv.ChangeHint = "Change it in CSV Files… → Change Folder… or Use Default (Ctrl+Shift+C).";
             list.Add(csv);
             if (!string.IsNullOrWhiteSpace(s.RfidCsvPath))
             {

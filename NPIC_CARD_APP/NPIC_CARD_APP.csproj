@@ -107,6 +107,9 @@
     <Compile Include="FolderManagerForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="BackupForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="PhotoFolderForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -165,6 +168,7 @@
     <Compile Include="Models\Student.cs" />
     <Compile Include="Services\ApiStudentLoader.cs" />
     <Compile Include="Services\AppSettings.cs" />
+    <Compile Include="Services\BackupService.cs" />
     <Compile Include="Services\CardText.cs" />
     <Compile Include="Services\CsvStudentLoader.cs" />
     <Compile Include="Services\ExcelStudentLoader.cs" />
