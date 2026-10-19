@@ -245,6 +245,16 @@ namespace NPIC_CARD_APP.Rendering
          Description("AsIs = as in the list. Uppercase = CAPITALS. KhmerDigits = 2025 → ២០២៥. KhmerDate = 24/01/2008 → ២៤ មករា ២០០៨.")]
         public CardValueFormat Format { get; set; }
 
+        [Category("3. Text"), DisplayName("Space left (mm)"),
+         Description("Empty space on the left of the value, in mm. When Label column is more than 0 the space is added after \": \"; " +
+                     "otherwise the whole line starts this far from the left edge of the box. 0 = no extra space.")]
+        public float SpaceLeft { get; set; }
+
+        [Category("3. Text"), DisplayName("Space right (mm)"),
+         Description("Empty space kept on the right of the value, in mm: the value stops this far before the right edge of the box " +
+                     "(a longer value shrinks to fit, and right / centre alignment moves in with it). 0 = no extra space.")]
+        public float SpaceRight { get; set; }
+
         [Category("4. Label"), DisplayName("Label"), Description("Optional text in front of the value, e.g. អត្តលេខ or ភេទ. Empty = value only.")]
         public string Label { get; set; }
 

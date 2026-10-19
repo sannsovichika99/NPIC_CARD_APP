@@ -355,6 +355,16 @@ namespace NPIC_CARD_APP
             A("Label size (pt)", "ទំហំស្លាក (pt)");
             A("Size of the label and the colon when Label column is more than 0. 0 = the same size as the value.",
                 "ទំហំស្លាក និងសញ្ញា : ពេល ជួរស្លាក ធំជាង 0។ 0 = ទំហំដូចតម្លៃ។");
+            A("Space left (mm)", "គម្លាតខាងឆ្វេង (mm)");
+            A("Empty space on the left of the value, in mm. When Label column is more than 0 the space is added after \": \"; " +
+              "otherwise the whole line starts this far from the left edge of the box. 0 = no extra space.",
+                "គម្លាតទទេនៅខាងឆ្វេងតម្លៃ គិតជា mm។ ពេល ជួរស្លាក ធំជាង 0 គម្លាតត្រូវបន្ថែមក្រោយ \": \"; " +
+                "បើមិនដូច្នោះទេ បន្ទាត់ទាំងមូលចាប់ផ្តើមឆ្ងាយពីគែមឆ្វេងនៃប្រអប់ប៉ុណ្ណេះ។ 0 = គ្មានគម្លាតបន្ថែម។");
+            A("Space right (mm)", "គម្លាតខាងស្តាំ (mm)");
+            A("Empty space kept on the right of the value, in mm: the value stops this far before the right edge of the box " +
+              "(a longer value shrinks to fit, and right / centre alignment moves in with it). 0 = no extra space.",
+                "គម្លាតទទេនៅខាងស្តាំតម្លៃ គិតជា mm៖ តម្លៃឈប់មុនគែមស្តាំនៃប្រអប់ប៉ុណ្ណេះ " +
+                "(តម្លៃវែងជាងនេះ នឹងរួមតូចឱ្យសម ហើយការតម្រឹមស្តាំ / កណ្តាល ក៏ផ្លាស់ទីចូលដែរ)។ 0 = គ្មានគម្លាតបន្ថែម។");
             A("Ornament", "គ្រឿងលម្អ");
             A("WatermarkPattern", "លំនាំស្នាមទឹក");
             A("Rotation (°)", "បង្វិល (°)");

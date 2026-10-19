@@ -594,6 +594,12 @@ namespace NPIC_CARD_APP
                 // Keep sizes usable whatever was typed
                 e.Width = Math.Max(0.3f, e.Width);
                 e.Height = Math.Max(0.3f, e.Height);
+                var field = e as FieldElement;
+                if (field != null)
+                {
+                    field.SpaceLeft = Math.Max(0f, field.SpaceLeft);
+                    field.SpaceRight = Math.Max(0f, field.SpaceRight);
+                }
             }
             _canvas.Invalidate();
             _layers.Invalidate();

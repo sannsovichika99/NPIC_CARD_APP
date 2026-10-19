@@ -227,6 +227,7 @@ namespace NPIC_CARD_APP.Rendering
             else value = FormatValue(FieldValue(e.Field, s, t), e.Format);
             TextFormatFlags align = Flags(e.Align);
             bool hasLabel = !string.IsNullOrEmpty(e.Label);
+            float rightX = e.X + e.Width - Math.Max(0f, e.SpaceRight);   // the value stops here
 
             if (hasLabel && e.LabelWidth > 0f)
             {
@@ -235,14 +236,15 @@ namespace NPIC_CARD_APP.Rendering
                 float labelPt = e.LabelSizePt > 0f ? e.LabelSizePt : e.SizePt;
                 DrawRuns(g, Runs(e.Label, e, e.LabelColor), labelPt, e.X, e.Y, e.LabelWidth, e.Height, TextFormatFlags.Left);
                 DrawRuns(g, Runs(":", e, e.LabelColor), labelPt, colonX, e.Y, 1.4f, e.Height, TextFormatFlags.Left);
-                float valueX = colonX + 1.3f;
-                DrawRuns(g, Runs(value, e, e.Color), e.SizePt, valueX, e.Y, Math.Max(0.5f, e.X + e.Width - valueX), e.Height, align);
+                float valueX = colonX + 1.3f + Math.Max(0f, e.SpaceLeft);
+                DrawRuns(g, Runs(value, e, e.Color), e.SizePt, valueX, e.Y, Math.Max(0.5f, rightX - valueX), e.Height, align);
                 return;
             }
 
             List<TextRun> runs = hasLabel ? Runs(e.Label, e, e.LabelColor) : new List<TextRun>();
             runs.AddRange(Runs(value, e, e.Color));
-            DrawRuns(g, runs, e.SizePt, e.X, e.Y, e.Width, e.Height, align);
+            float lineX = e.X + Math.Max(0f, e.SpaceLeft);
+            DrawRuns(g, runs, e.SizePt, lineX, e.Y, Math.Max(0.5f, rightX - lineX), e.Height, align);
         }
 
         private static string FormatValue(string value, CardValueFormat format)
