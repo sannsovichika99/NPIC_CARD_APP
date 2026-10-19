@@ -108,6 +108,15 @@ namespace NPIC_CARD_APP
             A("Section", "ផ្នែក");
             A("No setting matches the search.", "គ្មានការកំណត់ត្រូវនឹងការស្វែងរកទេ។");
             A("Needs attention", "ត្រូវការការយកចិត្តទុកដាក់");
+
+            // ---- Settings & Help (group headings and status) ----
+            A("APPEARANCE", "រូបរាង");
+            A("SETTINGS & FILES", "ការកំណត់ និងឯកសារ");
+            A("PRINTER", "ម៉ាស៊ីនបោះពុម្ព");
+            A("HELP & SYSTEM", "ជំនួយ និងប្រព័ន្ធ");
+            A("Active", "សកម្ម");
+            A("Expires soon", "ជិតផុតកំណត់");
+            A("Expired", "ផុតកំណត់");
             A("Nothing needs attention.", "គ្មានអ្វីត្រូវការការយកចិត្តទុកដាក់ទេ។");
             A("Copy value", "ចម្លងតម្លៃ");
             A("Copy setting and value", "ចម្លងការកំណត់ និងតម្លៃ");
