@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Printing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -16,8 +17,9 @@ namespace NPIC_CARD_APP
 {
     /// <summary>
     /// "About &amp; User Guide" page (F1), in English or Khmer: what Card Studio is, a first-time checklist, how to use
-    /// every part of the app, keyboard shortcuts, troubleshooting, and a live System info topic (version, data files,
-    /// printer, fonts, card images) that can be copied for support.
+    /// every part of the app, keyboard shortcuts, troubleshooting, and a live System info topic (version, this PC,
+    /// appearance, license, card design, student/photo sources, data files, printer, fonts, card images) that can be
+    /// copied for support. Secrets (API token, keys, passwords) are never shown — only whether they are saved.
     /// Topics are listed on the left; the search box looks through every topic (Enter / F3 = next match).
     /// The English | ខ្មែរ switch changes the whole page and is remembered in <see cref="AppSettings.HelpKhmer"/>.
     /// Ctrl+F = search, Esc = clear the search, then close.
@@ -54,6 +56,12 @@ namespace NPIC_CARD_APP
         private string _installedVersion, _installedDir;
         private int _historyTotal, _historyToday, _rfidCount;
         private string _historyError, _rfidError;
+        private string _windowsName, _cpuName;
+        private ulong _ramTotal, _ramFree;              // bytes; 0 = unknown
+        private long _diskFree = -1, _diskTotal = -1;   // bytes on the drive of the data folder; -1 = unknown
+        private string _diskName;
+        private int _designCount = -1;                  // saved Card Designer designs; -1 = unreadable
+        private string _designName, _designError;       // design the Custom template prints (null = starter layout)
 
         /// <param name="studentCount">Students loaded in the main window (-1 = unknown: the Activity row is left out).</param>
         /// <param name="studentSource">Where they came from (file name, API host, SQL server), or empty.</param>
@@ -250,8 +258,10 @@ namespace NPIC_CARD_APP
                 _btnCopy.Text = T("Copy System Info", "ចម្លងព័ត៌មានប្រព័ន្ធ");
                 _btnData.Text = T("Open Data Folder", "បើកថតទិន្នន័យ");
                 _tip.SetTip(_btnCopy, T(
-                    "Copy the version, file locations, printer, fonts and card images of this PC — paste it in a message to support.",
-                    "ចម្លងកំណែ ទីតាំងឯកសារ ម៉ាស៊ីនបោះពុម្ព ពុម្ពអក្សរ និងរូបភាពកាតនៃកុំព្យូទ័រនេះ — បិទភ្ជាប់វាក្នុងសារទៅអ្នកជំនួយបច្ចេកទេស។"));
+                    "Copy the version, Windows and PC details, card design, data sources, file locations, printer, fonts and card images " +
+                    "of this PC — paste it in a message to support. Passwords, tokens and keys are never included.",
+                    "ចម្លងកំណែ ព័ត៌មាន Windows និងកុំព្យូទ័រ ការរចនាកាត ប្រភពទិន្នន័យ ទីតាំងឯកសារ ម៉ាស៊ីនបោះពុម្ព ពុម្ពអក្សរ និងរូបភាពកាតនៃកុំព្យូទ័រនេះ " +
+                    "— បិទភ្ជាប់វាក្នុងសារទៅអ្នកជំនួយបច្ចេកទេស។ ពាក្យសម្ងាត់ token និង key មិនត្រូវបានចម្លងទេ។"));
                 _tip.SetTip(_btnData, T("Open ", "បើក ") + DataFolder +
                     T(" (settings, print history, RFID file).", " (ការកំណត់ ប្រវត្តិបោះពុម្ព ឯកសារ RFID)។"));
 
@@ -371,6 +381,109 @@ namespace NPIC_CARD_APP
 
             try { _rfidCount = RfidCardWriter.CheckFile(RfidCardWriter.FilePath(_settings)); }
             catch (Exception ex) { _rfidError = FirstLine(ex.Message); }
+
+            try
+            {
+                IList<CustomCardDesign> designs = CustomCardStore.All();
+                _designCount = designs.Count;
+                CustomCardDesign chosen = CustomCardStore.Find(_settings.CustomDesignId) ?? (designs.Count > 0 ? designs[0] : null);
+                _designName = chosen == null ? null : chosen.Name;
+            }
+            catch (Exception ex) { _designError = FirstLine(ex.Message); }
+
+            ReadPcFacts();
+        }
+
+        /// <summary>Windows edition, processor, memory and free disk space. Each fact on its own: one failing leaves it blank.</summary>
+        private void ReadPcFacts()
+        {
+            try
+            {
+                using (RegistryKey hklm = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine,
+                           Environment.Is64BitOperatingSystem ? RegistryView.Registry64 : RegistryView.Registry32))
+                {
+                    using (RegistryKey key = hklm.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion"))
+                    {
+                        if (key != null)
+                        {
+                            string product = key.GetValue("ProductName") as string;
+                            string release = (key.GetValue("DisplayVersion") ?? key.GetValue("ReleaseId")) as string;
+                            string build = key.GetValue("CurrentBuild") as string;
+                            object ubr = key.GetValue("UBR");
+                            int buildNo;
+                            // Windows 11 still says "Windows 10" in ProductName; build 22000 and later is Windows 11.
+                            if (product != null && int.TryParse(build, out buildNo) && buildNo >= 22000 &&
+                                product.StartsWith("Windows 10", StringComparison.OrdinalIgnoreCase))
+                                product = "Windows 11" + product.Substring("Windows 10".Length);
+                            if (!string.IsNullOrEmpty(product))
+                                _windowsName = product +
+                                               (string.IsNullOrEmpty(release) ? "" : " " + release) +
+                                               (string.IsNullOrEmpty(build) ? "" : "  ·  build " + build + (ubr == null ? "" : "." + ubr));
+                        }
+                    }
+                    using (RegistryKey cpu = hklm.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0"))
+                    {
+                        string name = cpu == null ? null : cpu.GetValue("ProcessorNameString") as string;
+                        if (!string.IsNullOrWhiteSpace(name)) _cpuName = string.Join(" ", name.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
+                    }
+                }
+            }
+            catch (Exception) { }
+
+            try
+            {
+                var info = new Microsoft.VisualBasic.Devices.ComputerInfo();
+                _ramTotal = info.TotalPhysicalMemory;
+                _ramFree = info.AvailablePhysicalMemory;
+            }
+            catch (Exception) { _ramTotal = _ramFree = 0; }
+
+            try
+            {
+                string root = Path.GetPathRoot(DataFolder);
+                if (!string.IsNullOrEmpty(root) && !root.StartsWith(@"\\", StringComparison.Ordinal))
+                {
+                    var drive = new DriveInfo(root);
+                    if (drive.IsReady)
+                    {
+                        _diskFree = drive.AvailableFreeSpace;
+                        _diskTotal = drive.TotalSize;
+                        _diskName = drive.Name.TrimEnd('\\');
+                    }
+                }
+            }
+            catch (Exception) { _diskFree = _diskTotal = -1; }
+        }
+
+        /// <summary>1 536 → "1.5 KB", 8 589 934 592 → "8.0 GB".</summary>
+        private static string Bytes(double bytes)
+        {
+            string[] units = { "bytes", "KB", "MB", "GB", "TB" };
+            int u = 0;
+            while (bytes >= 1024 && u < units.Length - 1) { bytes /= 1024; u++; }
+            return u == 0 ? bytes.ToString("N0") + " " + units[0] : bytes.ToString("0.0") + " " + units[u];
+        }
+
+        /// <summary>Web address without its query string or user info, which may hold a key or token.</summary>
+        private static string SafeUrl(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return url;
+            Uri uri;
+            if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out uri)) return url.Split('?')[0];
+            return uri.Scheme + "://" + uri.Authority + uri.AbsolutePath;   // Authority leaves out user:password@
+        }
+
+        /// <summary>"saved" / "missing" text for a DPAPI-encrypted secret (never shows the secret itself).</summary>
+        private string SecretState(string protectedValue, string plainValue, out bool warn)
+        {
+            warn = false;
+            if (string.IsNullOrEmpty(protectedValue)) return T("not saved", "មិនបានរក្សាទុក");
+            if (string.IsNullOrEmpty(plainValue))
+            {
+                warn = true;
+                return T("saved by another Windows user or PC — enter it again", "រក្សាទុកដោយអ្នកប្រើ Windows ឬកុំព្យូទ័រផ្សេង — សូមបញ្ចូលម្តងទៀត");
+            }
+            return T("saved (encrypted for this Windows user)", "បានរក្សាទុក (បានអ៊ិនគ្រីបសម្រាប់អ្នកប្រើ Windows នេះ)");
         }
 
         /// <summary>
@@ -951,9 +1064,62 @@ namespace NPIC_CARD_APP
             string version = VersionText(out versionWarn);
             w.Row(T("Version", "កំណែ"), version, versionWarn);
             w.Row(T("App folder", "ថតកម្មវិធី"), AppDomain.CurrentDomain.BaseDirectory);
-            w.Row("Windows", RuntimeInformation.OSDescription.Trim() + (Environment.Is64BitOperatingSystem ? " (64-bit)" : " (32-bit)"));
+            try
+            {
+                using (Process me = Process.GetCurrentProcess())
+                    w.Row(T("Running", "កំពុងដំណើរការ"), T(
+                        (Environment.Is64BitProcess ? "64-bit" : "32-bit") + "  ·  since " + me.StartTime.ToString("yyyy-MM-dd HH:mm") +
+                        "  ·  " + Bytes(me.WorkingSet64) + " memory in use",
+                        (Environment.Is64BitProcess ? "64-bit" : "32-bit") + "  ·  តាំងពី " + me.StartTime.ToString("yyyy-MM-dd HH:mm") +
+                        "  ·  ប្រើអង្គចងចាំ " + Bytes(me.WorkingSet64)));
+            }
+            catch (Exception) { }
+
+            w.Heading(T("This PC", "កុំព្យូទ័រនេះ"));
+            w.Row("Windows", (_windowsName ?? RuntimeInformation.OSDescription.Trim()) +
+                             (Environment.Is64BitOperatingSystem ? "  ·  64-bit" : "  ·  32-bit"));
             w.Row(".NET", RuntimeInformation.FrameworkDescription.Trim());
             w.Row(T("Computer / user", "កុំព្យូទ័រ / អ្នកប្រើ"), Environment.MachineName + " / " + Environment.UserName);
+            w.Row(T("Processor", "ប្រូសេស្ស័រ (CPU)"), (_cpuName ?? T("Unknown", "មិនស្គាល់")) +
+                  "  ·  " + Environment.ProcessorCount + T(" threads", " threads"));
+            if (_ramTotal > 0)
+            {
+                bool lowRam = _ramFree < 1024UL * 1024 * 1024;   // under 1 GB free: large photo sets and the 3D preview get slow
+                w.Row(T("Memory (RAM)", "អង្គចងចាំ (RAM)"), T(Bytes(_ramTotal) + " total  ·  " + Bytes(_ramFree) + " free",
+                                                             "សរុប " + Bytes(_ramTotal) + "  ·  នៅទំនេរ " + Bytes(_ramFree)),
+                      lowRam, lowRam ? T("close other programs", "សូមបិទកម្មវិធីផ្សេងៗ") : null);
+            }
+            if (_diskFree >= 0)
+            {
+                bool lowDisk = _diskFree < 1024L * 1024 * 1024;  // under 1 GB: settings, history and video export may fail
+                w.Row(T("Free disk space", "ទំហំថាសនៅទំនេរ"), T(Bytes(_diskFree) + " free of " + Bytes(_diskTotal) + " on " + _diskName,
+                                                               "នៅទំនេរ " + Bytes(_diskFree) + " ក្នុងចំណោម " + Bytes(_diskTotal) + " លើ " + _diskName),
+                      lowDisk, lowDisk ? T("drive of the data folder is almost full", "ថាសនៃថតទិន្នន័យជិតពេញហើយ") : null);
+            }
+            Screen[] screens = Screen.AllScreens;
+            Rectangle primary = Screen.PrimaryScreen.Bounds;
+            w.Row(T("Displays", "អេក្រង់"), T(
+                screens.Length + (screens.Length == 1 ? " display" : " displays") + "  ·  main " + primary.Width + " × " + primary.Height +
+                "  ·  scale " + Math.Round(DeviceDpi * 100 / 96f) + "%",
+                screens.Length + " អេក្រង់  ·  អេក្រង់ចម្បង " + primary.Width + " × " + primary.Height +
+                "  ·  ទំហំ " + Math.Round(DeviceDpi * 100 / 96f) + "%"));
+            CultureInfo culture = CultureInfo.CurrentCulture;
+            w.Row(T("Region & format", "តំបន់ និងទម្រង់"), culture.DisplayName + "  ·  " + DateTime.Now.ToString("d", culture) +
+                  "  ·  " + TimeZoneInfo.Local.DisplayName);
+
+            w.Heading(T("Appearance & language", "រូបរាង និងភាសា"));
+            w.Row(T("App language", "ភាសាកម្មវិធី"), Lang.IsKhmerCode(_settings.UiLanguage) ? T("Khmer", "ខ្មែរ") : T("English", "អង់គ្លេស"));
+            w.Row(T("Guide language", "ភាសាការណែនាំ"), _kh ? T("Khmer", "ខ្មែរ") : T("English", "អង់គ្លេស"));
+            w.Row(T("Colour theme", "ពណ៌ផ្ទៃ"), _settings.DarkMode ? T("Dark", "ងងឹត") : T("Light", "ភ្លឺ"));
+            w.Row(T("Primary colour", "ពណ៌ចម្បង"), AccentPalette.Describe(_settings.AccentColor));
+            w.Row(T("Sidebar", "របារចំហៀង"), _settings.SidebarCollapsed
+                ? T("Icons only", "តែរូបតំណាង")
+                : T("Icons and labels", "រូបតំណាង និងឈ្មោះ"));
+            bool breaks = KhmerBreaks.Available;
+            w.Row(T("Khmer line breaks", "ការកាត់បន្ទាត់អក្សរខ្មែរ"), breaks
+                ? T("Available", "អាចប្រើបាន")
+                : T("Not available — long Khmer text may wrap in the middle of a word",
+                    "មិនអាចប្រើបាន — អក្សរខ្មែរវែងៗអាចកាត់បន្ទាត់កណ្តាលពាក្យ"), !breaks);
 
             w.Heading(T("Updates", "បច្ចុប្បន្នភាព"));
             w.Row(T("Updates from", "បច្ចុប្បន្នភាពពី"), UpdateService.ReleasesPage);
@@ -999,29 +1165,115 @@ namespace NPIC_CARD_APP
                 : _rfidCount.ToString("N0"),
                 _rfidError != null);
 
+            w.Heading(T("Card design", "ការរចនាកាត"));
+            CardTemplate template = _settings.CardTemplate;
+            w.Row(T("Card template", "គំរូកាត"), CardTemplates.Find(template).Name);
+            if (template == CardTemplate.Custom)
+                w.Row(T("Custom design", "ការរចនាផ្ទាល់ខ្លួន"), _designName ?? T("Starter layout (no design saved yet)", "ប្លង់ចាប់ផ្តើម (មិនទាន់រក្សាទុកការរចនា)"),
+                      _designName == null, _designName == null ? T("open Card Designer… to make one", "បើក Card Designer… ដើម្បីបង្កើត") : null);
+            w.Row(T("Saved designs", "ការរចនាបានរក្សាទុក"), _designError != null
+                ? T("Card designs unreadable: ", "មិនអាចអានការរចនាកាត៖ ") + _designError
+                : _designCount.ToString("N0"), _designError != null);
+            w.Row(T("Card on tray", "កាតលើថាស"), DescribeOrientation(_settings.CardOrientation));
+            w.Row(T("Per tray load", "ក្នុងមួយដងដាក់ថាស"), DescribeSlotMode(_settings.SlotMode));
+            if (_settings.RotateFront180 || _settings.RotateBack180)
+                w.Row(T("Rotate 180°", "បង្វិល 180°"),
+                    _settings.RotateFront180 && _settings.RotateBack180 ? T("Front and back", "មុខ និងក្រោយ")
+                    : _settings.RotateFront180 ? T("Front", "មុខ") : T("Back", "ក្រោយ"));
+
+            w.Heading(T("Student & photo sources", "ប្រភពនិស្សិត និងរូបថត"));
+            int sources = 0;
+            if (!string.IsNullOrEmpty(_settings.LastCsvPath))
+            {
+                sources++;
+                bool csvFound = File.Exists(_settings.LastCsvPath);
+                w.Row(T("Last CSV / Excel file", "ឯកសារ CSV / Excel ចុងក្រោយ"), _settings.LastCsvPath, !csvFound,
+                      csvFound ? null : T("not found", "រកមិនឃើញ"));
+            }
+            if (!string.IsNullOrEmpty(_settings.CsvFolder))
+            {
+                sources++;
+                bool csvDir = Directory.Exists(_settings.CsvFolder);
+                w.Row(T("CSV folder", "ថត CSV"), _settings.CsvFolder, !csvDir, csvDir ? null : T("not found", "រកមិនឃើញ"));
+            }
+            bool warn;
+            if (!string.IsNullOrEmpty(_settings.ApiUrl))
+            {
+                sources++;
+                w.Row(T("Web API", "Web API"), SafeUrl(_settings.ApiUrl));
+                string state = SecretState(_settings.ApiTokenProtected, _settings.ApiToken, out warn);
+                w.Row(T("API token", "API token"), state, warn);
+            }
+            if (!string.IsNullOrEmpty(_settings.GoogleSheetUrl))
+            {
+                sources++;
+                w.Row(T("Google Sheet", "Google Sheet"), SafeUrl(_settings.GoogleSheetUrl));
+            }
+            if (!string.IsNullOrEmpty(_settings.SqlServer))
+            {
+                sources++;
+                w.Row("SQL Server", _settings.SqlServer +
+                      (string.IsNullOrEmpty(_settings.SqlDatabase) ? "" : "  ·  " + _settings.SqlDatabase) + "  ·  " +
+                      (_settings.SqlWindowsAuth
+                          ? T("Windows sign-in", "ចូលដោយ Windows")
+                          : T("SQL login ", "SQL login ") + _settings.SqlUser) +
+                      (_settings.SqlEncrypt ? T("  ·  encrypted", "  ·  បានអ៊ិនគ្រីប") : ""));
+                if (!_settings.SqlWindowsAuth)
+                {
+                    string state = SecretState(_settings.SqlPasswordProtected, _settings.SqlPassword, out warn);
+                    w.Row(T("SQL password", "ពាក្យសម្ងាត់ SQL"), state, warn);
+                }
+            }
+            bool hasPhotos = !string.IsNullOrEmpty(_settings.PhotoFolder);
+            bool photosFound = hasPhotos && Directory.Exists(_settings.PhotoFolder);
+            w.Row(T("Photo folder", "ថតរូបថត"), hasPhotos ? _settings.PhotoFolder : T("(not set)", "(មិនទាន់កំណត់)"), !photosFound,
+                hasPhotos && !photosFound ? T("not found", "រកមិនឃើញ") : null);
+            if (!string.IsNullOrEmpty(_settings.DriveFolderUrl))
+            {
+                string state = SecretState(_settings.DriveApiKeyProtected, _settings.DriveApiKey, out warn);
+                w.Row(T("Google Drive photos", "រូបថត Google Drive"), SafeUrl(_settings.DriveFolderUrl) + T("  ·  API key ", "  ·  API key ") + state, warn);
+            }
+            if (!string.IsNullOrEmpty(_settings.OneDriveFolder))
+            {
+                bool signedIn = !string.IsNullOrEmpty(_settings.OneDriveRefreshTokenProtected);
+                w.Row(T("OneDrive photos", "រូបថត OneDrive"), SafeUrl(_settings.OneDriveFolder) + "  ·  " + (signedIn
+                    ? T("signed in", "បានចូល") + (string.IsNullOrEmpty(_settings.OneDriveAccount) ? "" : " " + _settings.OneDriveAccount)
+                    : T("not signed in", "មិនទាន់ចូល")));
+            }
+            if (sources == 0)
+                w.Row(T("Student data", "ទិន្នន័យនិស្សិត"), T("No source set up yet — Import Students… (Ctrl+L)",
+                                                               "មិនទាន់កំណត់ប្រភព — Import Students… (Ctrl+L)"));
+
             w.Heading(T("Data files", "ឯកសារទិន្នន័យ"));
             w.Row(T("Settings", "ការកំណត់"), AppSettings.FilePath, !File.Exists(AppSettings.FilePath),
                 T("not saved yet", "មិនទាន់រក្សាទុក"));
+            if (File.Exists(AppSettings.BackupFilePath))
+                w.Row(T("Settings backup", "ការបម្រុងទុកការកំណត់"), AppSettings.BackupFilePath + "  ·  " +
+                      File.GetLastWriteTime(AppSettings.BackupFilePath).ToString("yyyy-MM-dd HH:mm"));
             w.Row(T("Print history", "ប្រវត្តិបោះពុម្ព"), PrintHistory.FilePath, !File.Exists(PrintHistory.FilePath),
                 T("nothing printed yet", "មិនទាន់បោះពុម្ពអ្វីទេ"));
             string rfid = RfidCardWriter.FilePath(_settings);
             w.Row(T("RFID file", "ឯកសារ RFID"), rfid, !File.Exists(rfid), T("no card saved yet", "មិនទាន់មានកាតរក្សាទុក"));
+            w.Row(T("Card designs", "ការរចនាកាត"), CustomCardStore.Folder);
 
             w.Heading(T("Printing", "ការបោះពុម្ព"));
             string printer = _settings.PrinterName;
             bool hasPrinter = !string.IsNullOrEmpty(printer);
-            bool installed = hasPrinter && PrinterSettings.InstalledPrinters.Cast<string>()
-                .Any(p => string.Equals(p, printer, StringComparison.OrdinalIgnoreCase));
+            string[] printers;
+            try { printers = PrinterSettings.InstalledPrinters.Cast<string>().ToArray(); }
+            catch (Exception) { printers = new string[0]; }   // print spooler stopped
+            bool installed = hasPrinter && printers.Any(p => string.Equals(p, printer, StringComparison.OrdinalIgnoreCase));
             w.Row(T("Card printer", "ម៉ាស៊ីនបោះពុម្ពកាត"), hasPrinter ? printer : T("(none selected)", "(មិនទាន់ជ្រើសរើស)"),
                 !hasPrinter || !installed,
                 hasPrinter && !installed ? T("not installed on this PC", "មិនបានដំឡើងលើកុំព្យូទ័រនេះ") : null);
             w.Row(T("Driver settings", "ការកំណត់ driver"), string.IsNullOrEmpty(_settings.DevModeBase64)
                 ? T("Driver defaults (Driver Setup… not used yet)", "លំនាំដើមរបស់ driver (មិនទាន់ប្រើ Driver Setup…)")
                 : T("Saved from Driver Setup…", "បានរក្សាទុកពី Driver Setup…"));
-            bool hasPhotos = !string.IsNullOrEmpty(_settings.PhotoFolder);
-            bool photosFound = hasPhotos && Directory.Exists(_settings.PhotoFolder);
-            w.Row(T("Photo folder", "ថតរូបថត"), hasPhotos ? _settings.PhotoFolder : T("(not set)", "(មិនទាន់កំណត់)"), !photosFound,
-                hasPhotos && !photosFound ? T("not found", "រកមិនឃើញ") : null);
+            int cardPrinters = printers.Count(_settings.IsCardPrinter);
+            w.Row(T("Printers on this PC", "ម៉ាស៊ីនបោះពុម្ពលើកុំព្យូទ័រនេះ"), T(
+                printers.Length + " installed  ·  " + cardPrinters + " card " + (cardPrinters == 1 ? "printer" : "printers"),
+                "បានដំឡើង " + printers.Length + "  ·  ម៉ាស៊ីនបោះពុម្ពកាត " + cardPrinters),
+                printers.Length == 0, printers.Length == 0 ? T("is the Print Spooler service running?", "តើសេវា Print Spooler កំពុងដំណើរការទេ?") : null);
 
             w.Heading(T("Card images", "រូបភាពកាត"));
             string[] missing = AssetStore.MissingFiles();
@@ -1035,6 +1287,29 @@ namespace NPIC_CARD_APP
             {
                 bool ok = CardFonts.IsInstalled(family);
                 w.Row(family, ok ? T("Installed", "បានដំឡើង") : T("Missing — a fallback font is used", "ខ្វះ — ប្រើពុម្ពអក្សរជំនួស"), !ok);
+            }
+            bool fontFiles = Directory.Exists(FontInstaller.FontsFolder);
+            w.Row(T("Font files", "ឯកសារពុម្ពអក្សរ"), FontInstaller.FontsFolder, !fontFiles,
+                  fontFiles ? null : T("not found — missing fonts cannot be installed", "រកមិនឃើញ — មិនអាចដំឡើងពុម្ពអក្សរដែលខ្វះបានទេ"));
+        }
+
+        private string DescribeOrientation(CardOrientation o)
+        {
+            switch (o)
+            {
+                case CardOrientation.Horizontal: return T("Horizontal", "ផ្តេក");
+                case CardOrientation.VerticalLeft: return T("Vertical (turn left 90°)", "បញ្ឈរ (បង្វិលឆ្វេង 90°)");
+                default: return T("Vertical (turn right 90°)", "បញ្ឈរ (បង្វិលស្តាំ 90°)");
+            }
+        }
+
+        private string DescribeSlotMode(SlotMode mode)
+        {
+            switch (mode)
+            {
+                case SlotMode.One: return T("1 — always slot 1 only", "1 — តែរន្ធទី 1 ជានិច្ច");
+                case SlotMode.Two: return T("2 — always slot 1 + slot 2", "2 — រន្ធទី 1 + រន្ធទី 2 ជានិច្ច");
+                default: return T("Auto — 2 cards per load when possible", "ស្វ័យប្រវត្តិ — 2 កាតក្នុងមួយដង នៅពេលអាច");
             }
         }
 
