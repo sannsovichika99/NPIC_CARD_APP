@@ -149,6 +149,31 @@ namespace NPIC_CARD_APP
                 "ការនាំចេញវីដេអូត្រូវការ Windows Media Foundation ដែលមិនមាននៅលើកុំព្យូទ័រនេះទេ។");
             A("On Windows N or KN editions, install the Media Feature Pack (Settings → Apps → Optional features), then try again.",
                 "លើ Windows ជំនាន់ N ឬ KN សូមដំឡើង Media Feature Pack (Settings → Apps → Optional features) រួចសាកល្បងម្ដងទៀត។");
+
+            // ---- 3D Card Preview: image export ----
+            A("Export image   I", "នាំចេញរូបភាព   I");
+            A("Export 3D card image", "នាំចេញរូបភាពកាត 3D");
+            A("PNG image, transparent background", "រូបភាព PNG ផ្ទៃខាងក្រោយថ្លា");
+            A("PNG image, dark background", "រូបភាព PNG ផ្ទៃខាងក្រោយងងឹត");
+            A("JPEG image, dark background", "រូបភាព JPEG ផ្ទៃខាងក្រោយងងឹត");
+            A("Image saved:", "បានរក្សាទុករូបភាព៖");
+            A("Could not export the image:", "មិនអាចនាំចេញរូបភាពបានទេ៖");
+
+            // ---- 3D Card Preview: images of all students ----
+            A("Export all images   Shift+I", "នាំចេញរូបភាពទាំងអស់   Shift+I");
+            A("Load a student list first.", "សូមផ្ទុកបញ្ជីនិស្សិតជាមុនសិន។");
+            A("Export images of all {0} students: choose the folder and file type",
+                "នាំចេញរូបភាពនិស្សិតទាំង {0} នាក់៖ ជ្រើសថត និងប្រភេទឯកសារ");
+            A("{0} of the {1} image files are already in this folder. Replace them?",
+                "ឯកសាររូបភាព {0} ក្នុងចំណោម {1} មានរួចហើយក្នុងថតនេះ។ ជំនួសវាឬ?");
+            A("Exporting images…  {0} / {1}", "កំពុងនាំចេញរូបភាព…  {0} / {1}");
+            A("Saving one image per student to {0}    |    Esc: cancel",
+                "កំពុងរក្សាទុករូបភាពម្នាក់មួយទៅ {0}    |    Esc៖ បោះបង់");
+            A("Export cancelled.", "បានបោះបង់ការនាំចេញ។");
+            A("Saved {0} of {1} images in:", "បានរក្សាទុករូបភាព {0} ក្នុងចំណោម {1} នៅក្នុង៖");
+            A("Not exported:", "មិនបាននាំចេញ៖");
+            A("… and {0} more", "… និង {0} ទៀត");
+            A("Open the folder now?", "បើកថតឥឡូវនេះឬ?");
         }
     }
 }

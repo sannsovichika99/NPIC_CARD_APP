@@ -24,6 +24,8 @@ namespace NPIC_CARD_APP
     ///   R                         reset the view
     ///   mouse wheel / + −         zoom
     ///   ← → / PageUp PageDown     previous / next student;  Home / End  first / last
+    ///   I                         export a picture of the card as it is shown (.png, transparent or dark background / .jpg)
+    ///   Shift+I                   the same picture for every student in the list, one file each, into one folder
     ///   V                         export a video of the card turning (.mp4, see Mp4VideoWriter)
     ///   Esc / Shift+F11           close (cancels a running video export)
     /// </summary>
@@ -61,6 +63,14 @@ namespace NPIC_CARD_APP
         private const double VideoYaw = -16, VideoPitch = 9;
         private const int ExportBudgetMs = 45;            // frames rendered per timer tick, so the window stays responsive
 
+        // ---- Image export: the view on screen, re-rendered so the card is drawn at its own (600 dpi) resolution ----
+        private const int ImageMaxSide = 8000;            // pixels; keeps a zoomed-in export within memory
+        private const int ImageMargin = 48;               // pixels left around the card + shadow in a transparent PNG
+        private static int _imageFilter = 1;              // last file type picked, as an ImageKind
+
+        /// <summary>Image file types, numbered as the entries of the save dialog's type list.</summary>
+        private enum ImageKind { TransparentPng = 1, DarkPng = 2, Jpeg = 3 }
+
         // Light from the upper left, in front of the card (world space: x right, y up, z toward the viewer).
         private static readonly double LightX, LightY, LightZ;
 
@@ -70,13 +80,24 @@ namespace NPIC_CARD_APP
             LightX = lx / len; LightY = ly / len; LightZ = lz / len;
         }
 
-        private enum ToolAction { Front, Back, Flip, Spin, Reset, Video, Close, Cancel }
+        private enum ToolAction { Front, Back, Flip, Spin, Reset, Image, AllImages, Video, Close, Cancel }
 
         private sealed class ToolButton
         {
             public ToolAction Action;
             public string Text;
+            public bool Compact;               // narrow screen: the label without its shortcut
             public Rectangle Bounds;
+
+            /// <summary>"Reset   R" → "Reset" when the toolbar has to be compact.</summary>
+            public string Shown
+            {
+                get
+                {
+                    int cut = Compact ? Text.LastIndexOf("   ", StringComparison.Ordinal) : -1;
+                    return cut > 0 ? Text.Substring(0, cut) : Text;
+                }
+            }
         }
 
         private readonly List<ToolButton> _buttons = new List<ToolButton>();
@@ -97,6 +118,25 @@ namespace NPIC_CARD_APP
         }
 
         private VideoExport _export;
+
+        /// <summary>A running "all students" image export: one student per timer tick.</summary>
+        private sealed class ImageBatch
+        {
+            public string Folder;
+            public string[] Paths;             // one file per student, same order as the list
+            public ImageKind Kind;
+            public double Yaw, Pitch, Zoom;    // the view every image is rendered from
+            public int Done, Saved;
+            public readonly List<string> Failed = new List<string>();
+            public int StartIndex;             // the student and view to return to afterwards
+            public double ViewYaw, ViewPitch;
+            public bool Spin;
+        }
+
+        private ImageBatch _batch;
+
+        /// <summary>A video or image export is running: the view and the toolbar wait for it.</summary>
+        private bool Busy { get { return _export != null || _batch != null; } }
 
         private readonly IList<Student> _students;
         private readonly AppSettings _settings;
@@ -147,6 +187,8 @@ namespace NPIC_CARD_APP
             AddButton(ToolAction.Flip, "Flip   Space");
             AddButton(ToolAction.Spin, "Auto spin   A");
             AddButton(ToolAction.Reset, "Reset   R");
+            AddButton(ToolAction.Image, "Export image   I");
+            AddButton(ToolAction.AllImages, "Export all images   Shift+I");
             AddButton(ToolAction.Video, "Export video   V");
             AddButton(ToolAction.Close, "✕  Close   Esc");
             _cancelButton = new ToolButton { Action = ToolAction.Cancel, Text = Lang.T("✕  Cancel   Esc") };
@@ -328,6 +370,11 @@ namespace NPIC_CARD_APP
                 ExportFrames();
                 return;
             }
+            if (_batch != null)
+            {
+                ExportNextImage();
+                return;
+            }
             bool changed = false;
 
             if (_tweenActive)
@@ -365,10 +412,10 @@ namespace NPIC_CARD_APP
         // ===================== Input =====================
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            if (_export != null)
+            if (Busy)
             {
-                // the view is not touched while a video is exported; Esc cancels it
-                if (keyData == Keys.Escape) { EndExport(false); return true; }
+                // the view is not touched while a video or images are exported; Esc cancels it
+                if (keyData == Keys.Escape) { CancelExport(); return true; }
                 return base.ProcessCmdKey(ref msg, keyData);
             }
             switch (keyData)
@@ -381,6 +428,8 @@ namespace NPIC_CARD_APP
                 case Keys.B: ShowFace(false); return true;
                 case Keys.A: ToggleSpin(); return true;
                 case Keys.R: ResetView(); return true;
+                case Keys.I: ExportImage(); return true;
+                case Keys.Shift | Keys.I: StartImageBatch(); return true;
                 case Keys.V: StartVideoExport(); return true;
                 case Keys.Add:
                 case Keys.Oemplus:
@@ -405,13 +454,13 @@ namespace NPIC_CARD_APP
         protected override void OnMouseWheel(MouseEventArgs e)
         {
             base.OnMouseWheel(e);
-            if (_export == null) Zoom(Math.Pow(1.12, e.Delta / 120.0));
+            if (!Busy) Zoom(Math.Pow(1.12, e.Delta / 120.0));
         }
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
-            if (_export != null || e.Button != MouseButtons.Left || HitTest(e.Location) != null) return;
+            if (Busy || e.Button != MouseButtons.Left || HitTest(e.Location) != null) return;
             _dragging = true;
             _dragMoved = false;
             _dragLast = e.Location;
@@ -464,7 +513,7 @@ namespace NPIC_CARD_APP
         protected override void OnMouseDoubleClick(MouseEventArgs e)
         {
             base.OnMouseDoubleClick(e);
-            if (_export == null && e.Button == MouseButtons.Left && HitTest(e.Location) == null) Flip();
+            if (!Busy && e.Button == MouseButtons.Left && HitTest(e.Location) == null) Flip();
         }
 
         protected override void OnMouseLeave(EventArgs e)
@@ -489,9 +538,11 @@ namespace NPIC_CARD_APP
                 case ToolAction.Flip: Flip(); break;
                 case ToolAction.Spin: ToggleSpin(); break;
                 case ToolAction.Reset: ResetView(); break;
+                case ToolAction.Image: ExportImage(); break;
+                case ToolAction.AllImages: StartImageBatch(); break;
                 case ToolAction.Video: StartVideoExport(); break;
                 case ToolAction.Close: Close(); break;
-                case ToolAction.Cancel: EndExport(false); break;
+                case ToolAction.Cancel: CancelExport(); break;
             }
         }
 
@@ -508,22 +559,35 @@ namespace NPIC_CARD_APP
 
         private static bool OnRight(ToolAction action)
         {
-            return action == ToolAction.Video || action == ToolAction.Close;
+            return action == ToolAction.Image || action == ToolAction.AllImages || action == ToolAction.Video ||
+                   action == ToolAction.Close;
         }
 
         private int ButtonWidth(ToolButton b)
         {
-            return TextRenderer.MeasureText(b.Text, _buttonFont).Width + 32;
+            return TextRenderer.MeasureText(b.Shown, _buttonFont).Width + 32;
         }
 
-        /// <summary>View buttons centred at the top of the screen; Export video and Close on the right edge.</summary>
+        /// <summary>
+        /// View buttons centred at the top of the screen; the export buttons and Close on the right edge.
+        /// When they do not all fit, the labels drop their shortcut keys.
+        /// </summary>
         private void LayoutButtons()
         {
             int total = 0, count = 0;
-            foreach (ToolButton b in _buttons)
+            for (int pass = 0; pass < 2; pass++)
             {
-                b.Bounds = new Rectangle(0, ToolbarTop, ButtonWidth(b), ToolbarHeight);
-                if (!OnRight(b.Action)) { total += b.Bounds.Width; count++; }
+                int all = 0;
+                total = 0;
+                count = 0;
+                foreach (ToolButton b in _buttons)
+                {
+                    b.Compact = pass == 1;
+                    b.Bounds = new Rectangle(0, ToolbarTop, ButtonWidth(b), ToolbarHeight);
+                    all += b.Bounds.Width + ToolbarGap;
+                    if (!OnRight(b.Action)) { total += b.Bounds.Width; count++; }
+                }
+                if (all + Edge + 2 * ToolbarGap <= ClientSize.Width) break;
             }
             total += ToolbarGap * Math.Max(0, count - 1);
 
@@ -560,7 +624,7 @@ namespace NPIC_CARD_APP
 
         private ToolButton HitTest(Point p)
         {
-            if (_export != null) return _cancelButton.Bounds.Contains(p) ? _cancelButton : null;
+            if (Busy) return _cancelButton.Bounds.Contains(p) ? _cancelButton : null;
             foreach (ToolButton b in _buttons)
                 if (b.Bounds.Contains(p)) return b;
             return null;
@@ -581,7 +645,16 @@ namespace NPIC_CARD_APP
         {
             if (_export != null)
             {
-                DrawExportProgress(g);
+                double k = _export.Total <= 0 ? 1 : (double)_export.Done / _export.Total;
+                DrawProgress(g, k, Lang.F("Exporting video…  {0} %", (int)(Math.Min(1, k) * 100)));
+                DrawButton(g, _cancelButton, false);
+                return;
+            }
+            if (_batch != null)
+            {
+                int total = _batch.Paths.Length;
+                DrawProgress(g, total == 0 ? 1 : (double)_batch.Done / total,
+                    Lang.F("Exporting images…  {0} / {1}", _batch.Done, total));
                 DrawButton(g, _cancelButton, false);
                 return;
             }
@@ -597,15 +670,14 @@ namespace NPIC_CARD_APP
             using (GraphicsPath path = RoundedRect(b.Bounds, ToolbarHeight / 2f))
             using (var brush = new SolidBrush(back))
                 g.FillPath(brush, path);
-            TextRenderer.DrawText(g, b.Text, _buttonFont, b.Bounds, text,
+            TextRenderer.DrawText(g, b.Shown, _buttonFont, b.Bounds, text,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
         }
 
-        /// <summary>Progress pill in the middle of the toolbar while a video is exported.</summary>
-        private void DrawExportProgress(Graphics g)
+        /// <summary>Progress pill in the middle of the toolbar while a video or images are exported.</summary>
+        private void DrawProgress(Graphics g, double k, string label)
         {
-            VideoExport ex = _export;
-            double k = ex.Total <= 0 ? 1 : Math.Min(1, (double)ex.Done / ex.Total);
+            k = Math.Max(0, Math.Min(1, k));
             int w = Math.Max(120, Math.Min(460, _cancelButton.Bounds.Left - Edge - ToolbarGap));
             var bar = new Rectangle((ClientSize.Width - w) / 2, ToolbarTop, w, ToolbarHeight);
             if (bar.Right > _cancelButton.Bounds.Left - ToolbarGap) bar.X = Math.Max(Edge / 2, _cancelButton.Bounds.Left - ToolbarGap - w);
@@ -618,7 +690,7 @@ namespace NPIC_CARD_APP
                 using (var brush = new SolidBrush(ButtonOn)) g.FillPath(brush, path);
                 g.Restore(state);
             }
-            TextRenderer.DrawText(g, Lang.F("Exporting video…  {0} %", (int)(k * 100)), _buttonFont, bar, Color.White,
+            TextRenderer.DrawText(g, label, _buttonFont, bar, Color.White,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
         }
 
@@ -626,14 +698,14 @@ namespace NPIC_CARD_APP
         /// <summary>Asks for a file name, then records <see cref="VideoSeconds"/> of the card turning into an .mp4.</summary>
         private void StartVideoExport()
         {
-            if (_export != null) return;
+            if (Busy) return;
 
             string path;
             using (var dlg = new SaveFileDialog
             {
                 Title = Lang.T("Export 3D card video"),
                 Filter = Lang.T("MP4 video") + " (*.mp4)|*.mp4",
-                FileName = VideoFileName(),
+                FileName = ExportFileName(".mp4"),
                 DefaultExt = "mp4",
                 AddExtension = true,
                 OverwritePrompt = true
@@ -677,11 +749,25 @@ namespace NPIC_CARD_APP
             Invalidate();
         }
 
-        private string VideoFileName()
+        /// <summary>"&lt;student id&gt;-3D&lt;extension&gt;", the suggested name for an exported image or video.</summary>
+        private string ExportFileName(string extension)
         {
-            string name = _students.Count == 0 ? "card-back" : (_students[_index].StudentId ?? "").Trim();
+            return CardFileName(_students.Count == 0 ? null : _students[_index], extension);
+        }
+
+        /// <summary>"&lt;student id&gt;-3D&lt;extension&gt;"; "card-back-3D…" without a student.</summary>
+        private static string CardFileName(Student student, string extension)
+        {
+            string name = student == null ? "card-back" : (student.StudentId ?? "").Trim();
             foreach (char c in Path.GetInvalidFileNameChars()) name = name.Replace(c, '_');
-            return (name.Length == 0 ? "card" : name) + "-3D.mp4";
+            return (name.Length == 0 ? "card" : name) + "-3D" + extension;
+        }
+
+        /// <summary>Esc / Cancel while exporting: stops the video or the image batch.</summary>
+        private void CancelExport()
+        {
+            if (_export != null) EndExport(false);
+            else if (_batch != null) EndImageBatch(false, true);
         }
 
         /// <summary>Renders and encodes frames for about <see cref="ExportBudgetMs"/>, then lets the window repaint.</summary>
@@ -796,9 +882,373 @@ namespace NPIC_CARD_APP
             AppDialog.Show(this, text, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
+        // ===================== Image export =====================
+        /// <summary>
+        /// Saves the card as it is shown: same angle, zoom and framing as the screen, re-rendered larger so the card
+        /// face keeps the detail of the card images. A transparent PNG is cropped to the card and its shadow.
+        /// </summary>
+        private void ExportImage()
+        {
+            if (Busy) return;
+
+            // The view at the moment of the click: a tween or auto spin keeps running behind the file dialog.
+            double yaw = _tweenActive ? _tToYaw : _yaw, pitch = _tweenActive ? _tToPitch : _pitch, zoom = _zoom;
+
+            string path;
+            ImageKind kind;
+            using (SaveFileDialog dlg = ImageDialog(Lang.T("Export 3D card image")))
+            {
+                dlg.OverwritePrompt = true;
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                path = dlg.FileName;
+                _imageFilter = dlg.FilterIndex;
+                kind = KindFor(path, dlg.FilterIndex);
+            }
+
+            Cursor = Cursors.WaitCursor;
+            try
+            {
+                RenderAndSave(path, kind, yaw, pitch, zoom);
+            }
+            catch (Exception error)
+            {
+                AppDialog.Show(this, "Could not export the image:\n\n" + error.Message, Text,
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            finally
+            {
+                _lastTick = Now;
+                Cursor = Cursors.Default;
+                Invalidate();
+            }
+
+            if (AppDialog.Show(this, "Image saved:\n" + path + "\n\nOpen it now?", Text,
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+            {
+                try { Process.Start(path); }
+                catch (Exception error) { AppDialog.Show(this, error.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+            }
+        }
+
+        /// <summary>Save dialog for one image (or, in a batch, the folder and type), opened on the type used last.</summary>
+        private SaveFileDialog ImageDialog(string title)
+        {
+            if (_imageFilter < 1 || _imageFilter > 3) _imageFilter = 1;
+            string ext = Extension((ImageKind)_imageFilter);
+            return new SaveFileDialog
+            {
+                Title = title,
+                Filter = Lang.T("PNG image, transparent background") + " (*.png)|*.png|" +
+                         Lang.T("PNG image, dark background") + " (*.png)|*.png|" +
+                         Lang.T("JPEG image, dark background") + " (*.jpg)|*.jpg;*.jpeg",
+                FilterIndex = _imageFilter,
+                FileName = ExportFileName(ext),
+                DefaultExt = ext.Substring(1),
+                AddExtension = true
+            };
+        }
+
+        private static string Extension(ImageKind kind)
+        {
+            return kind == ImageKind.Jpeg ? ".jpg" : ".png";
+        }
+
+        /// <summary>The file name's extension decides JPEG or PNG; the type picked decides the PNG background.</summary>
+        private static ImageKind KindFor(string path, int filterIndex)
+        {
+            string ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext == ".jpg" || ext == ".jpeg") return ImageKind.Jpeg;
+            return filterIndex == (int)ImageKind.TransparentPng ? ImageKind.TransparentPng : ImageKind.DarkPng;
+        }
+
+        /// <summary>Renders the view (<paramref name="yaw"/>, <paramref name="pitch"/>, <paramref name="zoom"/>) at export size and writes it.</summary>
+        private void RenderAndSave(string path, ImageKind kind, double yaw, double pitch, double zoom)
+        {
+            double nowYaw = _yaw, nowPitch = _pitch, nowZoom = _zoom;
+            try
+            {
+                _yaw = yaw; _pitch = pitch; _zoom = zoom;
+                using (Bitmap image = RenderImage(kind == ImageKind.TransparentPng))
+                    SaveImage(image, path, kind == ImageKind.Jpeg);
+            }
+            finally
+            {
+                _yaw = nowYaw; _pitch = nowPitch; _zoom = nowZoom;
+                // drop the export-sized frame (the next paint makes a screen-sized one); a batch keeps the pixel buffer
+                if (_frame != null) { _frame.Dispose(); _frame = null; }
+                if (_batch == null) _buf = new int[0];
+            }
+        }
+
+        // ===================== Image export: all students =====================
+        /// <summary>
+        /// Asks for a folder and file type (through a save dialog), then saves the current view of every student's card,
+        /// named by student id. Runs one student per timer tick, so the window shows each card and Cancel works.
+        /// </summary>
+        private void StartImageBatch()
+        {
+            if (Busy) return;
+            if (_students.Count == 0)
+            {
+                AppDialog.Show(this, "Load a student list first.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            double viewYaw = _tweenActive ? _tToYaw : _yaw, viewPitch = _tweenActive ? _tToPitch : _pitch;
+            double yaw = viewYaw, pitch = viewPitch;
+            // The back is the same on every card: when it faces the viewer, turn the card round so each image shows its student.
+            if (Math.Cos(yaw * Math.PI / 180) * Math.Cos(pitch * Math.PI / 180) <= 0) yaw += 180;
+
+            string folder;
+            ImageKind kind;
+            using (SaveFileDialog dlg = ImageDialog(Lang.F("Export images of all {0} students: choose the folder and file type",
+                                                           _students.Count)))
+            {
+                dlg.OverwritePrompt = false;   // asked below, once for all files
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                folder = Path.GetDirectoryName(dlg.FileName);
+                _imageFilter = dlg.FilterIndex;
+                kind = KindFor(dlg.FileName, dlg.FilterIndex);
+            }
+
+            // one file per student, named by id; repeated or empty ids get -2, -3 …
+            string ext = Extension(kind);
+            var paths = new string[_students.Count];
+            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int existing = 0;
+            for (int i = 0; i < paths.Length; i++)
+            {
+                string file = CardFileName(_students[i], ext);
+                string stem = Path.GetFileNameWithoutExtension(file);
+                for (int n = 2; !used.Add(file); n++) file = stem + "-" + n + ext;
+                paths[i] = Path.Combine(folder, file);
+                if (File.Exists(paths[i])) existing++;
+            }
+            if (existing > 0 &&
+                AppDialog.Show(this, string.Format("{0} of the {1} image files are already in this folder. Replace them?",
+                                                   existing, paths.Length),
+                               Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                return;
+
+            _batch = new ImageBatch
+            {
+                Folder = folder,
+                Paths = paths,
+                Kind = kind,
+                Yaw = yaw,
+                Pitch = pitch,
+                Zoom = _zoom,
+                StartIndex = _index,
+                ViewYaw = viewYaw,
+                ViewPitch = viewPitch,
+                Spin = _autoSpin
+            };
+            // the screen shows each card from the angle it is saved at
+            _yaw = yaw;
+            _pitch = pitch;
+            _autoSpin = false;
+            _tweenActive = false;
+            _dragging = false;
+            _velYaw = _velPitch = 0;
+            _hover = null;
+            Cursor = Cursors.Default;
+            Invalidate();
+        }
+
+        /// <summary>Renders and saves the next student's image; ends the batch after the last one.</summary>
+        private void ExportNextImage()
+        {
+            ImageBatch b = _batch;
+            int i = b.Done;
+            if (i < b.Paths.Length)
+            {
+                Student s = _students[i];
+                string who = string.IsNullOrWhiteSpace(s.StudentId) ? "#" + (i + 1) : s.StudentId.Trim();
+                _index = i;
+                RenderFront();   // also what the screen shows next
+                if (_error != null)
+                {
+                    b.Failed.Add(who + ": " + _error);
+                }
+                else
+                {
+                    try
+                    {
+                        RenderAndSave(b.Paths[i], b.Kind, b.Yaw, b.Pitch, b.Zoom);
+                        b.Saved++;
+                    }
+                    catch (Exception error)
+                    {
+                        b.Failed.Add(who + ": " + error.Message);
+                    }
+                }
+                b.Done++;
+                if (b.Done < b.Paths.Length)
+                {
+                    Invalidate();
+                    return;
+                }
+            }
+            EndImageBatch(true, true);
+        }
+
+        /// <summary>
+        /// Stops the batch (images already saved are kept), returns to the student and view from before it and,
+        /// when <paramref name="report"/>, tells how many images were saved and offers to open the folder.
+        /// </summary>
+        private void EndImageBatch(bool completed, bool report)
+        {
+            ImageBatch b = _batch;
+            if (b == null) return;
+            _batch = null;
+            _buf = new int[0];
+
+            _index = b.StartIndex;
+            _yaw = b.ViewYaw;
+            _pitch = b.ViewPitch;
+            _autoSpin = b.Spin;
+            _lastTick = Now;
+            _hover = null;
+            if (!report) return;   // the window is closing
+
+            RenderFront();
+            Invalidate();
+
+            var text = new System.Text.StringBuilder();
+            if (!completed) text.Append("Export cancelled.\n\n");
+            text.Append(string.Format("Saved {0} of {1} images in:", b.Saved, b.Paths.Length)).Append('\n').Append(b.Folder);
+            if (b.Failed.Count > 0)
+            {
+                text.Append("\n\n").Append("Not exported:");
+                const int shown = 8;
+                for (int i = 0; i < b.Failed.Count && i < shown; i++) text.Append('\n').Append(b.Failed[i]);
+                if (b.Failed.Count > shown) text.Append('\n').Append(string.Format("… and {0} more", b.Failed.Count - shown));
+            }
+
+            if (b.Saved == 0)
+            {
+                AppDialog.Show(this, text.ToString(), Text, MessageBoxButtons.OK,
+                    completed ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+                return;
+            }
+            text.Append("\n\n").Append("Open the folder now?");
+            if (AppDialog.Show(this, text.ToString(), Text, MessageBoxButtons.YesNo,
+                    b.Failed.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information) == DialogResult.Yes)
+            {
+                try { Process.Start(b.Folder); }
+                catch (Exception error) { AppDialog.Show(this, error.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+            }
+        }
+
+        /// <summary>The current view at export size, on the dark backdrop or (cropped) on a transparent background.</summary>
+        private Bitmap RenderImage(bool transparent)
+        {
+            Rectangle screen = StageRect();
+            if (screen.Width < 40 || screen.Height < 40) screen = new Rectangle(0, 0, 1600, 900);
+
+            // scale the screen stage so that at 100 % zoom the card is as many pixels wide as its own image
+            int cardPx = Math.Max(_front != null ? _front.Width : 0, _back != null ? _back.Width : 0);
+            if (cardPx <= 0) cardPx = 2000;
+            double fit = Math.Min(screen.Width * 0.62 / _cardW, screen.Height * 0.64 / _cardH);   // as in RenderFrame
+            double k = Math.Max(1, cardPx / (_cardW * fit));
+            k = Math.Min(k, (double)ImageMaxSide / Math.Max(screen.Width, screen.Height));
+
+            var stage = new Rectangle(0, 0, (int)Math.Round(screen.Width * k), (int)Math.Round(screen.Height * k));
+            RenderFrame(stage, double.MaxValue);
+
+            Bitmap image = new Bitmap(stage.Width, stage.Height, PixelFormat.Format32bppArgb);
+            try
+            {
+                using (Graphics g = Graphics.FromImage(image))
+                {
+                    if (transparent)
+                    {
+                        g.Clear(Color.Transparent);
+                    }
+                    else
+                    {
+                        using (Bitmap backdrop = CreateBackdrop(stage.Size, stage))
+                            g.DrawImageUnscaled(backdrop, 0, 0);
+                    }
+                    g.CompositingMode = CompositingMode.SourceOver;
+                    g.DrawImageUnscaled(_frame, 0, 0);
+                }
+                if (transparent) image = CropToContent(image, ImageMargin);
+
+                // pixels per inch of the card at 100 % zoom, so the picture is about card-sized when placed in a document
+                float dpi = (float)(fit * k * 25.4);
+                image.SetResolution(dpi, dpi);
+                return image;
+            }
+            catch
+            {
+                image.Dispose();
+                throw;
+            }
+        }
+
+        /// <summary>Cuts a transparent image down to its visible pixels plus <paramref name="margin"/>; disposes the original when it does.</summary>
+        private static Bitmap CropToContent(Bitmap image, int margin)
+        {
+            int w = image.Width, h = image.Height;
+            int minX = w, minY = h, maxX = -1, maxY = -1;
+            var all = new Rectangle(0, 0, w, h);
+            var row = new int[w];
+            BitmapData data = image.LockBits(all, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            try
+            {
+                for (int y = 0; y < h; y++)
+                {
+                    Marshal.Copy(IntPtr.Add(data.Scan0, y * data.Stride), row, 0, w);
+                    for (int x = 0; x < w; x++)
+                    {
+                        if (((row[x] >> 24) & 255) <= 2) continue;
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        maxY = y;
+                    }
+                }
+            }
+            finally
+            {
+                image.UnlockBits(data);
+            }
+            if (maxX < 0) return image;   // nothing drawn
+
+            Rectangle crop = Rectangle.FromLTRB(minX - margin, minY - margin, maxX + 1 + margin, maxY + 1 + margin);
+            crop.Intersect(all);
+            if (crop == all) return image;
+            Bitmap cropped = image.Clone(crop, PixelFormat.Format32bppArgb);
+            image.Dispose();
+            return cropped;
+        }
+
+        private static void SaveImage(Bitmap image, string path, bool jpeg)
+        {
+            if (!jpeg)
+            {
+                image.Save(path, ImageFormat.Png);
+                return;
+            }
+            ImageCodecInfo codec = Array.Find(ImageCodecInfo.GetImageEncoders(), c => c.FormatID == ImageFormat.Jpeg.Guid);
+            if (codec == null)
+            {
+                image.Save(path, ImageFormat.Jpeg);
+                return;
+            }
+            using (var parameters = new EncoderParameters(1))
+            {
+                parameters.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 95L);
+                image.Save(path, codec, parameters);
+            }
+        }
+
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             EndExport(false);   // closing in the middle of a recording drops the unfinished file
+            EndImageBatch(false, false);   // images already saved stay
             base.OnFormClosing(e);
         }
 
@@ -898,13 +1348,14 @@ namespace NPIC_CARD_APP
         /// Renders shadow, rim and the visible face into <see cref="_frame"/>; returns the frame's scale to the stage.
         /// The card lies in its own x/y plane (mm, centred, y up); R = Ry(yaw)·Rx(pitch) turns it into the world,
         /// where the camera sits at (0, 0, D) looking down −z.
+        /// <paramref name="maxCardPixels"/> caps the card's width in the frame (the frame is then scaled up to the stage).
         /// </summary>
-        private double RenderFrame(Rectangle stage)
+        private double RenderFrame(Rectangle stage, double maxCardPixels = MaxRenderWidth)
         {
             double cw = _cardW, ch = _cardH;
             double fit = Math.Min(stage.Width * 0.62 / cw, stage.Height * 0.64 / ch);
             double screenScale = fit * _zoom;
-            double renderScale = Math.Min(1.0, MaxRenderWidth / (cw * screenScale));
+            double renderScale = Math.Min(1.0, maxCardPixels / (cw * screenScale));
             int fw = Math.Max(1, (int)Math.Ceiling(stage.Width * renderScale));
             int fh = Math.Max(1, (int)Math.Ceiling(stage.Height * renderScale));
             if (_frame == null || _frame.Width != fw || _frame.Height != fh)
@@ -1175,6 +1626,12 @@ namespace NPIC_CARD_APP
             {
                 help = Lang.F("Recording {0} × {1}, {2} s    |    Esc: cancel", VideoWidth, VideoHeight, VideoSeconds);
             }
+            else if (_batch != null)
+            {
+                string folder = Path.GetFileName(_batch.Folder.TrimEnd(Path.DirectorySeparatorChar));
+                help = Lang.F("Saving one image per student to {0}    |    Esc: cancel",
+                              string.IsNullOrEmpty(folder) ? _batch.Folder : folder);
+            }
             else
             {
                 string side = Lang.T(_frontFacing ? "Front" : "Back");
@@ -1208,6 +1665,7 @@ namespace NPIC_CARD_APP
             if (disposing)
             {
                 EndExport(false);
+                _batch = null;
                 _timer.Stop();
                 _timer.Dispose();
                 if (_front != null) _front.Dispose();
