@@ -83,6 +83,11 @@ namespace NPIC_CARD_APP
         private readonly List<KeyValuePair<NavItem, string>> _navTips = new List<KeyValuePair<NavItem, string>>();
         private bool _sidebarCompact;
 
+        // Bell in the header: warnings, errors and finished jobs of this session (fed by SetStatus).
+        private readonly NotificationCenter _notices = new NotificationCenter();
+        private NotificationBell _bell;
+        private ToolStripDropDown _noticePopup;
+
         // RFID tab of the Print setup card: save the printed card's chip UID to the RFID CSV file
         private PillTabs _setupTabs;
         private TextBox _txtRfid;
@@ -460,6 +465,19 @@ namespace NPIC_CARD_APP
                 AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, BackColor = Color.Transparent,
                 Margin = new Padding(0)
             };
+
+            _bell = new NotificationBell { Margin = new Padding(0, 5, 6, 0) };
+            _bell.Click += (s, e) => ShowNotifications();
+            _tip.SetTip(_bell, "Notifications: warnings, errors and finished jobs (Ctrl+Shift+N)");
+            _notices.Changed += (s, e) =>
+            {
+                _bell.UnreadCount = _notices.UnreadCount;
+                _bell.Alert = _notices.HasUnreadAlert;
+            };
+            _notices.Added += n => { if (n.Kind >= NoticeKind.Warning) _bell.Ring(); };
+            actions.Controls.Add(_bell);
+            actions.Controls.Add(new Panel { Width = 1, Height = 26, BackColor = Border, Margin = new Padding(6, 12, 10, 0) });
+
             actions.Controls.Add(new Label
             {
                 Text = "Print side", Font = Theme.Small, ForeColor = TextMuted, AutoSize = true,
@@ -1842,6 +1860,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.U: ShowUpdates(); return true;
                 case Keys.Control | Keys.Shift | Keys.L: SwitchLanguage(!Lang.Khmer); return true;
                 case Keys.Control | Keys.Oem5: ToggleSidebar(); return true;   // Ctrl+\
+                case Keys.Control | Keys.Shift | Keys.N: ShowNotifications(); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
@@ -2651,13 +2670,61 @@ namespace NPIC_CARD_APP
         private void SetStatus(string text)
         {
             _lblStatus.Text = text;
-            Color tone =
-                text.StartsWith("Error") || text.StartsWith("Preview error") ? Danger :
-                text.StartsWith("Missing") || text.StartsWith("No card printer") || text.StartsWith("Auto slots") ||
-                text.StartsWith("Printing cancelled") || text.StartsWith("License expires") ? Warning :
-                Success;
+            string title;
+            Action action;
+            NoticeKind kind = ClassifyStatus(text, out title, out action);
+            Color tone = kind == NoticeKind.Error ? Danger : kind == NoticeKind.Warning ? Warning : Success;
             _lblStatusDot.ForeColor = tone;
             _lblStatus.ForeColor = tone == Success ? TextMuted : tone;
+
+            if (title != null) _notices.Add(kind, Lang.T(title), Lang.T(text), action);
+        }
+
+        /// <summary>
+        /// Kind of a status message, and — for the ones worth keeping in the notification list (every warning and error,
+        /// and finished jobs) — its notification title and what clicking the notification opens. Other messages get no title.
+        /// </summary>
+        private NoticeKind ClassifyStatus(string text, out string title, out Action action)
+        {
+            title = null;
+            action = null;
+
+            // ---- errors ----
+            if (text.StartsWith("Preview error")) { title = "Preview error"; return NoticeKind.Error; }
+            if (text.StartsWith("Error")) { title = "Something went wrong"; return NoticeKind.Error; }
+
+            // ---- warnings ----
+            if (text.StartsWith("Missing in ")) { title = "Card files missing"; action = ShowFolders; return NoticeKind.Warning; }
+            if (text.StartsWith("Missing history")) { title = "Print history not saved"; action = ShowPrintHistory; return NoticeKind.Warning; }
+            if (text.StartsWith("Missing data")) { title = "No students found"; action = ShowImportPage; return NoticeKind.Warning; }
+            if (text.StartsWith("Missing")) { title = "Something is missing"; return NoticeKind.Warning; }
+            if (text.StartsWith("No card printer")) { title = "No card printer found"; action = CheckPrinter; return NoticeKind.Warning; }
+            if (text.StartsWith("Auto slots")) { title = "Tray slots"; return NoticeKind.Warning; }
+            if (text.StartsWith("Printing cancelled")) { title = "Printing stopped"; return NoticeKind.Warning; }
+            if (text.StartsWith("License expires")) { title = "License expiring soon"; action = ShowLicense; return NoticeKind.Warning; }
+            if (text.StartsWith("Could not")) { title = "Something went wrong"; return NoticeKind.Warning; }
+
+            // ---- finished jobs and news ----
+            if (text.StartsWith("Update available")) { title = "Update available"; action = () => ShowUpdates(); return NoticeKind.Info; }
+            if (text.StartsWith("Done: ")) { title = "Printing finished"; action = ShowPrintHistory; return NoticeKind.Success; }
+            if (text.StartsWith("Loaded ")) { title = "Students loaded"; action = ShowGallery; return NoticeKind.Success; }
+            if (text.StartsWith("Downloaded ")) { title = "Photos downloaded"; action = ShowPhotoFolderPage; return NoticeKind.Success; }
+            if (text.StartsWith("RFID card ")) { title = "RFID card saved"; action = ShowRfidList; return NoticeKind.Success; }
+            if (text.StartsWith("Settings imported")) { title = "Settings imported"; return NoticeKind.Success; }
+            if (text.StartsWith("Card design “")) { title = "Card design saved"; action = ShowCardDesigner; return NoticeKind.Success; }
+            return NoticeKind.Success;
+        }
+
+        /// <summary>Opens (or closes) the notification list under the bell. Clicking a notification opens its page.</summary>
+        private void ShowNotifications()
+        {
+            if (_noticePopup != null && !_noticePopup.IsDisposed && _noticePopup.Visible)
+            {
+                _noticePopup.Close();
+                return;
+            }
+            if (NotificationPopup.JustClosed) return;   // this click on the bell is what closed it
+            _noticePopup = NotificationPopup.Show(_bell, _notices, notice => notice.Action());
         }
 
         /// <summary>Shows the whole error chain (Ctrl+C in the message box copies it).</summary>

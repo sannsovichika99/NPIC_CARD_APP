@@ -120,6 +120,7 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="UiKit.cs" />
+    <Compile Include="Notifications.cs" />
     <Compile Include="AccentPalette.cs" />
     <Compile Include="ThemeColorForm.cs">
       <SubType>Form</SubType>

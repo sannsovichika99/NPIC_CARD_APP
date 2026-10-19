@@ -854,6 +854,7 @@ namespace NPIC_CARD_APP
             w.Key("Ctrl+P", T("Print the selected students", "បោះពុម្ពនិស្សិតដែលបានជ្រើស"));
             w.Key("F11", T("Full-screen card preview", "មើលកាតជាមុនពេញអេក្រង់"));
             w.Key("Shift+F11", T("3D card preview", "មើលកាតជាមុន 3D"));
+            w.Key("Ctrl+Shift+N", T("Notifications", "ការជូនដំណឹង"));
             w.Key("Ctrl+\\", T("Sidebar: icons only / icons and names", "របារចំហៀង៖ តែរូបតំណាង / រូបតំណាង និងឈ្មោះ"));
             w.Key("Ctrl+L", T("Import Students page", "ទំព័រ Import Students"));
             w.Key("Ctrl+E / Ctrl+O", T("Import from Excel / CSV", "នាំចូលពី Excel / CSV"));

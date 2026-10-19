@@ -129,6 +129,36 @@ namespace NPIC_CARD_APP
                 "កែអត្ថបទថេរដែលបោះពុម្ពលើកាត និងជ្រើសហត្ថលេខានាយក");
             A("APP", "កម្មវិធី");
             A("Full Screen", "អេក្រង់ពេញ");
+
+            // ---- Notifications (bell in the header) ----
+            A("Notifications", "ការជូនដំណឹង");
+            A("Notifications: warnings, errors and finished jobs (Ctrl+Shift+N)",
+                "ការជូនដំណឹង៖ ការព្រមាន កំហុស និងការងារដែលបានបញ្ចប់ (Ctrl+Shift+N)");
+            A("Clear all", "សម្អាតទាំងអស់");
+            A("{0} new", "ថ្មី {0}");
+            A("Just now", "មុននេះបន្តិច");
+            A("{0} min ago", "{0} នាទីមុន");
+            A("{0} h ago", "{0} ម៉ោងមុន");
+            A("You're all caught up", "គ្មានការជូនដំណឹងថ្មីទេ");
+            A("Warnings, errors and finished jobs appear here.", "ការព្រមាន កំហុស និងការងារដែលបានបញ្ចប់ នឹងបង្ហាញនៅទីនេះ។");
+            A("Preview error", "កំហុសការមើលជាមុន");
+            A("Something went wrong", "មានបញ្ហាកើតឡើង");
+            A("Card files missing", "ខ្វះឯកសារកាត");
+            A("Print history not saved", "មិនបានរក្សាទុកប្រវត្តិបោះពុម្ព");
+            A("No students found", "រកមិនឃើញនិស្សិត");
+            A("Something is missing", "មានអ្វីមួយខ្វះ");
+            A("No card printer found", "រកមិនឃើញម៉ាស៊ីនបោះពុម្ពកាត");
+            A("Tray slots", "រន្ធថាស");
+            A("Printing stopped", "បានឈប់បោះពុម្ព");
+            A("License expiring soon", "អាជ្ញាប័ណ្ណជិតផុតកំណត់");
+            A("Update available", "មានកំណែថ្មី");
+            A("Printing finished", "បោះពុម្ពរួចរាល់");
+            A("Students loaded", "បានផ្ទុកនិស្សិត");
+            A("Photos downloaded", "បានទាញយករូបថត");
+            A("RFID card saved", "បានរក្សាទុកកាត RFID");
+            A("Settings imported", "បាននាំចូលការកំណត់");
+            A("Card design saved", "បានរក្សាទុកការរចនាកាត");
+
             A("Collapse sidebar", "បង្រួមរបារចំហៀង");
             A("Expand sidebar", "ពង្រីករបារចំហៀង");
             A("Show icons only (Ctrl+\\)", "បង្ហាញតែរូបតំណាង (Ctrl+\\)");
