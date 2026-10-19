@@ -126,7 +126,7 @@ namespace NPIC_CARD_APP.Rendering
                 };
                 float[] rowTop = { 2f, 6.5f, 11f, 15.5f, 20f, 24.5f };   // even 4.5 mm spacing
                 //float[] rowTop = { 2.3f, 6.6f, 10.9f, 15.1f, 19.4f, 24.1f };
-                const float rowH = 4.2f, labelX = 26.2f, colonX = 41.0f, valueX = 42.4f;
+                const float rowH = 4.2f, labelX = 26.2f, colonX = 41.7f, valueX = 43.6f;   // label 15.5 mm, 0.6 mm after the colon
 
                 for (int i = 0; i < labels.Length; i++)
                 {
@@ -137,8 +137,11 @@ namespace NPIC_CARD_APP.Rendering
                     DrawText(g, ":", CardFonts.KhmerSiemreap, FieldPt, FontStyle.Regular, Navy, colonX, y, 1.4f, rowH, TextFormatFlags.Left);
                     DrawText(g, values[i], CardFonts.KhmerSiemreap, FieldPt, FontStyle.Regular, Navy, valueX, y, valueW, rowH, TextFormatFlags.Left);
                 }
-                DrawText(g, "ជំនាន់ទី: " + KhmerText.Generation(s.Generation), CardFonts.KhmerSiemreap, FieldPt, FontStyle.Regular, Navy,
-                    69f, rowTop[5], 15f, rowH, TextFormatFlags.Left);
+                // Generation: 8 mm label column, then ": value"
+                DrawText(g, "ជំនាន់ទី", CardFonts.KhmerSiemreap, FieldPt, FontStyle.Regular, Navy, 69f, rowTop[5], 8f, rowH, TextFormatFlags.Left);
+                DrawText(g, ":", CardFonts.KhmerSiemreap, FieldPt, FontStyle.Regular, Navy, 77f, rowTop[5], 1.4f, rowH, TextFormatFlags.Left);
+                DrawText(g, KhmerText.Generation(s.Generation), CardFonts.KhmerSiemreap, FieldPt, FontStyle.Regular, Navy,
+                    78.3f, rowTop[5], 5.7f, rowH, TextFormatFlags.Left);
 
                 // Issue date
                 DrawText(g, t.IssueLine1, CardFonts.KhmerSiemreap, IssuePt, FontStyle.Regular, Blue, 34f, 31.3f, 48f, 3.6f, TextFormatFlags.Right);
@@ -146,9 +149,9 @@ namespace NPIC_CARD_APP.Rendering
 
                 // Director, stamp, signature
                 DrawText(g, t.DirectorTitle, CardFonts.Muol, DirectorTitlePt, FontStyle.Regular, Blue, 55f, 37.3f, 24.8f, 3.8f, TextFormatFlags.HorizontalCenter);
-                DrawAsset(g, AssetStore.Get("stamp.png", true, true), 56.7f, 38.1f, 12.2f, 12.2f, 1f, false);
-                DrawAsset(g, AssetStore.GetFile(t.SignatureFile, true, true), 61.5f, 41.4f + SignatureOffsetYMm, 13f, 5.6f, 1f, false);
-                DrawText(g, t.DirectorName, CardFonts.Muol, DirectorNamePt, FontStyle.Regular, Navy, 62.9f, 46.4f + SignatureOffsetYMm, 20f, 3.6f, TextFormatFlags.HorizontalCenter);
+                DrawAsset(g, AssetStore.Get("stamp.png", true, true), 51.3f, 37.5f, 12.2f, 12.2f, 1f, false);
+                DrawAsset(g, AssetStore.GetFile(t.SignatureFile, true, true), 57.5f, 41.5f, 13f, 5.6f, 1f, false);
+                DrawText(g, t.DirectorName, CardFonts.Muol, DirectorNamePt, FontStyle.Regular, Navy, 59f, 46.5f, 20f, 3.6f, TextFormatFlags.HorizontalCenter);
             }
             return bmp;
         }
@@ -189,18 +192,19 @@ namespace NPIC_CARD_APP.Rendering
                 DrawText(g, t.Website, CardFonts.KhmerSiemreap, ContactPt, FontStyle.Regular, Navy, 9.4f, 47.4f, 50f, 3.8f, TextFormatFlags.Left);
 
                 // QR + social icons
-                FillMm(g, Color.White, 68.3f, 33.8f, 11.3f, 11.3f);
+                FillMm(g, Color.White, 68.25f, 33.8f, 11.3f, 11.3f);
                 string backQr = t.BackQrSource == BackQrSource.Generate ? BuildBackQrText(t) : null;
                 Bitmap backQrLogo = backQr != null ? AssetStore.GetFile(t.BackQrLogoFile, false, true) : null;
-                if (!TryDrawQr(g, backQr, 68.3f, 33.8f, 11.3f, backQrLogo, t.BackQrLogoPercent))
-                    DrawAsset(g, AssetStore.Get("qrcode_for_back_card.png", false, true), 68.6f, 34.1f, 10.7f, 10.7f, 1f, true);
+                if (!TryDrawQr(g, backQr, 68.25f, 33.8f, 11.3f, backQrLogo, t.BackQrLogoPercent))
+                    DrawAsset(g, AssetStore.Get("qrcode_for_back_card.png", false, true), 68.55f, 34.1f, 10.7f, 10.7f, 1f, true);
                 DrawText(g, "ស្កេនទីនេះសម្រាប់ព័ត៌មាន", CardFonts.SiemreapGoogle, ScanPt, FontStyle.Regular, Red,
                     65.5f, 45.4f, 16.8f, 2.8f, TextFormatFlags.HorizontalCenter);
 
-                string[] icons = { "facebook.png", "telegram.png", "youtube.png", "tiktok.png" };
-                const float iconSize = 2.5f, iconStep = 2.73f;
+                // Facebook, Telegram, YouTube, TikTok + map pin (the pin keeps its white, like an uploaded picture)
+                string[] icons = { "facebook.png", "telegram.png", "youtube.png", "tiktok.png", "maps.png" };
+                const float iconSize = 2.5f, iconStep = 3f;
                 for (int i = 0; i < icons.Length; i++)
-                    DrawAsset(g, AssetStore.Get(icons[i], true, true), 68.6f + i * iconStep, 48.4f, iconSize, iconSize, 1f, false);
+                    DrawAsset(g, AssetStore.Get(icons[i], i < 4, true), 66.5f + i * iconStep, 48f, iconSize, iconSize, 1f, false);
             }
             return bmp;
         }

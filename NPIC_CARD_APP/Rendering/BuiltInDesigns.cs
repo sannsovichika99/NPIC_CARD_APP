@@ -67,13 +67,20 @@ namespace NPIC_CARD_APP.Rendering
             for (int i = 0; i < Labels.Length; i++)
             {
                 float right = i == 5 ? 68.5f : 83f;   // the last row leaves room for the generation
-                f.Add(Fld(null, Fields[i], Labels[i], 41.0f - 26.2f, FieldPt, Navy, Navy, 26.2f, rows[i], right - 26.2f, 4.2f, CardTextAlign.Left));
+                FieldElement row = Fld(null, Fields[i], Labels[i], 15.5f, FieldPt, Navy, Navy, 26.2f, rows[i], right - 26.2f, 4.2f, CardTextAlign.Left);
+                row.SpaceLeft = 0.6f;
+                f.Add(row);
             }
-            f.Add(Fld(null, CardField.Generation, "ជំនាន់ទី: ", 0f, FieldPt, Navy, Navy, 69f, rows[5], 15f, 4.2f, CardTextAlign.Left));
+            f.Add(Fld(null, CardField.Generation, "ជំនាន់ទី", 8f, FieldPt, Navy, Navy, 69f, rows[5], 15f, 4.2f, CardTextAlign.Left));
 
             f.Add(Fld(null, CardField.IssueLine1, "", 0f, IssuePt, Blue, Blue, 34f, 31.3f, 48f, 3.6f, CardTextAlign.Right));
             f.Add(Fld(null, CardField.IssueLine2, "", 0f, IssuePt, Blue, Blue, 34f, 34.3f, 44f, 3.6f, CardTextAlign.Right));
-            Director(f, 55f, 37.3f, 1f);
+
+            // Director block: stamp, signature and name sit further left than in the other templates
+            f.Add(Fld(null, CardField.DirectorTitle, "", 0f, 6.6f, Blue, Blue, 55f, 37.3f, 24.8f, 3.8f, CardTextAlign.Center, CardFontFamily.KhmerOSMuol));
+            f.Add(Img("Stamp", CardImageSource.Stamp, 51.3f, 37.5f, 12.2f, 12.2f));
+            f.Add(Img("Signature", CardImageSource.Signature, 57.5f, 41.5f, 13f, 5.6f));
+            f.Add(Fld(null, CardField.DirectorName, "", 0f, 6.2f, Navy, Navy, 59f, 46.5f, 20f, 3.6f, CardTextAlign.Center, CardFontFamily.KhmerOSMuol));
         }
 
         private static void ClassicBack(List<CardElement> b)
@@ -96,9 +103,18 @@ namespace NPIC_CARD_APP.Rendering
             b.Add(Icon(CardImageSource.GlobeIcon, 6.3f, 49.3f));
             b.Add(Fld(null, CardField.Website, "", 0f, ContactPt, Navy, Navy, 9.4f, 47.4f, 50f, 3.8f, CardTextAlign.Left));
 
-            b.Add(new QrElement { Content = CardQrContent.BackQr, X = 68.3f, Y = 33.8f, Width = 11.3f, Height = 11.3f });
+            b.Add(new QrElement { Content = CardQrContent.BackQr, X = 68.25f, Y = 33.8f, Width = 11.3f, Height = 11.3f });
             b.Add(Txt("Scan here", ScanHere, CardFontFamily.Siemreap, ScanPt, Red, 65.5f, 45.4f, 16.8f, 2.8f, align: CardTextAlign.Center));
-            SocialRow(b, 68.6f, 48.4f);
+
+            // Social icons + map pin, grouped so they move together in Card Designer
+            CardImageSource[] icons = { CardImageSource.Facebook, CardImageSource.Telegram, CardImageSource.YouTube, CardImageSource.TikTok, CardImageSource.Maps };
+            for (int i = 0; i < icons.Length; i++)
+            {
+                ImageElement icon = Img(icons[i] == CardImageSource.Maps ? "Map" : null, icons[i], 66.5f + i * 3f, 48f, 2.5f, 2.5f);
+                icon.GroupId = "gclassicsocial";
+                if (icons[i] == CardImageSource.Maps) icon.RemoveWhite = false;
+                b.Add(icon);
+            }
         }
 
         // =====================================================================

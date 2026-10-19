@@ -645,6 +645,7 @@ namespace NPIC_CARD_APP
             {
                 case CardImageSource.Signature: e.Width = 13f; e.Height = 5.6f; break;
                 case CardImageSource.Facebook: case CardImageSource.Telegram: case CardImageSource.YouTube: case CardImageSource.TikTok:
+                case CardImageSource.Maps:
                 case CardImageSource.PinIcon: case CardImageSource.MailIcon: case CardImageSource.GlobeIcon:
                     e.Width = e.Height = 2.5f; break;
                 case CardImageSource.BackQrPicture: e.RemoveWhite = false; break;
@@ -910,6 +911,7 @@ namespace NPIC_CARD_APP
             m.Items.Add(Item("Telegram", () => AddImage(CardImageSource.Telegram)));
             m.Items.Add(Item("YouTube", () => AddImage(CardImageSource.YouTube)));
             m.Items.Add(Item("TikTok", () => AddImage(CardImageSource.TikTok)));
+            m.Items.Add(Item("Map", () => AddImage(CardImageSource.Maps)));
             m.Items.Add(new ToolStripSeparator());
             m.Items.Add(Item("Location icon", () => AddImage(CardImageSource.PinIcon)));
             m.Items.Add(Item("Email icon", () => AddImage(CardImageSource.MailIcon)));

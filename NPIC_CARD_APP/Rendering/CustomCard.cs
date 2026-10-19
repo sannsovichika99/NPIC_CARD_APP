@@ -74,7 +74,9 @@ namespace NPIC_CARD_APP.Rendering
         /// <summary>Diagonal "NPIC" pattern of the Classic back, clipped to the box.</summary>
         WatermarkPattern,
         /// <summary>Any PNG/JPG chosen in "File".</summary>
-        CustomFile
+        CustomFile,
+        /// <summary>Map pin (Assets\maps.png), shown next to the social icons on the Classic back.</summary>
+        Maps
     }
 
     public enum CardQrContent

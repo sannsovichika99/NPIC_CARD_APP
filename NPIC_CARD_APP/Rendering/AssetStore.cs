@@ -18,7 +18,7 @@ namespace NPIC_CARD_APP.Rendering
         public static readonly string[] RequiredFiles =
         {
             "npic_png.png", "ministry_of_labour_logo.png", "stamp.png", "qrcode_for_back_card.png",
-            "facebook.png", "telegram.png", "youtube.png", "tiktok.png"
+            "facebook.png", "telegram.png", "youtube.png", "tiktok.png", "maps.png"
         };
 
         private static readonly Dictionary<string, Bitmap> Cache = new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);

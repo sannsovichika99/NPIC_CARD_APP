@@ -176,6 +176,7 @@ namespace NPIC_CARD_APP
             A("Stamp", "ត្រា");
             A("Director signature (Card Text)", "ហត្ថលេខានាយក (អត្ថបទលើកាត)");
             A("Location icon", "រូបតំណាងទីតាំង");
+            A("Map", "ផែនទី");
             A("Email icon", "រូបតំណាងអ៊ីមែល");
             A("Website icon", "រូបតំណាងគេហទំព័រ");
             A("Ornament (Card Text)", "គ្រឿងលម្អ (អត្ថបទលើកាត)");

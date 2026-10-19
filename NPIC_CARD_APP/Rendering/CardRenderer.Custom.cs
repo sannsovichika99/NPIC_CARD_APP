@@ -334,6 +334,7 @@ namespace NPIC_CARD_APP.Rendering
                 case CardImageSource.Telegram: return "telegram.png";
                 case CardImageSource.YouTube: return "youtube.png";
                 case CardImageSource.TikTok: return "tiktok.png";
+                case CardImageSource.Maps: return "maps.png";
                 default: return "npic_png.png";
             }
         }

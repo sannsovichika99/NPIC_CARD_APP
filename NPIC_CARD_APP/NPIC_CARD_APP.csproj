@@ -240,6 +240,9 @@
     <Content Include="Assets\tiktok.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="Assets\maps.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <!-- Card fonts: installed at start-up (per user) and by the setup (all users) when missing. See Rendering\FontInstaller.cs. -->
   <ItemGroup>
