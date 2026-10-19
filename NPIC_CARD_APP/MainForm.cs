@@ -2732,9 +2732,13 @@ namespace NPIC_CARD_APP
                 string what = result.Status == RfidSaveStatus.Updated ? "replaced " + result.PreviousUid + " with"
                             : result.Status == RfidSaveStatus.Unchanged ? "already saved:"
                             : "saved";
-                ShowRfidResult("✓ " + s.StudentId + ": " + what + " " + uid + "  (" + DateTime.Now.ToString("HH:mm:ss") + ")", Success);
                 SetStatus("RFID card " + uid + " saved for " + Describe(s) + ".");
                 _txtRfid.Clear();
+
+                // The card is done: take the student off the list and go on to the next one.
+                bool removed = RemoveFromList(s);
+                ShowRfidResult("✓ " + s.StudentId + ": " + what + " " + uid + "  (" + DateTime.Now.ToString("HH:mm:ss") + ")" +
+                               (removed ? "  ·  removed from the list" : ""), Success);
             }
             catch (Exception ex)
             {
@@ -2746,6 +2750,33 @@ namespace NPIC_CARD_APP
                 SetRfidBusy(false);
                 _txtRfid.Focus();
             }
+        }
+
+        /// <summary>
+        /// Removes a student whose RFID card was saved from the loaded list (not from the Excel / CSV / database it came from)
+        /// and selects the student now in that row, so the next card can be tapped straight away. False when not in the list.
+        /// </summary>
+        private bool RemoveFromList(Student s)
+        {
+            int at = _students.IndexOf(s);
+            if (at < 0) return false;
+            int row = _view.IndexOf(s);
+
+            _students.RemoveAt(at);
+            ApplyFilter();   // rebinds the grid to the shorter list and updates the counts
+
+            if (_view.Count > 0)
+            {
+                int next = Math.Max(0, Math.Min(row < 0 ? 0 : row, _view.Count - 1));
+                SelectRow(next);
+                if (next < _grid.Rows.Count) _grid.FirstDisplayedScrollingRowIndex = Math.Max(0, next - 2);
+            }
+
+            // The RFID box now belongs to the newly selected student (the change happened while the upload was busy).
+            Student current = CurrentStudent();
+            _rfidStudentId = current == null ? null : current.StudentId;
+            UpdateRfidPanel();
+            return true;
         }
 
         // ===================== Misc =====================
