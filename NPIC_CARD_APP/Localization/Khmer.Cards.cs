@@ -135,6 +135,20 @@ namespace NPIC_CARD_APP
             A("Reset   R", "កំណត់ឡើងវិញ   R");
             A("    |    Drag: turn    Wheel: zoom    Space: flip    ← →: student    Esc: close",
                 "    |    អូស៖ បង្វិល    កង់កណ្ដុរ៖ ពង្រីក/បង្រួម    Space៖ ត្រឡប់    ← →៖ និស្សិត    Esc៖ បិទ");
+
+            // ---- 3D Card Preview: video export ----
+            A("Export video   V", "នាំចេញវីដេអូ   V");
+            A("✕  Cancel   Esc", "✕  បោះបង់   Esc");
+            A("Export 3D card video", "នាំចេញវីដេអូកាត 3D");
+            A("MP4 video", "វីដេអូ MP4");
+            A("Exporting video…  {0} %", "កំពុងនាំចេញវីដេអូ…  {0} %");
+            A("Recording {0} × {1}, {2} s    |    Esc: cancel", "កំពុងថត {0} × {1}, {2} វិនាទី    |    Esc៖ បោះបង់");
+            A("Video saved:", "បានរក្សាទុកវីដេអូ៖");
+            A("Could not export the video:", "មិនអាចនាំចេញវីដេអូបានទេ៖");
+            A("Video export needs Windows Media Foundation, which is missing on this computer.",
+                "ការនាំចេញវីដេអូត្រូវការ Windows Media Foundation ដែលមិនមាននៅលើកុំព្យូទ័រនេះទេ។");
+            A("On Windows N or KN editions, install the Media Feature Pack (Settings → Apps → Optional features), then try again.",
+                "លើ Windows ជំនាន់ N ឬ KN សូមដំឡើង Media Feature Pack (Settings → Apps → Optional features) រួចសាកល្បងម្ដងទៀត។");
         }
     }
 }

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -23,7 +24,8 @@ namespace NPIC_CARD_APP
     ///   R                         reset the view
     ///   mouse wheel / + −         zoom
     ///   ← → / PageUp PageDown     previous / next student;  Home / End  first / last
-    ///   Esc / Shift+F11           close
+    ///   V                         export a video of the card turning (.mp4, see Mp4VideoWriter)
+    ///   Esc / Shift+F11           close (cancels a running video export)
     /// </summary>
     public class CardPreview3DForm : Form
     {
@@ -52,6 +54,13 @@ namespace NPIC_CARD_APP
         private const double SpinSpeed = 40;              // degrees per second
         private const double MinZoom = 0.5, MaxZoom = 2.2;
 
+        // ---- Video export: one seamless loop of a full turn, Full HD H.264 ----
+        private const int VideoWidth = 1920, VideoHeight = 1080, VideoFps = 30;
+        private const double VideoSeconds = 8;
+        private const int VideoBitrate = 12000000;
+        private const double VideoYaw = -16, VideoPitch = 9;
+        private const int ExportBudgetMs = 45;            // frames rendered per timer tick, so the window stays responsive
+
         // Light from the upper left, in front of the card (world space: x right, y up, z toward the viewer).
         private static readonly double LightX, LightY, LightZ;
 
@@ -61,7 +70,7 @@ namespace NPIC_CARD_APP
             LightX = lx / len; LightY = ly / len; LightZ = lz / len;
         }
 
-        private enum ToolAction { Front, Back, Flip, Spin, Reset, Close }
+        private enum ToolAction { Front, Back, Flip, Spin, Reset, Video, Close, Cancel }
 
         private sealed class ToolButton
         {
@@ -71,7 +80,23 @@ namespace NPIC_CARD_APP
         }
 
         private readonly List<ToolButton> _buttons = new List<ToolButton>();
+        private readonly ToolButton _cancelButton;   // the only button while a video is exported
         private ToolButton _hover;
+
+        /// <summary>A running video export: frames are rendered and encoded a few per timer tick.</summary>
+        private sealed class VideoExport
+        {
+            public string FilePath;
+            public Mp4VideoWriter Writer;
+            public Bitmap Frame;               // the frame being written; also the live preview on screen
+            public Bitmap Backdrop;            // video-sized background with the spotlight
+            public int Done, Total;
+            public double StartYaw;
+            public double Yaw, Pitch, Zoom;    // the view to return to afterwards
+            public bool Spin;
+        }
+
+        private VideoExport _export;
 
         private readonly IList<Student> _students;
         private readonly AppSettings _settings;
@@ -122,7 +147,9 @@ namespace NPIC_CARD_APP
             AddButton(ToolAction.Flip, "Flip   Space");
             AddButton(ToolAction.Spin, "Auto spin   A");
             AddButton(ToolAction.Reset, "Reset   R");
+            AddButton(ToolAction.Video, "Export video   V");
             AddButton(ToolAction.Close, "✕  Close   Esc");
+            _cancelButton = new ToolButton { Action = ToolAction.Cancel, Text = Lang.T("✕  Cancel   Esc") };
 
             Text = Lang.T("3D Card Preview");
             FormBorderStyle = FormBorderStyle.None;
@@ -296,6 +323,11 @@ namespace NPIC_CARD_APP
             double now = Now;
             double dt = Math.Min(0.05, Math.Max(0, now - _lastTick));
             _lastTick = now;
+            if (_export != null)
+            {
+                ExportFrames();
+                return;
+            }
             bool changed = false;
 
             if (_tweenActive)
@@ -333,6 +365,12 @@ namespace NPIC_CARD_APP
         // ===================== Input =====================
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
+            if (_export != null)
+            {
+                // the view is not touched while a video is exported; Esc cancels it
+                if (keyData == Keys.Escape) { EndExport(false); return true; }
+                return base.ProcessCmdKey(ref msg, keyData);
+            }
             switch (keyData)
             {
                 case Keys.Escape:
@@ -343,6 +381,7 @@ namespace NPIC_CARD_APP
                 case Keys.B: ShowFace(false); return true;
                 case Keys.A: ToggleSpin(); return true;
                 case Keys.R: ResetView(); return true;
+                case Keys.V: StartVideoExport(); return true;
                 case Keys.Add:
                 case Keys.Oemplus:
                     Zoom(1.12); return true;
@@ -366,13 +405,13 @@ namespace NPIC_CARD_APP
         protected override void OnMouseWheel(MouseEventArgs e)
         {
             base.OnMouseWheel(e);
-            Zoom(Math.Pow(1.12, e.Delta / 120.0));
+            if (_export == null) Zoom(Math.Pow(1.12, e.Delta / 120.0));
         }
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
-            if (e.Button != MouseButtons.Left || HitTest(e.Location) != null) return;
+            if (_export != null || e.Button != MouseButtons.Left || HitTest(e.Location) != null) return;
             _dragging = true;
             _dragMoved = false;
             _dragLast = e.Location;
@@ -425,7 +464,7 @@ namespace NPIC_CARD_APP
         protected override void OnMouseDoubleClick(MouseEventArgs e)
         {
             base.OnMouseDoubleClick(e);
-            if (e.Button == MouseButtons.Left && HitTest(e.Location) == null) Flip();
+            if (_export == null && e.Button == MouseButtons.Left && HitTest(e.Location) == null) Flip();
         }
 
         protected override void OnMouseLeave(EventArgs e)
@@ -450,7 +489,9 @@ namespace NPIC_CARD_APP
                 case ToolAction.Flip: Flip(); break;
                 case ToolAction.Spin: ToggleSpin(); break;
                 case ToolAction.Reset: ResetView(); break;
+                case ToolAction.Video: StartVideoExport(); break;
                 case ToolAction.Close: Close(); break;
+                case ToolAction.Cancel: EndExport(false); break;
             }
         }
 
@@ -465,30 +506,48 @@ namespace NPIC_CARD_APP
             _buttons.Add(new ToolButton { Action = action, Text = Lang.T(text) });
         }
 
-        /// <summary>View buttons centred at the top of the screen; Close on the right edge.</summary>
+        private static bool OnRight(ToolAction action)
+        {
+            return action == ToolAction.Video || action == ToolAction.Close;
+        }
+
+        private int ButtonWidth(ToolButton b)
+        {
+            return TextRenderer.MeasureText(b.Text, _buttonFont).Width + 32;
+        }
+
+        /// <summary>View buttons centred at the top of the screen; Export video and Close on the right edge.</summary>
         private void LayoutButtons()
         {
             int total = 0, count = 0;
             foreach (ToolButton b in _buttons)
             {
-                int w = TextRenderer.MeasureText(b.Text, _buttonFont).Width + 32;
-                b.Bounds = new Rectangle(0, ToolbarTop, w, ToolbarHeight);
-                if (b.Action != ToolAction.Close) { total += w; count++; }
+                b.Bounds = new Rectangle(0, ToolbarTop, ButtonWidth(b), ToolbarHeight);
+                if (!OnRight(b.Action)) { total += b.Bounds.Width; count++; }
             }
             total += ToolbarGap * Math.Max(0, count - 1);
 
-            int x = (ClientSize.Width - total) / 2;
+            int right = ClientSize.Width - Edge / 2;
+            for (int i = _buttons.Count - 1; i >= 0; i--)
+            {
+                ToolButton b = _buttons[i];
+                if (!OnRight(b.Action)) continue;
+                right -= b.Bounds.Width;
+                b.Bounds = new Rectangle(right, ToolbarTop, b.Bounds.Width, ToolbarHeight);
+                right -= ToolbarGap;
+            }
+
+            // centred, but moved left when a narrow screen would make it run into the right-hand buttons
+            int x = Math.Max(Edge / 2, Math.Min((ClientSize.Width - total) / 2, right - total));
             foreach (ToolButton b in _buttons)
             {
-                int w = b.Bounds.Width;
-                if (b.Action == ToolAction.Close)
-                {
-                    b.Bounds = new Rectangle(ClientSize.Width - Edge / 2 - w, ToolbarTop, w, ToolbarHeight);
-                    continue;
-                }
-                b.Bounds = new Rectangle(x, ToolbarTop, w, ToolbarHeight);
-                x += w + ToolbarGap;
+                if (OnRight(b.Action)) continue;
+                b.Bounds = new Rectangle(x, ToolbarTop, b.Bounds.Width, ToolbarHeight);
+                x += b.Bounds.Width + ToolbarGap;
             }
+
+            int cw = ButtonWidth(_cancelButton);
+            _cancelButton.Bounds = new Rectangle(ClientSize.Width - Edge / 2 - cw, ToolbarTop, cw, ToolbarHeight);
         }
 
         protected override void OnClientSizeChanged(EventArgs e)
@@ -501,6 +560,7 @@ namespace NPIC_CARD_APP
 
         private ToolButton HitTest(Point p)
         {
+            if (_export != null) return _cancelButton.Bounds.Contains(p) ? _cancelButton : null;
             foreach (ToolButton b in _buttons)
                 if (b.Bounds.Contains(p)) return b;
             return null;
@@ -519,18 +579,227 @@ namespace NPIC_CARD_APP
 
         private void DrawToolbar(Graphics g)
         {
-            foreach (ToolButton b in _buttons)
+            if (_export != null)
             {
-                bool on = IsOn(b), hover = b == _hover;
-                Color back = on ? (hover ? ButtonOnHover : ButtonOn) : (hover ? ButtonHover : ButtonBack);
-                Color text = on ? Color.White : FooterText;
-
-                using (GraphicsPath path = RoundedRect(b.Bounds, ToolbarHeight / 2f))
-                using (var brush = new SolidBrush(back))
-                    g.FillPath(brush, path);
-                TextRenderer.DrawText(g, b.Text, _buttonFont, b.Bounds, text,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+                DrawExportProgress(g);
+                DrawButton(g, _cancelButton, false);
+                return;
             }
+            foreach (ToolButton b in _buttons) DrawButton(g, b, IsOn(b));
+        }
+
+        private void DrawButton(Graphics g, ToolButton b, bool on)
+        {
+            bool hover = b == _hover;
+            Color back = on ? (hover ? ButtonOnHover : ButtonOn) : (hover ? ButtonHover : ButtonBack);
+            Color text = on ? Color.White : FooterText;
+
+            using (GraphicsPath path = RoundedRect(b.Bounds, ToolbarHeight / 2f))
+            using (var brush = new SolidBrush(back))
+                g.FillPath(brush, path);
+            TextRenderer.DrawText(g, b.Text, _buttonFont, b.Bounds, text,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+        }
+
+        /// <summary>Progress pill in the middle of the toolbar while a video is exported.</summary>
+        private void DrawExportProgress(Graphics g)
+        {
+            VideoExport ex = _export;
+            double k = ex.Total <= 0 ? 1 : Math.Min(1, (double)ex.Done / ex.Total);
+            int w = Math.Max(120, Math.Min(460, _cancelButton.Bounds.Left - Edge - ToolbarGap));
+            var bar = new Rectangle((ClientSize.Width - w) / 2, ToolbarTop, w, ToolbarHeight);
+            if (bar.Right > _cancelButton.Bounds.Left - ToolbarGap) bar.X = Math.Max(Edge / 2, _cancelButton.Bounds.Left - ToolbarGap - w);
+
+            using (GraphicsPath path = RoundedRect(bar, ToolbarHeight / 2f))
+            {
+                using (var brush = new SolidBrush(ButtonBack)) g.FillPath(brush, path);
+                GraphicsState state = g.Save();
+                g.SetClip(new Rectangle(bar.X, bar.Y, (int)Math.Round(bar.Width * k), bar.Height));
+                using (var brush = new SolidBrush(ButtonOn)) g.FillPath(brush, path);
+                g.Restore(state);
+            }
+            TextRenderer.DrawText(g, Lang.F("Exporting video…  {0} %", (int)(k * 100)), _buttonFont, bar, Color.White,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+        }
+
+        // ===================== Video export =====================
+        /// <summary>Asks for a file name, then records <see cref="VideoSeconds"/> of the card turning into an .mp4.</summary>
+        private void StartVideoExport()
+        {
+            if (_export != null) return;
+
+            string path;
+            using (var dlg = new SaveFileDialog
+            {
+                Title = Lang.T("Export 3D card video"),
+                Filter = Lang.T("MP4 video") + " (*.mp4)|*.mp4",
+                FileName = VideoFileName(),
+                DefaultExt = "mp4",
+                AddExtension = true,
+                OverwritePrompt = true
+            })
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                path = dlg.FileName;
+            }
+
+            Mp4VideoWriter writer;
+            try
+            {
+                writer = new Mp4VideoWriter(path, VideoWidth, VideoHeight, VideoFps, VideoBitrate);
+            }
+            catch (Exception ex)
+            {
+                ShowExportError(ex);
+                return;
+            }
+
+            var size = new Size(VideoWidth, VideoHeight);
+            _export = new VideoExport
+            {
+                FilePath = path,
+                Writer = writer,
+                Frame = new Bitmap(VideoWidth, VideoHeight, PixelFormat.Format32bppRgb),
+                Backdrop = CreateBackdrop(size, new Rectangle(Point.Empty, size)),
+                Total = (int)Math.Round(VideoSeconds * VideoFps),
+                StartYaw = _students.Count == 0 ? VideoYaw + 180 : VideoYaw,   // no student: start on the back
+                Yaw = _tweenActive ? _tToYaw : _yaw,
+                Pitch = _tweenActive ? _tToPitch : _pitch,
+                Zoom = _zoom,
+                Spin = _autoSpin
+            };
+            _autoSpin = false;
+            _tweenActive = false;
+            _dragging = false;
+            _velYaw = _velPitch = 0;
+            _hover = null;
+            Cursor = Cursors.Default;
+            Invalidate();
+        }
+
+        private string VideoFileName()
+        {
+            string name = _students.Count == 0 ? "card-back" : (_students[_index].StudentId ?? "").Trim();
+            foreach (char c in Path.GetInvalidFileNameChars()) name = name.Replace(c, '_');
+            return (name.Length == 0 ? "card" : name) + "-3D.mp4";
+        }
+
+        /// <summary>Renders and encodes frames for about <see cref="ExportBudgetMs"/>, then lets the window repaint.</summary>
+        private void ExportFrames()
+        {
+            VideoExport ex = _export;
+            var budget = Stopwatch.StartNew();
+            try
+            {
+                do
+                {
+                    RenderVideoFrame(ex);
+                    ex.Writer.WriteFrame(ex.Frame);
+                    ex.Done++;
+                }
+                while (ex.Done < ex.Total && budget.ElapsedMilliseconds < ExportBudgetMs);
+
+                if (ex.Done < ex.Total)
+                {
+                    Invalidate();
+                    return;
+                }
+                ex.Writer.Finish();
+            }
+            catch (Exception error)
+            {
+                EndExport(false);
+                ShowExportError(error);
+                return;
+            }
+
+            EndExport(true);
+            if (AppDialog.Show(this, "Video saved:\n" + ex.FilePath + "\n\nOpen it now?", Text,
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+            {
+                try { Process.Start(ex.FilePath); }
+                catch (Exception error) { AppDialog.Show(this, error.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+            }
+        }
+
+        /// <summary>
+        /// One full turn that slows down while each face is toward the viewer and loops seamlessly:
+        /// yaw speed ∝ 1 − 0.8·cos 4πu, so it is slowest at the front (u = 0, 1) and the back (u = ½).
+        /// </summary>
+        private void RenderVideoFrame(VideoExport ex)
+        {
+            double u = (double)ex.Done / ex.Total;   // the last frame stops one step short of the first
+            _yaw = ex.StartYaw + 360 * (u - 0.8 * Math.Sin(4 * Math.PI * u) / (4 * Math.PI));
+            _pitch = VideoPitch + 4 * Math.Sin(2 * Math.PI * u);
+            _zoom = 1;
+
+            var stage = new Rectangle(0, 0, ex.Frame.Width, ex.Frame.Height);
+            double scale = RenderFrame(stage);
+            using (Graphics g = Graphics.FromImage(ex.Frame))
+            {
+                g.CompositingMode = CompositingMode.SourceCopy;
+                g.DrawImageUnscaled(ex.Backdrop, 0, 0);
+                g.CompositingMode = CompositingMode.SourceOver;
+                DrawStageFrame(g, stage, scale);
+            }
+        }
+
+        /// <summary>The frame last written, fitted into the stage, as a live preview of the recording.</summary>
+        private void DrawExportPreview(Graphics g, Rectangle stage)
+        {
+            Bitmap frame = _export.Frame;
+            if (_export.Done == 0) return;
+            double k = Math.Min((stage.Width - 2.0 * Edge) / frame.Width, (double)stage.Height / frame.Height);
+            if (k <= 0) return;
+            int w = (int)(frame.Width * k), h = (int)(frame.Height * k);
+            var r = new Rectangle(stage.X + (stage.Width - w) / 2, stage.Y + (stage.Height - h) / 2, w, h);
+            g.InterpolationMode = InterpolationMode.Bilinear;
+            g.PixelOffsetMode = PixelOffsetMode.Half;
+            g.DrawImage(frame, r);
+            g.PixelOffsetMode = PixelOffsetMode.Default;
+            using (var pen = new Pen(ButtonHover))
+                g.DrawRectangle(pen, r.X - 1, r.Y - 1, r.Width + 1, r.Height + 1);
+        }
+
+        /// <summary>Stops the export and returns to the view from before it; an unfinished file is deleted.</summary>
+        private void EndExport(bool completed)
+        {
+            VideoExport ex = _export;
+            if (ex == null) return;
+            _export = null;
+
+            ex.Writer.Dispose();
+            ex.Frame.Dispose();
+            ex.Backdrop.Dispose();
+            if (!completed)
+            {
+                try { File.Delete(ex.FilePath); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+
+            _yaw = ex.Yaw;
+            _pitch = ex.Pitch;
+            _zoom = ex.Zoom;
+            _autoSpin = ex.Spin;
+            _lastTick = Now;
+            _hover = null;
+            Invalidate();
+        }
+
+        private void ShowExportError(Exception error)
+        {
+            string text = error is DllNotFoundException || error is EntryPointNotFoundException
+                ? "Video export needs Windows Media Foundation, which is missing on this computer.\n\n" +
+                  "On Windows N or KN editions, install the Media Feature Pack (Settings → Apps → Optional features), then try again."
+                : "Could not export the video:\n\n" + error.Message;
+            AppDialog.Show(this, text, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            EndExport(false);   // closing in the middle of a recording drops the unfinished file
+            base.OnFormClosing(e);
         }
 
         // ===================== Drawing =====================
@@ -552,22 +821,16 @@ namespace NPIC_CARD_APP
             DrawBackdrop(g);
 
             Rectangle stage = StageRect();
-            if (stage.Width > 40 && stage.Height > 40)
+            if (_export != null)
+            {
+                DrawExportPreview(g, stage);
+            }
+            else if (stage.Width > 40 && stage.Height > 40)
             {
                 try
                 {
                     double scale = RenderFrame(stage);
-                    g.CompositingQuality = CompositingQuality.HighSpeed;
-                    if (scale >= 0.999)
-                    {
-                        g.DrawImageUnscaled(_frame, stage.Location);
-                    }
-                    else
-                    {
-                        g.InterpolationMode = InterpolationMode.Bilinear;
-                        g.PixelOffsetMode = PixelOffsetMode.Half;
-                        g.DrawImage(_frame, stage);
-                    }
+                    DrawStageFrame(g, stage, scale);
                 }
                 catch (Exception ex)
                 {
@@ -581,36 +844,54 @@ namespace NPIC_CARD_APP
             DrawFooter(g);
         }
 
+        /// <summary>The rendered stage (<see cref="RenderFrame"/>) drawn into <paramref name="stage"/>.</summary>
+        private void DrawStageFrame(Graphics g, Rectangle stage, double scale)
+        {
+            g.CompositingQuality = CompositingQuality.HighSpeed;
+            if (scale >= 0.999)
+            {
+                g.DrawImageUnscaled(_frame, stage.Location);
+            }
+            else
+            {
+                g.InterpolationMode = InterpolationMode.Bilinear;
+                g.PixelOffsetMode = PixelOffsetMode.Half;
+                g.DrawImage(_frame, stage);
+            }
+        }
+
         /// <summary>Dark backdrop with a soft spotlight behind the card, cached until the window size changes.</summary>
         private void DrawBackdrop(Graphics g)
         {
             Size size = ClientSize;
             if (size.Width <= 0 || size.Height <= 0) return;
-            if (_backdrop == null)
+            if (_backdrop == null) _backdrop = CreateBackdrop(size, StageRect());
+            g.DrawImageUnscaled(_backdrop, 0, 0);
+        }
+
+        private static Bitmap CreateBackdrop(Size size, Rectangle stage)
+        {
+            var bmp = new Bitmap(size.Width, size.Height, PixelFormat.Format32bppPArgb);
+            using (Graphics bg = Graphics.FromImage(bmp))
             {
-                _backdrop = new Bitmap(size.Width, size.Height, PixelFormat.Format32bppPArgb);
-                using (Graphics bg = Graphics.FromImage(_backdrop))
+                bg.Clear(Backdrop);
+                var glow = new RectangleF(stage.X + stage.Width * 0.12f, stage.Y - stage.Height * 0.15f,
+                                          stage.Width * 0.76f, stage.Height * 1.2f);
+                if (glow.Width > 1 && glow.Height > 1)
                 {
-                    bg.Clear(Backdrop);
-                    Rectangle stage = StageRect();
-                    var glow = new RectangleF(stage.X + stage.Width * 0.12f, stage.Y - stage.Height * 0.15f,
-                                              stage.Width * 0.76f, stage.Height * 1.2f);
-                    if (glow.Width > 1 && glow.Height > 1)
+                    using (var path = new GraphicsPath())
                     {
-                        using (var path = new GraphicsPath())
+                        path.AddEllipse(glow);
+                        using (var brush = new PathGradientBrush(path))
                         {
-                            path.AddEllipse(glow);
-                            using (var brush = new PathGradientBrush(path))
-                            {
-                                brush.CenterColor = Spotlight;
-                                brush.SurroundColors = new[] { Backdrop };
-                                bg.FillPath(brush, path);
-                            }
+                            brush.CenterColor = Spotlight;
+                            brush.SurroundColors = new[] { Backdrop };
+                            bg.FillPath(brush, path);
                         }
                     }
                 }
             }
-            g.DrawImageUnscaled(_backdrop, 0, 0);
+            return bmp;
         }
 
         /// <summary>
@@ -889,10 +1170,18 @@ namespace NPIC_CARD_APP
             }
             if (_error != null) info += "    " + Lang.F("Preview error: {0}", _error);
 
-            string side = Lang.T(_frontFacing ? "Front" : "Back");
-            string zoom = Math.Abs(_zoom - 1) > 0.01 ? "  ·  " + Math.Round(_zoom * 100) + " %" : "";
-            string help = side + zoom +
-                          Lang.T("    |    Drag: turn    Wheel: zoom    Space: flip    ← →: student    Esc: close");
+            string help;
+            if (_export != null)
+            {
+                help = Lang.F("Recording {0} × {1}, {2} s    |    Esc: cancel", VideoWidth, VideoHeight, VideoSeconds);
+            }
+            else
+            {
+                string side = Lang.T(_frontFacing ? "Front" : "Back");
+                string zoom = Math.Abs(_zoom - 1) > 0.01 ? "  ·  " + Math.Round(_zoom * 100) + " %" : "";
+                help = side + zoom +
+                       Lang.T("    |    Drag: turn    Wheel: zoom    Space: flip    ← →: student    Esc: close");
+            }
 
             var rect = new Rectangle(Edge, ClientSize.Height - Edge / 2 - FooterHeight, ClientSize.Width - 2 * Edge, FooterHeight);
             TextRenderer.DrawText(g, info, _footerFont, rect, _error != null ? Color.Salmon : Color.White,
@@ -918,6 +1207,7 @@ namespace NPIC_CARD_APP
         {
             if (disposing)
             {
+                EndExport(false);
                 _timer.Stop();
                 _timer.Dispose();
                 if (_front != null) _front.Dispose();

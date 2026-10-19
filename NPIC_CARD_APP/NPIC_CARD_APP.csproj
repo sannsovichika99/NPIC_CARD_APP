@@ -193,6 +193,7 @@
     <Compile Include="Rendering\KhmerText.cs" />
     <Compile Include="Rendering\PositionGrid.cs" />
     <Compile Include="Rendering\QrEncoder.cs" />
+    <Compile Include="Rendering\Mp4VideoWriter.cs" />
     <Compile Include="Printing\CardPrinter.cs" />
     <Compile Include="Printing\PrinterDevMode.cs" />
     <Compile Include="Printing\PrinterStatus.cs" />
