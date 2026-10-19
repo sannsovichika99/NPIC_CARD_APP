@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Printing;
 using System.IO;
 using System.Linq;
@@ -43,6 +44,7 @@ namespace NPIC_CARD_APP
         private sealed class Entry
         {
             public string Section, Name, Value, Note;
+            public string Glyph;      // icon of the section
             public bool Warn;
             public string OpenPath;   // file or folder opened on double-click; null = nothing to open
         }
@@ -50,8 +52,14 @@ namespace NPIC_CARD_APP
         private readonly AppSettings _settings;
         private List<Entry> _all;
         private readonly TextBox _txtSearch;
-        private readonly DataGridView _grid;
-        private readonly Label _lblSummary, _lblEmpty;
+        private readonly SettingsList _list;
+        private readonly Panel _nav;
+        private readonly Label _lblSummary;
+        private readonly ToolTip _tip = new ToolTip();
+        private readonly Dictionary<string, NavItem> _navSections = new Dictionary<string, NavItem>();
+        private NavItem _navAll, _navAttention;
+        private bool _attentionOnly;          // "Needs attention" picked: only the orange rows
+        private ContextMenuStrip _rowMenu;
 
         /// <summary>True after Import… replaced the settings: the main window must reload its controls.</summary>
         public bool SettingsImported { get; private set; }
@@ -84,6 +92,13 @@ namespace NPIC_CARD_APP
             _txtSearch = new TextBox { Width = 260, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(0, 5, 12, 0) };
             _txtSearch.HandleCreated += (s, e) => SetCueBanner(_txtSearch, "Search settings… (Ctrl+F)");
             _txtSearch.TextChanged += (s, e) => ShowEntries();
+            _txtSearch.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode != Keys.Down) return;   // ↓ from the search box goes to the first result
+                _list.Focus();
+                _list.SelectFirst();
+                e.Handled = e.SuppressKeyPress = true;
+            };
 
             var toolbar = ModalUi.Toolbar();
             toolbar.Controls.Add(_txtSearch);
@@ -96,66 +111,24 @@ namespace NPIC_CARD_APP
             toolbar.Controls.Add(MakeButton("Copy All", (s, e) => CopyAll()));
             toolbar.Controls.Add(MakeButton("Open Settings Folder", (s, e) => OpenInExplorer(AppSettings.FilePath)));
 
-            var tip = new ToolTip();
-            tip.SetTip(btnExport, "Save all settings to a file, to back them up or copy them to another PC.\n" +
-                                      "The API token and SQL password are not included.");
-            tip.SetTip(btnSql, "Change or test the SQL Server connection, or load students from the database (Ctrl+D in the main window).");
-            tip.SetTip(btnImport, "Replace all settings with the ones in an exported file.\n" +
-                                      "The current settings are backed up first.");
+            _tip.SetTip(btnExport, "Save all settings to a file, to back them up or copy them to another PC.\n" +
+                                       "The API token and SQL password are not included.");
+            _tip.SetTip(btnSql, "Change or test the SQL Server connection, or load students from the database (Ctrl+D in the main window).");
+            _tip.SetTip(btnImport, "Replace all settings with the ones in an exported file.\n" +
+                                       "The current settings are backed up first.");
 
-            // ---- List ----
-            _grid = new DataGridView
-            {
-                Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, AllowUserToDeleteRows = false,
-                AllowUserToResizeRows = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, MultiSelect = true,
-                BackgroundColor = Surface, BorderStyle = BorderStyle.None,
-                CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal, GridColor = GridLine,
-                RowHeadersVisible = false, EnableHeadersVisualStyles = false,
-                ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None,
-                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
-                ColumnHeadersHeight = 32, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None,
-                AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells,
-                ClipboardCopyMode = DataGridViewClipboardCopyMode.EnableWithoutHeaderText,
-                ShowCellToolTips = true
-            };
-            _grid.RowTemplate.MinimumHeight = 30;
-            _grid.ColumnHeadersDefaultCellStyle.BackColor = SurfaceAlt;
-            _grid.ColumnHeadersDefaultCellStyle.ForeColor = TextMuted;
-            _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = SurfaceAlt;
-            _grid.ColumnHeadersDefaultCellStyle.Font = new Font(CardFonts.UI, 9f, FontStyle.Bold);
-            _grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(4, 0, 4, 0);
-            _grid.DefaultCellStyle.ForeColor = TextMain;
-            _grid.DefaultCellStyle.SelectionBackColor = AccentSoft;
-            _grid.DefaultCellStyle.SelectionForeColor = Accent;
-            _grid.DefaultCellStyle.Padding = new Padding(4, 3, 4, 3);
-            _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Section", HeaderText = "Section", Width = 150 });
-            _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Setting", HeaderText = "Setting", Width = 190 });
-            var valueColumn = new DataGridViewTextBoxColumn
-            {
-                Name = "Value", HeaderText = "Value", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
-            };
-            valueColumn.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
-            _grid.Columns.Add(valueColumn);
-            _grid.Columns["Section"].DefaultCellStyle.Font = new Font(CardFonts.UI, 9f, FontStyle.Bold);
-            _grid.Columns["Section"].DefaultCellStyle.ForeColor = Accent;
-            _grid.Columns["Setting"].DefaultCellStyle.ForeColor = TextMuted;
-            foreach (DataGridViewColumn c in _grid.Columns) c.SortMode = DataGridViewColumnSortMode.NotSortable;
-            _grid.CellDoubleClick += (s, e) =>
-            {
-                if (e.RowIndex < 0) return;
-                var entry = _grid.Rows[e.RowIndex].Tag as Entry;
-                if (entry != null && entry.OpenPath != null) OpenInExplorer(entry.OpenPath);
-            };
+            // ---- Section navigator (left) + one card per section (right) ----
+            _list = new SettingsList { Dock = DockStyle.Fill };
+            _list.OpenRequested += entry => OpenInExplorer(entry.OpenPath);
+            _list.MenuRequested += ShowRowMenu;
+            _list.TopSectionChanged += (s, e) => HighlightNav();
 
-            _lblEmpty = new Label
+            _nav = new Panel { Dock = DockStyle.Left, Width = 224, BackColor = Surface, AutoScroll = true, Padding = new Padding(0, 10, 1, 10) };
+            _nav.Paint += (s, e) =>
             {
-                Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, ForeColor = TextMuted, BackColor = Surface,
-                Text = "No setting matches the search.", Visible = false
+                using (var pen = new Pen(GridLine)) e.Graphics.DrawLine(pen, _nav.Width - 1, 0, _nav.Width - 1, _nav.Height);
             };
-            var gridHost = new Panel { Dock = DockStyle.Fill, BackColor = Surface };
-            gridHost.Controls.Add(_grid);
-            gridHost.Controls.Add(_lblEmpty);
-            _lblEmpty.BringToFront();
+            BuildNav();
 
             _lblSummary = new Label
             {
@@ -163,11 +136,29 @@ namespace NPIC_CARD_APP
             };
             ModalUi.StyleStatus(_lblSummary);
 
-            Controls.Add(gridHost);
+            // Docking runs in reverse add order: the fill control first, the edges last.
+            Controls.Add(_list);
+            Controls.Add(_nav);
             Controls.Add(toolbar);
             Controls.Add(_lblSummary);
 
             ShowEntries();
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            if (_nav != null) _nav.Visible = ClientSize.Width >= 760;   // narrow window: the cards get the whole width
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                if (_rowMenu != null) _rowMenu.Dispose();
+                _tip.Dispose();
+            }
+            base.Dispose(disposing);
         }
 
         protected override void OnShown(EventArgs e)
@@ -190,43 +181,141 @@ namespace NPIC_CARD_APP
         }
 
         // ===================== View =====================
+        /// <summary>
+        /// Left column: All Settings and Needs attention (filters), then one item per section (jumps to its card).
+        /// Sections with problems show how many in orange. Rebuilt when the settings change (import, SQL Server…).
+        /// </summary>
+        private void BuildNav()
+        {
+            _nav.SuspendLayout();
+            foreach (Control c in _nav.Controls.Cast<Control>().ToArray()) c.Dispose();
+            _navSections.Clear();
+
+            _navAll = new NavItem("All Settings", Theme.IcoList, (s, e) => ShowSection(null, false));
+            _navAttention = new NavItem("Needs attention", Theme.IcoWarning, (s, e) => ShowSection(null, true))
+            {
+                BadgeColor = Warning
+            };
+            var divider = new Panel { Height = 17, BackColor = Surface };
+            divider.Paint += (s, e) =>
+            {
+                using (var pen = new Pen(GridLine)) e.Graphics.DrawLine(pen, 18, 8, divider.Width - 18, 8);
+            };
+            var items = new List<Control> { _navAll, _navAttention, divider };
+            foreach (IGrouping<string, Entry> group in _all.GroupBy(x => x.Section))   // keeps the order of the list
+            {
+                string section = group.Key;
+                var item = new NavItem(section, group.First().Glyph, (s, e) => ShowSection(section, false)) { Height = 34 };
+                _tip.SetToolTip(item, section);
+                _navSections[section] = item;
+                items.Add(item);
+            }
+
+            // Dock = Top stacks the LAST added control on top, so add bottom-up.
+            for (int i = items.Count - 1; i >= 0; i--)
+            {
+                items[i].Dock = DockStyle.Top;
+                _nav.Controls.Add(items[i]);
+            }
+            _nav.ResumeLayout(true);
+        }
+
+        /// <summary>All Settings / Needs attention switch the filter; a section jumps to its card (showing everything again).</summary>
+        private void ShowSection(string section, bool attentionOnly)
+        {
+            if (_attentionOnly != attentionOnly)
+            {
+                _attentionOnly = attentionOnly;
+                ShowEntries();
+            }
+            if (section == null)
+            {
+                _list.ScrollToTop();
+            }
+            else if (!_list.ScrollToSection(section))
+            {
+                _txtSearch.Clear();   // hidden by the search: show everything, then jump
+                _list.ScrollToSection(section);
+            }
+            HighlightNav();
+        }
+
+        /// <summary>Filter item and the section whose card is at the top of the list.</summary>
+        private void HighlightNav()
+        {
+            if (_navAll == null) return;
+            _navAll.Active = !_attentionOnly;
+            _navAttention.Active = _attentionOnly;
+            foreach (KeyValuePair<string, NavItem> pair in _navSections)
+                pair.Value.Active = pair.Key == _list.TopSection;
+        }
+
         private void ShowEntries()
         {
             string q = _txtSearch.Text.Trim();
-            List<Entry> shown = q.Length == 0 ? _all : _all.Where(x => Has(x.Section, q) || Has(x.Name, q) || Has(x.Value, q)).ToList();
+            IEnumerable<Entry> filtered = _all;
+            if (_attentionOnly) filtered = filtered.Where(x => x.Warn);
+            if (q.Length > 0) filtered = filtered.Where(x => Has(x.Section, q) || Has(x.Name, q) || Has(x.Value, q) || Has(x.Note, q));
+            List<Entry> shown = filtered.ToList();
 
-            _grid.SuspendLayout();
-            _grid.Rows.Clear();
-            string lastSection = null;
-            foreach (Entry x in shown)
-            {
-                // Name the section on its first row only, so the list reads as groups.
-                int i = _grid.Rows.Add(x.Section == lastSection ? "" : x.Section, x.Name, x.Value);
-                lastSection = x.Section;
-                DataGridViewRow row = _grid.Rows[i];
-                row.Tag = x;
+            _list.EmptyText = Lang.T(_attentionOnly && q.Length == 0 ? "Nothing needs attention." : "No setting matches the search.");
+            _list.SetEntries(shown);
 
-                string tip = x.Note ?? "";
-                if (x.OpenPath != null) tip += (tip.Length > 0 ? "\n" : "") + Lang.T("Double-click to open in Explorer.");
-                row.Cells[1].ToolTipText = row.Cells[2].ToolTipText = tip;
-
-                if (x.Warn)
-                {
-                    row.Cells[2].Style.ForeColor = Warning;
-                    row.Cells[2].Style.SelectionForeColor = Warning;
-                }
-            }
-            _grid.ResumeLayout();
-            _grid.ClearSelection();
-
-            _lblEmpty.Visible = shown.Count == 0;
             int warnings = _all.Count(x => x.Warn);
+            _navAll.Badge = _all.Count.ToString();
+            _navAttention.Badge = warnings.ToString();
+            _navAttention.Visible = warnings > 0 || _attentionOnly;
+            foreach (KeyValuePair<string, NavItem> pair in _navSections)
+            {
+                pair.Value.Visible = shown.Any(x => x.Section == pair.Key);
+                int sectionWarnings = _all.Count(x => x.Section == pair.Key && x.Warn);
+                pair.Value.Badge = sectionWarnings > 0 ? sectionWarnings.ToString() : null;
+                pair.Value.BadgeColor = Warning;
+            }
+            HighlightNav();
+
             _lblSummary.Text =
                 Lang.F("{0} settings", _all.Count) + (q.Length > 0 ? Lang.F("  ·  {0} shown", shown.Count) : "") +
                 (warnings > 0 ? Lang.F("  ·  {0} need attention (orange)", warnings) : Lang.T("  ·  nothing needs attention")) +
                 Environment.NewLine +
                 Lang.F("Read-only. Change settings in the main window.  Settings file: {0}", AppSettings.FilePath);
             _lblSummary.ForeColor = warnings > 0 ? Warning : TextMuted;
+        }
+
+        /// <summary>Settings changed (import, SQL Server…): collect them again and rebuild the navigator and the list.</summary>
+        private void Reload()
+        {
+            _all = Collect(_settings, DeviceDpi);
+            BuildNav();
+            ShowEntries();
+        }
+
+        /// <summary>Right-click / menu key on a row: copy it, or open its file or folder.</summary>
+        private void ShowRowMenu(Entry entry, Point at)
+        {
+            if (_rowMenu != null) _rowMenu.Dispose();
+            _rowMenu = ThemedMenu.Create();
+            _rowMenu.Items.Add(ThemedMenu.Item(Lang.T("Copy value"), () => CopyText(entry.Value)));
+            _rowMenu.Items.Add(ThemedMenu.Item(Lang.T("Copy setting and value"), () => CopyText(entry.Name + ": " + entry.Value)));
+            if (entry.OpenPath != null)
+            {
+                _rowMenu.Items.Add(new ToolStripSeparator());
+                _rowMenu.Items.Add(ThemedMenu.Item(Lang.T("Open in Explorer"), () => OpenInExplorer(entry.OpenPath)));
+            }
+            _rowMenu.Show(_list, at);
+        }
+
+        private void CopyText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            try
+            {
+                Clipboard.SetText(text);
+            }
+            catch (ExternalException ex)
+            {
+                AppDialog.Show(this, "Could not copy to the clipboard:\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void CopyAll()
@@ -336,8 +425,7 @@ namespace NPIC_CARD_APP
             }
 
             SettingsImported = true;
-            _all = Collect(_settings, DeviceDpi);
-            ShowEntries();
+            Reload();
             string counts = _lblSummary.Text.Split(new[] { Environment.NewLine }, StringSplitOptions.None)[0];
             _lblSummary.Text = counts + Environment.NewLine + "Imported from " + path +
                 "   (previous settings: " + AppSettings.BackupFilePath + ")";
@@ -370,8 +458,7 @@ namespace NPIC_CARD_APP
                 return;
             }
 
-            _all = Collect(_settings, DeviceDpi);
-            ShowEntries();
+            Reload();
         }
 
         private void OpenInExplorer(string path)
@@ -401,7 +488,8 @@ namespace NPIC_CARD_APP
                 list.Add(new Entry
                 {
                     // In the app's language; values that are data (paths, names) have no table entry and stay as they are.
-                    Section = Lang.T(section), Name = Lang.T(name), Value = Lang.T(value), Warn = warn, Note = Lang.T(note), OpenPath = open
+                    Section = Lang.T(section), Name = Lang.T(name), Value = Lang.T(value), Warn = warn, Note = Lang.T(note), OpenPath = open,
+                    Glyph = SectionGlyph(section)
                 });
 
             // ---- Printer ----
@@ -606,6 +694,27 @@ namespace NPIC_CARD_APP
         }
 
         // ===================== Helpers =====================
+        /// <summary>Icon of a section, from its English name.</summary>
+        private static string SectionGlyph(string section)
+        {
+            if (section.StartsWith("Card text", StringComparison.Ordinal)) return Theme.IcoEdit;
+            switch (section)
+            {
+                case "Printer": return Theme.IcoPrint;
+                case "Tray layout": return Theme.IcoTemplate;
+                case "Appearance": return Theme.IcoColor;
+                case "Files & folders": return Theme.IcoFolder;
+                case "Web API": return Theme.IcoGlobe;
+                case "Google Sheets": return Theme.IcoDocument;
+                case "Google Drive photos":
+                case "OneDrive photos": return Theme.IcoCloud;
+                case "SQL Server": return Theme.IcoDatabase;
+                case "Fonts": return Theme.IcoFont;
+                case "System": return Theme.IcoInfo;
+                default: return Theme.IcoSettings;
+            }
+        }
+
         private static string YesNo(bool value) { return value ? "Yes" : "No"; }
 
         private static string Or(string value, string fallback) { return string.IsNullOrEmpty(value) ? fallback : value; }
@@ -628,6 +737,495 @@ namespace NPIC_CARD_APP
         private static void SetCueBanner(TextBox box, string text)
         {
             SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, Lang.T(text));
+        }
+
+        // ===================== Card list =====================
+        /// <summary>
+        /// Owner-drawn settings list: one rounded card per section (icon, title, number of settings, attention badge) with a
+        /// name | value row per setting and its note under the value. Rows that need attention are tinted orange; rows
+        /// with a file or folder get an open button. Click selects, the button / double-click / Enter opens, right-click
+        /// or the menu key asks for the row menu, ↑ ↓ Home End move, Ctrl+C copies "Setting: value".
+        /// </summary>
+        private sealed class SettingsList : ScrollableControl
+        {
+            private const int Pad = 16, CardGap = 14, HeadH = 50, RowPadX = 18, RowPadY = 10, MinRowH = 40,
+                              OpenSize = 28, Radius = 10, NoteGap = 3;
+
+            private const TextFormatFlags Wrap = TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl |
+                                                 TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
+            private const TextFormatFlags OneLine = TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter |
+                                                    TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
+            // Measuring one line: no ellipsis, or the measured width shrinks to "…".
+            private const TextFormatFlags Measure1 = TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
+
+            private sealed class Card
+            {
+                public string Section, Glyph;
+                public int Warnings;
+                public Rectangle Bounds;
+                public readonly List<Row> Rows = new List<Row>();
+            }
+
+            private sealed class Row
+            {
+                public Entry Entry;
+                public Card Card;
+                public Rectangle Bounds, Name, Value, Note, Open;   // content coordinates (not scrolled)
+            }
+
+            private readonly Font _titleFont = Theme.UiFont(10.5f, true);
+            private readonly Font _nameFont = Theme.UiFont(9f);
+            private readonly Font _valueFont = new Font(CardFonts.UI, 9.5f);
+            private readonly Font _smallFont = Theme.UiFont(8.25f);
+            private readonly ToolTip _tip = new ToolTip();
+            private readonly List<Card> _cards = new List<Card>();
+            private readonly List<Row> _rows = new List<Row>();
+            private Row _hover, _selected;
+            private bool _hoverOpen;
+            private int _layoutWidth = -1;
+
+            public event Action<Entry> OpenRequested;
+            public event Action<Entry, Point> MenuRequested;
+            public event EventHandler TopSectionChanged;
+
+            /// <summary>Section whose card is at the top of the visible part of the list.</summary>
+            public string TopSection { get; private set; }
+
+            /// <summary>Shown in the middle when there is nothing to list.</summary>
+            public string EmptyText { get; set; }
+
+            public SettingsList()
+            {
+                SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
+                         ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
+                AutoScroll = true;
+                BackColor = Theme.SurfaceAlt;
+                TabStop = true;
+            }
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing)
+                {
+                    _titleFont.Dispose();
+                    _nameFont.Dispose();
+                    _valueFont.Dispose();
+                    _smallFont.Dispose();
+                    _tip.Dispose();
+                }
+                base.Dispose(disposing);
+            }
+
+            // ---------- Content ----------
+            public void SetEntries(List<Entry> entries)
+            {
+                Entry keep = _selected != null ? _selected.Entry : null;
+                _cards.Clear();
+                _rows.Clear();
+                Card card = null;
+                foreach (Entry x in entries)   // entries come grouped by section
+                {
+                    if (card == null || card.Section != x.Section)
+                    {
+                        card = new Card { Section = x.Section, Glyph = x.Glyph };
+                        _cards.Add(card);
+                    }
+                    var row = new Row { Entry = x, Card = card };
+                    card.Rows.Add(row);
+                    _rows.Add(row);
+                    if (x.Warn) card.Warnings++;
+                }
+                _hover = null;
+                _selected = _rows.FirstOrDefault(r => r.Entry == keep);
+                Relayout();
+                AutoScrollPosition = Point.Empty;
+                SetTop(_cards.Count > 0 ? _cards[0].Section : null);
+                Invalidate();
+            }
+
+            public void ScrollToTop()
+            {
+                SetScrollY(0);
+                SetTop(_cards.Count > 0 ? _cards[0].Section : null);
+            }
+
+            /// <summary>Brings the section's card to the top. False when the section is not in the list (filtered out).</summary>
+            public bool ScrollToSection(string section)
+            {
+                Card card = _cards.FirstOrDefault(c => c.Section == section);
+                if (card == null) return false;
+                SetScrollY(card.Bounds.Top - Pad);
+                SetTop(section);
+                return true;
+            }
+
+            public void SelectFirst()
+            {
+                if (_rows.Count > 0) SelectRow(_rows[0]);
+            }
+
+            // ---------- Layout ----------
+            protected override void OnResize(EventArgs e)
+            {
+                base.OnResize(e);
+                if (ClientSize.Width != _layoutWidth) { Relayout(); Invalidate(); }
+            }
+
+            private void Relayout()
+            {
+                int width = ClientSize.Width;
+                if (width <= 0) return;
+                _layoutWidth = width;
+
+                int cardW = Math.Max(260, width - 2 * Pad);
+                int nameW = Math.Max(120, Math.Min(240, cardW * 30 / 100));
+                int valueLine = TextRenderer.MeasureText("Ag", _valueFont, Size.Empty, Measure1).Height;
+                int nameLine = TextRenderer.MeasureText("Ag", _nameFont, Size.Empty, Measure1).Height;
+
+                int y = Pad;
+                foreach (Card card in _cards)
+                {
+                    int x = Pad, ry = y + HeadH;
+                    int nameX = x + RowPadX, valueX = nameX + nameW + 18;
+                    int valueW = Math.Max(80, x + cardW - RowPadX - OpenSize - 10 - valueX);
+                    foreach (Row row in card.Rows)
+                    {
+                        Entry e = row.Entry;
+                        int nameH = Measure(e.Name, _nameFont, nameW);
+                        int valueH = Measure(e.Value, _valueFont, valueW);
+                        int noteH = Measure(e.Note, _smallFont, valueW);
+                        int contentH = Math.Max(nameH, valueH + (noteH > 0 ? NoteGap + noteH : 0));
+                        int h = Math.Max(MinRowH, contentH + 2 * RowPadY);
+                        int top = ry + (h - contentH) / 2;
+
+                        row.Bounds = new Rectangle(x, ry, cardW, h);
+                        // The name sits level with the first line of the value.
+                        row.Name = new Rectangle(nameX, top + Math.Max(0, (valueLine - nameLine) / 2), nameW, nameH);
+                        row.Value = new Rectangle(valueX, top, valueW, valueH);
+                        row.Note = noteH > 0 ? new Rectangle(valueX, top + valueH + NoteGap, valueW, noteH) : Rectangle.Empty;
+                        row.Open = e.OpenPath == null ? Rectangle.Empty
+                            : new Rectangle(x + cardW - RowPadX - OpenSize + 6, top + (valueLine - OpenSize) / 2, OpenSize, OpenSize);
+                        ry += h;
+                    }
+                    card.Bounds = new Rectangle(x, y, cardW, ry - y + 2);
+                    y = card.Bounds.Bottom + CardGap;
+                }
+                AutoScrollMinSize = new Size(0, _cards.Count == 0 ? 0 : y - CardGap + Pad);
+            }
+
+            private static int Measure(string text, Font font, int width)
+            {
+                if (string.IsNullOrEmpty(text)) return 0;
+                return TextRenderer.MeasureText(text, font, new Size(width, int.MaxValue), Wrap).Height + 1;
+            }
+
+            // ---------- Painting ----------
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                Graphics g = e.Graphics;
+                g.Clear(BackColor);
+                if (_cards.Count == 0)
+                {
+                    TextRenderer.DrawText(g, EmptyText ?? "", _nameFont, ClientRectangle, Theme.TextSoft,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak);
+                    return;
+                }
+                Theme.HighQuality(g);
+                Point o = AutoScrollPosition;
+                foreach (Card card in _cards)
+                {
+                    Rectangle cb = Shift(card.Bounds, o);
+                    if (cb.Bottom < e.ClipRectangle.Top - 12 || cb.Top > e.ClipRectangle.Bottom + 12) continue;
+                    PaintCard(g, card, cb, o, e.ClipRectangle);
+                }
+            }
+
+            private void PaintCard(Graphics g, Card card, Rectangle cb, Point o, Rectangle clip)
+            {
+                var shape = new RectangleF(cb.X + 0.5f, cb.Y + 0.5f, cb.Width - 1f, cb.Height - 1f);
+                Theme.DrawShadow(g, shape, Radius, Theme.Dark ? Color.Black : Theme.Accent, 4, 10, 2f);
+                using (GraphicsPath path = Theme.RoundRect(shape, Radius))
+                {
+                    using (var b = new SolidBrush(Theme.Surface)) g.FillPath(b, path);
+
+                    Region old = g.Clip;
+                    g.SetClip(path, CombineMode.Intersect);
+                    foreach (Row row in card.Rows)
+                    {
+                        Rectangle rb = Shift(row.Bounds, o);
+                        if (rb.Bottom >= clip.Top && rb.Top <= clip.Bottom) PaintRow(g, row, rb, o);
+                    }
+                    g.Clip = old;
+                    old.Dispose();
+
+                    PaintHeader(g, card, cb);
+                    using (var pen = new Pen(Theme.Border)) g.DrawPath(pen, path);
+                }
+            }
+
+            private void PaintHeader(Graphics g, Card card, Rectangle cb)
+            {
+                bool warn = card.Warnings > 0;
+                var icon = new RectangleF(cb.X + 14, cb.Y + (HeadH - 32) / 2f, 32, 32);
+                using (GraphicsPath p = Theme.RoundRect(icon, 9))
+                using (var b = new SolidBrush(warn ? Theme.WarningSoft : Theme.AccentSoft))
+                    g.FillPath(b, p);
+                Theme.DrawIcon(g, card.Glyph, 16f, warn ? Theme.Warning : Theme.Accent, icon);
+
+                int right = cb.Right - 14;
+                if (warn)
+                {
+                    string text = Lang.F("{0} need attention", card.Warnings);
+                    int w = TextRenderer.MeasureText(text, _smallFont, Size.Empty, Measure1).Width + 22;
+                    var pill = new Rectangle(right - w, cb.Y + (HeadH - 24) / 2, w, 24);
+                    using (GraphicsPath p = Theme.RoundRect(pill, 12))
+                    using (var b = new SolidBrush(Theme.WarningSoft))
+                        g.FillPath(b, p);
+                    TextRenderer.DrawText(g, text, _smallFont, pill, Theme.Warning, OneLine | TextFormatFlags.HorizontalCenter);
+                    right = pill.Left - 10;
+                }
+
+                int titleX = (int)icon.Right + 12;
+                string count = Lang.F("{0} settings", card.Rows.Count);
+                int countW = TextRenderer.MeasureText(count, _smallFont, Size.Empty, Measure1).Width;
+                int titleW = Math.Min(TextRenderer.MeasureText(card.Section, _titleFont, Size.Empty, Measure1).Width,
+                                      Math.Max(40, right - titleX - countW - 12));
+                TextRenderer.DrawText(g, card.Section, _titleFont, new Rectangle(titleX, cb.Y, titleW, HeadH), Theme.TextMain, OneLine);
+                TextRenderer.DrawText(g, count, _smallFont, new Rectangle(titleX + titleW + 10, cb.Y + 1, countW + 2, HeadH),
+                                      Theme.TextMuted, OneLine);
+
+                using (var pen = new Pen(Theme.GridLine))
+                    g.DrawLine(pen, cb.X, cb.Y + HeadH - 1, cb.Right, cb.Y + HeadH - 1);
+            }
+
+            private void PaintRow(Graphics g, Row row, Rectangle rb, Point o)
+            {
+                Entry e = row.Entry;
+                bool selected = row == _selected, hover = row == _hover;
+
+                Color back = selected ? Theme.AccentSoft : e.Warn ? Theme.WarningSoft : hover ? Theme.SurfaceHover : Color.Empty;
+                if (!back.IsEmpty)
+                    using (var b = new SolidBrush(back)) g.FillRectangle(b, rb);
+                if (selected || e.Warn)
+                    using (var b = new SolidBrush(selected ? Theme.Accent : Theme.Warning)) g.FillRectangle(b, rb.X, rb.Y, 3, rb.Height);
+                if (row != row.Card.Rows[0] && back.IsEmpty)
+                    using (var pen = new Pen(Theme.GridLine)) g.DrawLine(pen, rb.X + RowPadX, rb.Y, rb.Right - RowPadX, rb.Y);
+
+                TextRenderer.DrawText(g, e.Name, _nameFont, Shift(row.Name, o), Theme.TextSoft, Wrap);
+                TextRenderer.DrawText(g, e.Value, _valueFont, Shift(row.Value, o), e.Warn ? Theme.Warning : Theme.TextMain, Wrap);
+                if (!row.Note.IsEmpty)
+                    TextRenderer.DrawText(g, e.Note, _smallFont, Shift(row.Note, o), e.Warn ? Theme.Warning : Theme.TextMuted, Wrap);
+
+                if (row.Open.IsEmpty) return;
+                Rectangle ob = Shift(row.Open, o);
+                bool hot = hover && _hoverOpen;
+                if (hot)
+                    using (GraphicsPath p = Theme.RoundRect(ob, 8))
+                    using (var b = new SolidBrush(selected ? Theme.Surface : Theme.AccentSoft))
+                        g.FillPath(b, p);
+                Theme.DrawIcon(g, Theme.IcoOpenFolder, 14f,
+                    hot ? Theme.Accent : hover || selected ? Theme.TextSoft : Theme.TextMuted, ob);
+            }
+
+            private static Rectangle Shift(Rectangle r, Point o)
+            {
+                r.Offset(o);
+                return r;
+            }
+
+            // ---------- Mouse ----------
+            private Point ToContent(Point client)
+            {
+                return new Point(client.X - AutoScrollPosition.X, client.Y - AutoScrollPosition.Y);
+            }
+
+            private Row HitRow(Point client, out bool onOpen)
+            {
+                Point p = ToContent(client);
+                foreach (Row row in _rows)
+                {
+                    if (!row.Bounds.Contains(p)) continue;
+                    onOpen = !row.Open.IsEmpty && Rectangle.Inflate(row.Open, 4, 4).Contains(p);
+                    return row;
+                }
+                onOpen = false;
+                return null;
+            }
+
+            private void UpdateHover(Point client)
+            {
+                bool onOpen = false;
+                Row row = ClientRectangle.Contains(client) ? HitRow(client, out onOpen) : null;
+                if (row == _hover && onOpen == _hoverOpen) return;
+                if (onOpen != _hoverOpen) _tip.SetToolTip(this, onOpen ? Lang.T("Open in Explorer") : null);
+                _hover = row;
+                _hoverOpen = onOpen;
+                Cursor = onOpen ? Cursors.Hand : Cursors.Default;
+                Invalidate();
+            }
+
+            protected override void OnMouseMove(MouseEventArgs e)
+            {
+                base.OnMouseMove(e);
+                UpdateHover(e.Location);
+            }
+
+            protected override void OnMouseLeave(EventArgs e)
+            {
+                base.OnMouseLeave(e);
+                UpdateHover(new Point(-1, -1));
+            }
+
+            protected override void OnMouseDown(MouseEventArgs e)
+            {
+                base.OnMouseDown(e);
+                Focus();
+                bool onOpen;
+                Row row = HitRow(e.Location, out onOpen);
+                if (row == null) return;
+                SelectRow(row);
+                if (e.Button == MouseButtons.Right && MenuRequested != null) MenuRequested(row.Entry, e.Location);
+            }
+
+            protected override void OnMouseClick(MouseEventArgs e)
+            {
+                base.OnMouseClick(e);
+                bool onOpen;
+                Row row = HitRow(e.Location, out onOpen);
+                if (row != null && onOpen && e.Button == MouseButtons.Left) Open(row);
+            }
+
+            protected override void OnMouseDoubleClick(MouseEventArgs e)
+            {
+                base.OnMouseDoubleClick(e);
+                bool onOpen;
+                Row row = HitRow(e.Location, out onOpen);
+                if (row != null && !onOpen && e.Button == MouseButtons.Left) Open(row);   // the button already opened it
+            }
+
+            protected override void OnMouseWheel(MouseEventArgs e)
+            {
+                base.OnMouseWheel(e);
+                UserScrolled();
+                UpdateHover(e.Location);
+            }
+
+            protected override void OnScroll(ScrollEventArgs se)
+            {
+                base.OnScroll(se);
+                Invalidate();
+                UserScrolled();
+            }
+
+            // ---------- Keyboard ----------
+            protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
+            protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
+
+            protected override bool IsInputKey(Keys keyData)
+            {
+                switch (keyData & Keys.KeyCode)
+                {
+                    case Keys.Up: case Keys.Down: case Keys.PageUp: case Keys.PageDown: case Keys.Home: case Keys.End:
+                        return true;
+                }
+                return base.IsInputKey(keyData);
+            }
+
+            protected override void OnKeyDown(KeyEventArgs e)
+            {
+                int i = _selected == null ? -1 : _rows.IndexOf(_selected);
+                int page = Math.Max(40, ClientSize.Height - 60);
+                switch (e.KeyData)
+                {
+                    case Keys.Down: SelectIndex(i + 1); break;
+                    case Keys.Up: SelectIndex(i < 0 ? 0 : i - 1); break;
+                    case Keys.Home: SelectIndex(0); break;
+                    case Keys.End: SelectIndex(_rows.Count - 1); break;
+                    case Keys.PageDown: SetScrollY(-AutoScrollPosition.Y + page); UserScrolled(); break;
+                    case Keys.PageUp: SetScrollY(-AutoScrollPosition.Y - page); UserScrolled(); break;
+                    case Keys.Enter: if (_selected != null) Open(_selected); break;
+                    case Keys.Control | Keys.C:
+                        if (_selected != null) CopyRow(_selected.Entry);
+                        break;
+                    case Keys.Apps:
+                    case Keys.Shift | Keys.F10:
+                        if (_selected != null && MenuRequested != null)
+                        {
+                            Rectangle rb = Shift(_selected.Bounds, AutoScrollPosition);
+                            MenuRequested(_selected.Entry, new Point(Shift(_selected.Value, AutoScrollPosition).X, rb.Bottom - 6));
+                        }
+                        break;
+                    default:
+                        base.OnKeyDown(e);
+                        return;
+                }
+                e.Handled = e.SuppressKeyPress = true;
+            }
+
+            private void SelectIndex(int i)
+            {
+                if (_rows.Count == 0) return;
+                SelectRow(_rows[Math.Max(0, Math.Min(_rows.Count - 1, i))]);
+            }
+
+            private void SelectRow(Row row)
+            {
+                _selected = row;
+                EnsureVisible(row);
+                Invalidate();
+            }
+
+            /// <summary>Scrolls just enough to show the row (and its card's header when it is the first row).</summary>
+            private void EnsureVisible(Row row)
+            {
+                int top = -AutoScrollPosition.Y, view = ClientSize.Height;
+                int rowTop = row == row.Card.Rows[0] ? row.Card.Bounds.Top : row.Bounds.Top;
+                if (rowTop - 8 < top) SetScrollY(rowTop - 8);
+                else if (row.Bounds.Bottom + 8 > top + view) SetScrollY(row.Bounds.Bottom + 8 - view);
+                else return;
+                UserScrolled();
+            }
+
+            private void SetScrollY(int y)
+            {
+                AutoScrollPosition = new Point(0, Math.Max(0, y));
+                Invalidate();
+            }
+
+            private void Open(Row row)
+            {
+                if (row.Entry.OpenPath != null && OpenRequested != null) OpenRequested(row.Entry);
+            }
+
+            private void CopyRow(Entry entry)
+            {
+                try
+                {
+                    Clipboard.SetText(entry.Name + ": " + entry.Value);
+                }
+                catch (ExternalException)
+                {
+                    // clipboard busy (another app holds it): nothing copied
+                }
+            }
+
+            // ---------- Section at the top (drives the navigator) ----------
+            private void UserScrolled()
+            {
+                if (_cards.Count == 0) { SetTop(null); return; }
+                int top = -AutoScrollPosition.Y;
+                bool atEnd = top + ClientSize.Height >= AutoScrollMinSize.Height - 2 && top > 0;
+                Card card = atEnd ? _cards[_cards.Count - 1]
+                                  : _cards.FirstOrDefault(c => c.Bounds.Bottom - 24 > top) ?? _cards[_cards.Count - 1];
+                SetTop(card.Section);
+            }
+
+            private void SetTop(string section)
+            {
+                if (section == TopSection) return;
+                TopSection = section;
+                if (TopSectionChanged != null) TopSectionChanged(this, EventArgs.Empty);
+            }
         }
     }
 }

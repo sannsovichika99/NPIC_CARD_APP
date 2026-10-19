@@ -107,6 +107,11 @@ namespace NPIC_CARD_APP
                 "ជំនួសការកំណត់ទាំងអស់ដោយការកំណត់ក្នុងឯកសារដែលបាននាំចេញ។\nការកំណត់បច្ចុប្បន្នត្រូវបានបម្រុងទុកជាមុន។");
             A("Section", "ផ្នែក");
             A("No setting matches the search.", "គ្មានការកំណត់ត្រូវនឹងការស្វែងរកទេ។");
+            A("Needs attention", "ត្រូវការការយកចិត្តទុកដាក់");
+            A("Nothing needs attention.", "គ្មានអ្វីត្រូវការការយកចិត្តទុកដាក់ទេ។");
+            A("Copy value", "ចម្លងតម្លៃ");
+            A("Copy setting and value", "ចម្លងការកំណត់ និងតម្លៃ");
+            A("Open in Explorer", "បើកក្នុង Explorer");
             A("Double-click to open in Explorer.", "ចុចពីរដងដើម្បីបើកក្នុង Explorer។");
             A("{0} settings", "ការកំណត់ {0}");
             A("  ·  {0} shown", "  ·  បង្ហាញ {0}");

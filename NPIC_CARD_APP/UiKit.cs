@@ -485,6 +485,10 @@ namespace NPIC_CARD_APP
         public bool Active { get { return _active; } set { _active = value; Invalidate(); } }
         public string Badge { get { return _badge; } set { if (_badge != value) { _badge = value; Invalidate(); } } }
 
+        private Color _badgeColor = Color.Empty;
+        /// <summary>Colour of the badge text (e.g. <see cref="Theme.Warning"/>); Color.Empty = the accent colour.</summary>
+        public Color BadgeColor { get { return _badgeColor; } set { if (_badgeColor != value) { _badgeColor = value; Invalidate(); } } }
+
         private bool _compact;
         /// <summary>Icon-only sidebar: the icon is centred, the label hidden and the badge becomes a small pill on the icon.</summary>
         public bool Compact { get { return _compact; } set { if (_compact != value) { _compact = value; Invalidate(); } } }
@@ -557,7 +561,8 @@ namespace NPIC_CARD_APP
             float badgeW = string.IsNullOrEmpty(_badge) ? 0 : g.MeasureString(_badge, Theme.NavBold).Width + 8;
             Theme.DrawText(g, Text, _active ? (ActiveFont ?? Theme.NavBold) : Font, fore, new RectangleF(54, 0, Width - 54 - badgeW - 14, Height));
             if (badgeW > 0)
-                Theme.DrawText(g, _badge, Theme.NavBold, Theme.Accent, new RectangleF(Width - badgeW - 16, 0, badgeW, Height), StringAlignment.Far);
+                Theme.DrawText(g, _badge, Theme.NavBold, _badgeColor.IsEmpty ? Theme.Accent : _badgeColor,
+                               new RectangleF(Width - badgeW - 16, 0, badgeW, Height), StringAlignment.Far);
         }
     }
 
