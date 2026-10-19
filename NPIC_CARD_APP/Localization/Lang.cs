@@ -12,7 +12,7 @@ using NPIC_CARD_APP.Services;
 namespace NPIC_CARD_APP
 {
     /// <summary>
-    /// Language of the app windows: English or Khmer (<see cref="AppSettings.UiLanguage"/>, EN / KH switch in the sidebar,
+    /// Language of the app windows: English or Khmer (<see cref="AppSettings.UiLanguage"/>, language menu in the top bar,
     /// Settings &amp; Help → Language, or Ctrl+Shift+L). Read once at start-up like Dark Mode: switching restarts the app.
     /// Printed cards are never affected (their text comes from Card Text… and the card designs).
     ///

@@ -27,7 +27,8 @@ This version adds a 3D card preview with video export, a notification bell, a co
 
 ## Change
 * Popups now dim every monitor, not just the one they are on. The dim follows when a monitor is plugged in or removed
-* Sidebar: the language switch is now a globe item in icon-only mode
+* The language switch moved from the sidebar to the top bar: a flag button (EN ▾ / KH ▾) opens a menu with English and Khmer, the language in use ticked
+* The sidebar header (logo and app name) stays at the top while the commands below it scroll
 * Copy System Info includes the new PC, card design and source details
 
 ## Known issue

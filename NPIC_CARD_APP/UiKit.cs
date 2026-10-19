@@ -666,6 +666,190 @@ namespace NPIC_CARD_APP
         }
     }
 
+    /// <summary>
+    /// Header language picker: the current language's flag and code with a ▾ chevron. Clicking it (or Enter / Space /
+    /// ↓ while it has focus) raises <see cref="Control.Click"/>; the owner opens the language menu below it.
+    /// </summary>
+    internal sealed class LanguageButton : Control
+    {
+        private const int FlagW = 20, FlagH = 14, PadX = 12, Gap = 7, ChevronW = 8;
+        private bool _hover, _open;
+
+        public LanguageButton()
+        {
+            SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.OptimizedDoubleBuffer |
+                     ControlStyles.AllPaintingInWmPaint | ControlStyles.ResizeRedraw | ControlStyles.UserPaint |
+                     ControlStyles.Selectable, true);
+            BackColor = Color.Transparent;
+            Font = Theme.NavBold;
+            Cursor = Cursors.Hand;
+            TabStop = true;
+            AccessibleName = "Language";
+            AccessibleRole = AccessibleRole.ButtonDropDown;
+            Text = Lang.Khmer ? "KH" : "EN";
+        }
+
+        /// <summary>True while the menu is showing: the button stays highlighted and the chevron points up.</summary>
+        public bool Open { get { return _open; } set { if (_open != value) { _open = value; Invalidate(); } } }
+
+        /// <summary>The last click came from Enter / Space / ↓ (the menu then starts with an item selected).</summary>
+        public bool OpenedWithKeyboard { get; private set; }
+
+        protected override void OnTextChanged(EventArgs e) { base.OnTextChanged(e); Relayout(); }
+        protected override void OnFontChanged(EventArgs e) { base.OnFontChanged(e); Relayout(); }
+
+        private void Relayout()
+        {
+            int textW = TextRenderer.MeasureText(Text, Font).Width;
+            Size = new Size(PadX + FlagW + Gap + textW + Gap + ChevronW + PadX, 32);
+            Invalidate();
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+        protected override void OnMouseDown(MouseEventArgs e) { Focus(); OpenedWithKeyboard = false; base.OnMouseDown(e); }
+
+        protected override bool IsInputKey(Keys keyData)
+        {
+            return keyData == Keys.Down || base.IsInputKey(keyData);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space || e.KeyCode == Keys.Down)
+            {
+                e.Handled = true;
+                OpenedWithKeyboard = true;
+                OnClick(EventArgs.Empty);
+            }
+            base.OnKeyDown(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            Graphics g = e.Graphics;
+            Theme.HighQuality(g);
+            var r = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+            using (GraphicsPath p = Theme.RoundRect(r, r.Height / 2))
+            {
+                Color fill = _open ? Theme.AccentSoft : _hover ? Color.FromArgb(120, Theme.AccentSoft) : Theme.Surface;
+                using (var b = new SolidBrush(fill)) g.FillPath(b, p);
+                Color edge = Focused && ShowFocusCues ? Color.FromArgb(160, Theme.Accent) : _open ? Theme.AccentSoft : Theme.Border;
+                using (var pen = new Pen(edge)) g.DrawPath(pen, p);
+            }
+
+            var flag = new RectangleF(PadX, (Height - FlagH) / 2f, FlagW, FlagH);
+            FlagArt.Draw(g, Lang.Khmer ? "kh" : "gb", flag);
+
+            g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+            Color text = _open ? Theme.Accent : Theme.TextMain;
+            float textX = flag.Right + Gap;
+            float chevronX = Width - PadX - ChevronW;
+            Theme.DrawText(g, Text, Font, text, new RectangleF(textX - 2, 0, chevronX - textX + 4, Height));
+
+            float cy = Height / 2f, half = ChevronW / 2f, rise = _open ? -2f : 2f;
+            using (var pen = new Pen(_open ? Theme.Accent : Theme.TextMuted, 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(chevronX, cy - rise), new PointF(chevronX + half, cy + rise), new PointF(chevronX + ChevronW, cy - rise)
+                });
+        }
+    }
+
+    /// <summary>Small vector flags (crisp at any scaling): "gb" Union Jack for English, "kh" Cambodia for Khmer.</summary>
+    internal static class FlagArt
+    {
+        /// <summary>Flag as a bitmap (menu item images), transparent outside its rounded corners.</summary>
+        public static Bitmap Create(string code, int width = 20, int height = 14)
+        {
+            var bmp = new Bitmap(width, height);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                Draw(g, code, new RectangleF(0.5f, 0.5f, width - 1, height - 1));   // keeps the outline inside
+            }
+            return bmp;
+        }
+
+        public static void Draw(Graphics g, string code, RectangleF r)
+        {
+            GraphicsState state = g.Save();
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using (GraphicsPath clip = Theme.RoundRect(r, 2.5f))
+            {
+                g.SetClip(clip, CombineMode.Intersect);
+                if (code == "kh") DrawCambodia(g, r); else DrawUnionJack(g, r);
+                g.ResetClip();
+                using (var pen = new Pen(Color.FromArgb(Theme.Dark ? 90 : 45, Theme.Dark ? Color.White : Color.Black), 1f))
+                    g.DrawPath(pen, clip);
+            }
+            g.Restore(state);
+        }
+
+        private static void DrawUnionJack(Graphics g, RectangleF r)
+        {
+            Color blue = Color.FromArgb(1, 33, 105), red = Color.FromArgb(200, 16, 46);
+            using (var b = new SolidBrush(blue)) g.FillRectangle(b, r);
+            float h = r.Height;
+            using (var white = new Pen(Color.White, h * 0.22f))
+            using (var redPen = new Pen(red, h * 0.09f))
+            {
+                g.DrawLine(white, r.Left, r.Top, r.Right, r.Bottom);
+                g.DrawLine(white, r.Left, r.Bottom, r.Right, r.Top);
+                g.DrawLine(redPen, r.Left, r.Top, r.Right, r.Bottom);
+                g.DrawLine(redPen, r.Left, r.Bottom, r.Right, r.Top);
+            }
+            float cx = r.X + r.Width / 2f, cy = r.Y + h / 2f;
+            float wc = h * 0.34f, rc = h * 0.2f;
+            using (var white = new SolidBrush(Color.White))
+            {
+                g.FillRectangle(white, cx - wc / 2, r.Top, wc, h);
+                g.FillRectangle(white, r.Left, cy - wc / 2, r.Width, wc);
+            }
+            using (var rb = new SolidBrush(red))
+            {
+                g.FillRectangle(rb, cx - rc / 2, r.Top, rc, h);
+                g.FillRectangle(rb, r.Left, cy - rc / 2, r.Width, rc);
+            }
+        }
+
+        private static void DrawCambodia(Graphics g, RectangleF r)
+        {
+            Color blue = Color.FromArgb(3, 46, 161), red = Color.FromArgb(224, 0, 37);
+            float w = r.Width, h = r.Height;
+            using (var b = new SolidBrush(blue)) g.FillRectangle(b, r);
+            using (var b = new SolidBrush(red)) g.FillRectangle(b, r.X, r.Y + h / 4f, w, h / 2f);
+
+            // Angkor Wat, simplified: terrace, gallery and five towers (the middle one tallest).
+            float cx = r.X + w / 2f;
+            Func<float, float> Y = f => r.Y + h * f;
+            using (var white = new SolidBrush(Color.White))
+            {
+                g.FillRectangle(white, cx - w * 0.30f, Y(0.64f), w * 0.60f, h * 0.07f);   // terrace
+                g.FillRectangle(white, cx - w * 0.25f, Y(0.53f), w * 0.50f, h * 0.12f);   // gallery
+                Tower(g, white, cx, w * 0.11f, Y(0.28f), Y(0.54f));
+                Tower(g, white, cx - w * 0.14f, w * 0.09f, Y(0.36f), Y(0.54f));
+                Tower(g, white, cx + w * 0.14f, w * 0.09f, Y(0.36f), Y(0.54f));
+                Tower(g, white, cx - w * 0.25f, w * 0.07f, Y(0.44f), Y(0.54f));
+                Tower(g, white, cx + w * 0.25f, w * 0.07f, Y(0.44f), Y(0.54f));
+            }
+        }
+
+        /// <summary>Tower with a pointed top: a body plus a spire about a third of its height.</summary>
+        private static void Tower(Graphics g, Brush b, float cx, float width, float top, float bottom)
+        {
+            float shoulder = top + (bottom - top) * 0.38f, half = width / 2f;
+            g.FillPolygon(b, new[]
+            {
+                new PointF(cx, top), new PointF(cx + half, shoulder), new PointF(cx + half, bottom),
+                new PointF(cx - half, bottom), new PointF(cx - half, shoulder)
+            });
+        }
+    }
+
     internal enum PillKind { Primary, Secondary, Ghost }
 
     /// <summary>Rounded flat button: Primary = violet gradient, Secondary = white outlined, Ghost = accent text only.</summary>

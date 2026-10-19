@@ -1794,6 +1794,10 @@ namespace NPIC_CARD_APP
             public override Color MenuItemSelectedGradientEnd { get { return Theme.AccentSoft; } }
             public override Color SeparatorDark { get { return Theme.Border; } }
             public override Color SeparatorLight { get { return Theme.Surface; } }
+            // Image column (menus with ShowImageMargin, e.g. the language menu's flags): same colour as the menu.
+            public override Color ImageMarginGradientBegin { get { return Theme.Surface; } }
+            public override Color ImageMarginGradientMiddle { get { return Theme.Surface; } }
+            public override Color ImageMarginGradientEnd { get { return Theme.Surface; } }
         }
     }
 

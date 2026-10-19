@@ -442,7 +442,7 @@ namespace NPIC_CARD_APP
             add("Appearance", "Primary colour", AccentPalette.Describe(s.AccentColor), false,
                 "Change it with Settings & Help… → Theme Color… in the sidebar (restarts the app). Printed cards are not affected.", null);
             add("Appearance", "Language", Lang.IsKhmerCode(s.UiLanguage) ? "Khmer" : "English", false,
-                "Switch with EN / KH in the sidebar, Settings & Help… → Language or Ctrl+Shift+L (restarts the app). " +
+                "Switch with the language menu in the top bar, Settings & Help… → Language or Ctrl+Shift+L (restarts the app). " +
                 "Printed cards are not affected.", null);
 
             // ---- Files & folders ----

@@ -160,8 +160,8 @@ namespace NPIC_CARD_APP
             A("Language", "ភាសា");
             A("English", "អង់គ្លេស");
             A("Khmer", "ខ្មែរ");
-            A("Switch with EN / KH in the sidebar, Settings & Help… → Language or Ctrl+Shift+L (restarts the app). Printed cards are not affected.",
-                "ប្ដូរដោយ EN / KH នៅរបារចំហៀង ការកំណត់ និងជំនួយ… → ភាសា ឬ Ctrl+Shift+L (កម្មវិធីបើកឡើងវិញ)។ កាតដែលបានបោះពុម្ពមិនមានការប៉ះពាល់ទេ។");
+            A("Switch with the language menu in the top bar, Settings & Help… → Language or Ctrl+Shift+L (restarts the app). Printed cards are not affected.",
+                "ប្ដូរដោយម៉ឺនុយភាសានៅរបារខាងលើ ការកំណត់ និងជំនួយ… → ភាសា ឬ Ctrl+Shift+L (កម្មវិធីបើកឡើងវិញ)។ កាតដែលបានបោះពុម្ពមិនមានការប៉ះពាល់ទេ។");
             A("Files & folders", "ឯកសារ និងថត");
             A("Choose it with Photo Folder…", "ជ្រើសវាដោយ ថតរូបថត…");
             A("Folder not found.", "រកមិនឃើញថត។");

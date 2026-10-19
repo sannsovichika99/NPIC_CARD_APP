@@ -76,9 +76,7 @@ namespace NPIC_CARD_APP
         private const int SidebarFullWidth = 232, SidebarCompactWidth = 68;
         private Panel _sidebar;
         private BrandBlock _brand;
-        private NavItem _navToggle, _navLanguage;
-        private Control _languageRow;
-        private Label _languageSection;
+        private NavItem _navToggle;
         private readonly List<Label> _sections = new List<Label>();
         private readonly List<KeyValuePair<NavItem, string>> _navTips = new List<KeyValuePair<NavItem, string>>();
         private bool _sidebarCompact;
@@ -179,7 +177,7 @@ namespace NPIC_CARD_APP
 
         // ===================== UI =====================
         //  ┌──────────┬───────────────────────────────────────────────────────────┐
-        //  │ brand    │ Good afternoon, …              [Front|Back]  Preview Print│
+        //  │ brand    │ Good afternoon, …   bell [EN ▾]  [Front|Back]  Print      │
         //  │ nav      │ [ Students ]   [ Selected ]   [ Printed today ]           │
         //  │  …       │ ┌ Students ─────────────┐  ┌ Card preview ─────────────┐  │
         //  │          │ │ search / grid         │  │ front | back              │  │
@@ -202,8 +200,8 @@ namespace NPIC_CARD_APP
         }
 
         /// <summary>
-        /// White sidebar: brand, then every command grouped like the sample's navigation (scrolls when the window is short),
-        /// and the icons-only / full switch pinned at the bottom.
+        /// White sidebar: brand pinned at the top, then every command grouped like the sample's navigation (scrolls when
+        /// the window is short), and the icons-only / full switch pinned at the bottom.
         /// </summary>
         private Control BuildSidebar()
         {
@@ -227,16 +225,9 @@ namespace NPIC_CARD_APP
                 "Cards already printed: who, which side, when (Ctrl+H)");
 
             _brand = new BrandBlock("Card Studio", "ID Card Printer", logo);
-            _languageSection = Section("LANGUAGE");
-            _languageRow = BuildLanguageSwitch();
-            // Icons-only sidebar: the EN | KH pills do not fit, a globe item switches the language instead.
-            _navLanguage = Nav("Language", Theme.IcoGlobe, () => SwitchLanguage(!Lang.Khmer),
-                "Language: switch between English and Khmer (Ctrl+Shift+L)");
-            _navLanguage.Visible = false;
 
             var items = new List<Control>
             {
-                _brand,
                 Spacer(14),
                 dashboard,
                 Nav("Import Students…", Theme.IcoDownload, ShowImportPage,
@@ -269,9 +260,6 @@ namespace NPIC_CARD_APP
                     "Epson Driver Setup (Ctrl+Shift+E), System Info (Ctrl+Shift+I), Check for Updates (Ctrl+U) and Help & About (F1) " +
                     "in one page", Lang.T(Theme.Dark ? "Light Mode" : "Dark Mode"))),
 
-                _languageSection,
-                _languageRow,
-                _navLanguage,
                 Spacer(10)
             };
 
@@ -293,7 +281,11 @@ namespace NPIC_CARD_APP
                 using (var pen = new Pen(GridLine)) e.Graphics.DrawLine(pen, inset, 0, divider.Width - inset, 0);
             };
 
-            side.Controls.Add(scroll);       // fill first, bottom edge last
+            // Fill first, edges last: the brand stays pinned at the top and the toggle at the bottom,
+            // only the navigation between them scrolls.
+            _brand.Dock = DockStyle.Top;
+            side.Controls.Add(scroll);
+            side.Controls.Add(_brand);
             side.Controls.Add(divider);
             side.Controls.Add(_navToggle);
             return side;
@@ -306,7 +298,7 @@ namespace NPIC_CARD_APP
 
         /// <summary>
         /// Icons only (compact) or icons with names (full). In compact mode each icon's tooltip starts with its name,
-        /// section titles become thin dividers and the language pills become a globe item.
+        /// and section titles become thin dividers.
         /// </summary>
         private void SetSidebarCompact(bool compact, bool save)
         {
@@ -330,10 +322,6 @@ namespace NPIC_CARD_APP
                 section.Text = compact ? "" : (string)section.Tag;   // English: Lang translates it again
                 section.Height = compact ? 17 : 32;
             }
-            _languageSection.Visible = !compact;
-            _languageRow.Visible = !compact;
-            _navLanguage.Visible = compact;
-
             _navToggle.Compact = compact;
             _navToggle.Glyph = compact ? Theme.IcoPaneOpen : Theme.IcoPaneClose;
             _navToggle.Text = compact ? "Expand sidebar" : "Collapse sidebar";
@@ -355,27 +343,63 @@ namespace NPIC_CARD_APP
             }
         }
 
-        /// <summary>EN | KH pills: the language of every window. Picking the other one asks, saves it and restarts the app.</summary>
+        /// <summary>
+        /// Header language picker: a 🇬🇧 EN ▾ / 🇰🇭 KH ▾ button that drops down a menu of both languages, the one in
+        /// use ticked. Picking the other one asks, saves it and restarts the app (the language of every window).
+        /// </summary>
         private Control BuildLanguageSwitch()
         {
-            var row = new FlowLayoutPanel
+            var button = new LanguageButton { Margin = new Padding(2, 6, 0, 0) };
+            _tip.SetToolTip(button, "English · ភាសាខ្មែរ  (Ctrl+Shift+L)");
+
+            ContextMenuStrip menu = null;
+            Image gbFlag = FlagArt.Create("gb"), khFlag = FlagArt.Create("kh");
+            DateTime closedAt = DateTime.MinValue;
+            button.Click += (s, e) =>
             {
-                Height = 44, WrapContents = false, BackColor = Surface, Padding = new Padding(16, 4, 0, 0), Margin = new Padding(0)
+                // The mouse-down that closed the menu also clicks the button: let that click just close it.
+                if ((DateTime.Now - closedAt).TotalMilliseconds < 250) return;
+
+                if (menu != null) menu.Dispose();
+                menu = ThemedMenu.Create();
+                menu.ShowImageMargin = true;
+                menu.Items.Add(ThemedMenu.Header(Lang.T("LANGUAGE")));
+                menu.Items.Add(LanguageItem(menu, gbFlag, "English", false));
+                menu.Items.Add(LanguageItem(menu, khFlag, "ភាសាខ្មែរ  (Khmer)", true));
+                menu.Closed += (s2, e2) =>
+                {
+                    button.Open = false;
+                    if (e2.CloseReason == ToolStripDropDownCloseReason.AppClicked) closedAt = DateTime.Now;
+                };
+                button.Open = true;
+                menu.Show(button, new Point(button.Width, button.Height + 4), ToolStripDropDownDirection.BelowLeft);
+                if (button.OpenedWithKeyboard) menu.Items[Lang.Khmer ? 2 : 1].Select();   // start on the language in use
             };
-            var tabs = new PillTabs("EN", "KH") { Margin = new Padding(0) };
-            tabs.SelectedIndex = Lang.Khmer ? 1 : 0;   // before the handler: no question at start-up
-            bool reverting = false;
-            tabs.SelectedIndexChanged += (s, e) =>
+            button.Disposed += (s, e) =>
             {
-                if (reverting) return;
-                if (SwitchLanguage(tabs.SelectedIndex == 1)) return;
-                reverting = true;                        // answered No: show the language in use again
-                tabs.SelectedIndex = Lang.Khmer ? 1 : 0;
-                reverting = false;
+                if (menu != null) menu.Dispose();
+                gbFlag.Dispose();
+                khFlag.Dispose();
             };
-            _tip.SetToolTip(tabs, "English · ភាសាខ្មែរ  (Ctrl+Shift+L)");
-            row.Controls.Add(tabs);
-            return row;
+            return button;
+        }
+
+        /// <summary>One language of the header menu: flag, native name, bold with a ✓ when it is the language in use.</summary>
+        private ToolStripMenuItem LanguageItem(ContextMenuStrip menu, Image flag, string name, bool khmer)
+        {
+            bool current = khmer == Lang.Khmer;
+            ToolStripMenuItem item = ThemedMenu.Item(name, () => { if (!current) SwitchLanguage(khmer); });
+            item.Image = flag;
+            item.ImageScaling = ToolStripItemImageScaling.None;
+            item.Padding = new Padding(0, 3, 0, 3);
+            if (current)
+            {
+                var bold = new Font(menu.Font, FontStyle.Bold);
+                menu.Disposed += (s, e) => bold.Dispose();
+                item.Font = bold;
+                item.ShortcutKeyDisplayString = "✓";
+            }
+            return item;
         }
 
         private NavItem Nav(string text, string glyph, Action action, string tooltip)
@@ -476,6 +500,7 @@ namespace NPIC_CARD_APP
             };
             _notices.Added += n => { if (n.Kind >= NoticeKind.Warning) _bell.Ring(); };
             actions.Controls.Add(_bell);
+            actions.Controls.Add(BuildLanguageSwitch());
             actions.Controls.Add(new Panel { Width = 1, Height = 26, BackColor = Border, Margin = new Padding(6, 12, 10, 0) });
 
             actions.Controls.Add(new Label
@@ -2153,7 +2178,7 @@ namespace NPIC_CARD_APP
         }
 
         /// <summary>
-        /// EN / KH (sidebar), Settings &amp; Help → Language or Ctrl+Shift+L: saves the other language and restarts the app,
+        /// Language menu (top bar), Settings &amp; Help → Language or Ctrl+Shift+L: saves the other language and restarts the app,
         /// like Dark Mode (every window reads the language once at start-up). The user guide follows the new language.
         /// True when the app is restarting.
         /// </summary>

@@ -945,10 +945,10 @@ namespace NPIC_CARD_APP
                        "with a live preview. The app restarts to apply it. Printed cards are not affected.",
                        "**Theme Color…** — ជ្រើសរើសពណ៌ចម្បងរបស់ប៊ូតុង ផ្ទាំង និងការរំលេច (ពណ៌ ១០ ឬពណ៌ផ្ទាល់ខ្លួន) " +
                        "ដោយមានការមើលជាមុនភ្លាមៗ។ កម្មវិធីនឹងចាប់ផ្តើមឡើងវិញដើម្បីអនុវត្ត។ កាតដែលបោះពុម្ពមិនរងផលប៉ះពាល់ទេ។"));
-            w.Bullet(T("**Language** — **EN / KH** at the bottom of the sidebar (or **Settings & Help… → Language**, Ctrl+Shift+L) shows " +
+            w.Bullet(T("**Language** — the flag menu (**EN ▾ / KH ▾**) in the top bar (or **Settings & Help… → Language**, Ctrl+Shift+L) shows " +
                        "every window of the app in English or Khmer. The app restarts to apply it, and this guide switches with it. " +
                        "Printed cards are not affected: their text comes from **Card Text…** and the card design.",
-                       "**Language** — **EN / KH** នៅខាងក្រោមរបារចំហៀង (ឬ **Settings & Help… → Language**, Ctrl+Shift+L) បង្ហាញ" +
+                       "**Language** — ម៉ឺនុយទង់ជាតិ (**EN ▾ / KH ▾**) នៅរបារខាងលើ (ឬ **Settings & Help… → Language**, Ctrl+Shift+L) បង្ហាញ" +
                        "គ្រប់ផ្ទាំងរបស់កម្មវិធីជាភាសាអង់គ្លេស ឬភាសាខ្មែរ។ កម្មវិធីនឹងចាប់ផ្តើមឡើងវិញដើម្បីអនុវត្ត ហើយការណែនាំនេះប្តូរតាម។ " +
                        "កាតដែលបោះពុម្ពមិនរងផលប៉ះពាល់ទេ៖ អត្ថបទរបស់វាមកពី **Card Text…** និងការរចនាកាត។"));
             w.Bullet(T("**Card images** (logos, stamp, QR and social icons) live in the **Assets** folder next to the app.",
