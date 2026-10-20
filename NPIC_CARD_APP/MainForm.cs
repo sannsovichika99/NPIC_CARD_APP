@@ -49,6 +49,12 @@ namespace NPIC_CARD_APP
         private readonly AppSettings _settings;
         private List<Student> _students = new List<Student>();
         private List<Student> _view = new List<Student>();   // _students filtered by the search box = what the grid shows
+
+        /// <summary>Students chosen in the Gallery: while set, the list shows only them (null = every student).</summary>
+        private HashSet<string> _picked;
+        private List<Student> _pickedFrom;   // student list the pick was made in: loading another list ends the pick
+        private Control _pickBar;
+        private Label _lblPicked;
         private bool _loading;
         private string _source = "";                          // where the list came from: file name, API host or SQL server
 
@@ -61,7 +67,8 @@ namespace NPIC_CARD_APP
         private ComboBox _cboPrinter;
         private CheckBox _chkAllPrinters;
         private NumericUpDown _numS1X, _numS1Y, _numS2X, _numS2Y;
-        private ComboBox _cboSlots, _cboOrientation;
+        private SegmentPicker _segSlots, _segOrientation;
+        private TrayMap _trayMap;
         private CheckBox _chkRotateBack, _chkRotateFront;
         private Label _lblSlotHint;
         private readonly ToolTip _tip = new ToolTip();
@@ -597,7 +604,13 @@ namespace NPIC_CARD_APP
             _txtSearch.TextChanged += (s, e) => ApplyFilter();
             _txtSearch.KeyDown += (s, e) =>
             {
-                if (e.KeyCode == Keys.Escape) { _txtSearch.Clear(); e.SuppressKeyPress = true; }
+                if (e.KeyCode == Keys.Escape)
+                {
+                    // First Esc clears the search, the next one shows every student again after a Gallery pick
+                    if (_txtSearch.TextLength > 0) _txtSearch.Clear();
+                    else ClearGalleryPick();
+                    e.SuppressKeyPress = true;
+                }
                 else if (e.KeyCode == Keys.Down && _grid.Rows.Count > 0) { _grid.Focus(); e.SuppressKeyPress = true; }
             };
 
@@ -651,17 +664,62 @@ namespace NPIC_CARD_APP
             gridHost.Controls.Add(_lblEmpty);
             _lblEmpty.BringToFront();
 
-            var body = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = new Padding(0) };
+            var body = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Margin = new Padding(0) };
             body.RowStyles.Add(new RowStyle(SizeType.Absolute, 50f));
+            body.RowStyles.Add(new RowStyle(SizeType.AutoSize));       // Gallery pick bar (hidden = no height)
             body.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
             body.Controls.Add(search, 0, 0);
-            body.Controls.Add(gridHost, 0, 1);
+            body.Controls.Add(BuildPickBar(), 0, 1);
+            body.Controls.Add(gridHost, 0, 2);
 
             return MakeCard("Students", body, _lblCount,
                 MakeButton("Import…", PillKind.Ghost, (s, e) => ShowImportPage(),
                     "Load the student list from Excel, CSV, the web API or SQL Server (Ctrl+L)"),
                 MakeButton("View List", PillKind.Ghost, (s, e) => ShowGallery(),
                     "View every loaded student with photo, details and print status (Ctrl+G)"));
+        }
+
+        /// <summary>
+        /// Soft accent strip above the student list while it shows only the students chosen in the Gallery:
+        /// "Showing 3 students chosen in the Gallery" + Show all.
+        /// </summary>
+        private Control BuildPickBar()
+        {
+            var bar = new Panel
+            {
+                Dock = DockStyle.Fill, Height = 38, Margin = new Padding(0, 0, 0, 8), Padding = new Padding(36, 3, 10, 3),
+                BackColor = Surface, Visible = false
+            };
+            // Label + button sit on the accent fill, inside the rounded edge (the button paints its parent's colour)
+            var inner = new Panel { Dock = DockStyle.Fill, BackColor = AccentSoft, Margin = new Padding(0) };
+            bar.Paint += (s, e) =>
+            {
+                Graphics g = e.Graphics;
+                Theme.HighQuality(g);
+                var r = new RectangleF(0.5f, 0.5f, bar.Width - 1.5f, bar.Height - 1.5f);
+                using (System.Drawing.Drawing2D.GraphicsPath p = Theme.RoundRect(r, 10))
+                {
+                    using (var b = new SolidBrush(AccentSoft)) g.FillPath(b, p);
+                    using (var pen = new Pen(Theme.AccentOutline)) g.DrawPath(pen, p);
+                }
+                Theme.DrawIcon(g, Theme.IcoPhoto, 15f, Accent, new RectangleF(8, 0, 24, bar.Height));
+            };
+
+            _lblPicked = new Label
+            {
+                Dock = DockStyle.Fill, AutoEllipsis = true, ForeColor = Accent, Font = Theme.UiFont(9f, true),
+                BackColor = Color.Transparent, TextAlign = ContentAlignment.MiddleLeft
+            };
+            Button showAll = MakeButton("Show all", PillKind.Ghost, (s, e) => ClearGalleryPick(),
+                "Show every student in the list again (Esc in the search box)");
+            showAll.Dock = DockStyle.Right;
+            showAll.Margin = new Padding(0);
+
+            inner.Controls.Add(_lblPicked);   // fill first, docked edge last (docking runs in reverse add order)
+            inner.Controls.Add(showAll);
+            bar.Controls.Add(inner);
+            _pickBar = bar;
+            return bar;
         }
 
         /// <summary>Front and back thumbnails side by side; the side that will print gets a violet outline.</summary>
@@ -794,58 +852,173 @@ namespace NPIC_CARD_APP
             return body;
         }
 
+        //  Tray page (fits the 174 px card body, no scrolling; the hint + Save strip is docked under the grid):
+        //  ┌──────────────────────────────────────────┬───────────┐
+        //  │               X (mm)     Y (mm)          │ ┌───────┐ │
+        //  │ Slot 1        [  0.0 ]   [  0.0 ]        │ │ 1     │ │  mini map of the page:
+        //  │ Slot 2        [  0.0 ]   [ 60.0 ]        │ │   2   │ │  where each slot lands,
+        //  │ Per tray load [Auto| 1 | 2 ]             │ │       │ │  live as the values change
+        //  │ Card on tray  [ ▭ | ▯ | ▯ ]              │ │       │ │
+        //  │ Rotate 180°   ☐ Front  ☐ Back            │ └───────┘ │
+        //  ├──────────────────────────────────────────┴───────────┤
+        //  │ 5 card(s) → 3 tray load(s), 2 per load        [Save] │
+        //  └──────────────────────────────────────────────────────┘
         private Control BuildTrayPage()
         {
-            var rows = new FlowLayoutPanel
+            const float rowH = 26f;
+            var grid = new TableLayoutPanel
             {
-                FlowDirection = FlowDirection.TopDown, WrapContents = false,
-                AutoScroll = true, Margin = new Padding(0), BackColor = Surface,
-                Font = SetupFont   // Latin-only page: Segoe UI keeps the spin boxes and lists compact
+                Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 6, Margin = new Padding(0), Padding = new Padding(0), BackColor = Surface,
+                Font = SetupFont   // Latin-only page: Segoe UI keeps the spin boxes compact
             };
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));          // field names
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));          // X / Front
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));          // Y / Back
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));     // mini map
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 14f));           // X / Y column heads
+            for (int i = 0; i < 5; i++) grid.RowStyles.Add(new RowStyle(SizeType.Absolute, rowH));
 
-            _numS1X = MakeNumber(); _numS1Y = MakeNumber();
-            _numS2X = MakeNumber(); _numS2Y = MakeNumber();
+            grid.Controls.Add(ColumnHead("X (mm)"), 1, 0);
+            grid.Controls.Add(ColumnHead("Y (mm)"), 2, 0);
+
+            _numS1X = TrayNumber(); _numS1Y = TrayNumber();
+            _numS2X = TrayNumber(); _numS2Y = TrayNumber();
             foreach (NumericUpDown n in new[] { _numS1X, _numS1Y, _numS2X, _numS2Y })
                 n.ValueChanged += (s, e) => UpdateSlotHint();
-            rows.Controls.Add(Row(FieldLabel("Slot 1"), Unit("X"), _numS1X, Unit("Y"), _numS1Y, Unit("mm")));
-            rows.Controls.Add(Row(FieldLabel("Slot 2"), Unit("X"), _numS2X, Unit("Y"), _numS2Y, Unit("mm")));
+            _tip.SetTip(_numS1X, "Slot 1 X: distance from the left edge of the page (mm)");
+            _tip.SetTip(_numS1Y, "Slot 1 Y: distance from the top edge of the page (mm)");
+            _tip.SetTip(_numS2X, "Slot 2 X: distance from the left edge of the page (mm)");
+            _tip.SetTip(_numS2Y, "Slot 2 Y: distance from the top edge of the page (mm)");
+            grid.Controls.Add(TrayLabel("Slot 1"), 0, 1);
+            grid.Controls.Add(_numS1X, 1, 1);
+            grid.Controls.Add(_numS1Y, 2, 1);
+            grid.Controls.Add(TrayLabel("Slot 2"), 0, 2);
+            grid.Controls.Add(_numS2X, 1, 2);
+            grid.Controls.Add(_numS2Y, 2, 2);
 
             // Order must match the SlotMode enum: Auto, One, Two
-            _cboSlots = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 76, Margin = new Padding(0, 3, 10, 3) };
-            _cboSlots.Items.AddRange(new object[] { Lang.T("Auto"), "1", "2" });
-            _cboSlots.SelectedIndexChanged += (s, e) => UpdateSlotHint();
-            _tip.SetTip(_cboSlots,
+            _segSlots = new SegmentPicker(new[] { "Auto", "1", "2" }) { Anchor = AnchorStyles.Left, Margin = new Padding(0) };
+            _segSlots.SelectedIndexChanged += (s, e) => UpdateSlotHint();
+            _tip.SetTip(_segSlots,
                 "Auto = 2 cards per tray load when 2 or more students are selected and slot 2 is set up; " +
                 "otherwise slot 1 only.\n1 = always slot 1 only.   2 = always slot 1 + slot 2.");
-            _lblSlotHint = new Label { AutoSize = true, ForeColor = TextMuted, Font = CaptionFont, Margin = new Padding(0, 7, 0, 0) };
-            rows.Controls.Add(Row(FieldLabel("Per tray load"), _cboSlots, _lblSlotHint));
+            grid.Controls.Add(TrayLabel("Per tray load"), 0, 3);
+            grid.Controls.Add(_segSlots, 1, 3);
+            grid.SetColumnSpan(_segSlots, 2);
 
             // Order must match the CardOrientation enum: Horizontal, VerticalRight, VerticalLeft
-            _cboOrientation = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 190, Margin = new Padding(0, 3, 6, 3) };
-            _cboOrientation.Items.AddRange(new object[]
+            _segOrientation = new SegmentPicker(
+                new[] { "Horizontal", "Vertical (turn right 90°)", "Vertical (turn left 90°)" }, 38)
             {
-                Lang.T("Horizontal"), Lang.T("Vertical (turn right 90°)"), Lang.T("Vertical (turn left 90°)")
-            });
-            _cboOrientation.SelectedIndexChanged += (s, e) =>
+                Anchor = AnchorStyles.Left, Margin = new Padding(0), DrawGlyph = DrawOrientationGlyph
+            };
+            _segOrientation.SelectedIndexChanged += (s, e) =>
             {
-                if (_cboOrientation.SelectedIndex >= 0) _settings.CardOrientation = (CardOrientation)_cboOrientation.SelectedIndex;
+                if (_segOrientation.SelectedIndex < 0) return;
+                _settings.CardOrientation = (CardOrientation)_segOrientation.SelectedIndex;
+                // Tip = the chosen option's name, then how to choose (both already in the app's language)
+                _tip.SetToolTip(_segOrientation, _segOrientation.SelectedText + "\n\n" + Lang.T(
+                    "How the card lies in the tray pocket.\n" +
+                    "Vertical = the long side of the card runs in the feed direction (54 x 85.6 mm on the page).\n" +
+                    "If the card comes out upside down, pick the other Vertical option."));
                 UpdateSlotHint();
             };
-            _tip.SetTip(_cboOrientation,
-                "How the card lies in the tray pocket.\n" +
-                "Vertical = the long side of the card runs in the feed direction (54 x 85.6 mm on the page).\n" +
-                "If the card comes out upside down, pick the other Vertical option.");
-            rows.Controls.Add(Row(FieldLabel("Card on tray"), _cboOrientation));
+            grid.Controls.Add(TrayLabel("Card on tray"), 0, 4);
+            grid.Controls.Add(_segOrientation, 1, 4);
+            grid.SetColumnSpan(_segOrientation, 2);
 
-            _chkRotateFront = new CheckBox { Text = "Front", AutoSize = true, Margin = new Padding(0, 6, 14, 3) };
+            _chkRotateFront = new CheckBox { Text = "Front", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(1, 0, 6, 0) };
             _chkRotateFront.CheckedChanged += (s, e) => { _settings.RotateFront180 = _chkRotateFront.Checked; };
-            _chkRotateBack = new CheckBox { Text = "Back", AutoSize = true, Margin = new Padding(0, 6, 10, 3) };
+            _chkRotateBack = new CheckBox { Text = "Back", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(1, 0, 6, 0) };
             _chkRotateBack.CheckedChanged += (s, e) => { _settings.RotateBack180 = _chkRotateBack.Checked; };
             _tip.SetTip(_chkRotateFront, "Rotate the front side 180° when printing");
             _tip.SetTip(_chkRotateBack, "Rotate the back side 180° when printing");
-            rows.Controls.Add(Row(FieldLabel("Rotate 180°"), _chkRotateFront, _chkRotateBack,
-                MakeButton("Save", PillKind.Ghost, (s, e) => SaveSettings(true), "Save slot positions and print options")));
-            return rows;
+            grid.Controls.Add(TrayLabel("Rotate 180°"), 0, 5);
+            grid.Controls.Add(_chkRotateFront, 1, 5);
+            grid.Controls.Add(_chkRotateBack, 2, 5);
+
+            _trayMap = new TrayMap { Dock = DockStyle.Fill, Margin = new Padding(12, 2, 0, 2) };
+            _trayMap.SlotClicked += slot =>
+            {
+                NumericUpDown box = slot == 1 ? _numS1X : _numS2X;
+                box.Focus();
+                box.Select(0, box.Text.Length);
+            };
+            _tip.SetTip(_trayMap, "Where slot 1 and slot 2 land on the printer page. Click a slot to edit its X / Y.");
+            grid.Controls.Add(_trayMap, 3, 0);
+            grid.SetRowSpan(_trayMap, 6);
+
+            _lblSlotHint = new Label
+            {
+                Dock = DockStyle.Fill, AutoEllipsis = true, ForeColor = TextMuted, Font = Theme.Small,
+                TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(1, 0, 0, 0)
+            };
+            Button save = MakeButton("Save", PillKind.Ghost, (s, e) => SaveSettings(true), "Save slot positions and print options");
+            save.Anchor = AnchorStyles.Right;
+            save.Margin = new Padding(6, 0, 0, 0);
+            // Docked under the grid, not a grid row: a row spanning the auto-size columns would widen them and
+            // squeeze the map.
+            var footer = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 30, ColumnCount = 2, RowCount = 1, Margin = new Padding(0), BackColor = Surface };
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            footer.Controls.Add(_lblSlotHint, 0, 0);
+            footer.Controls.Add(save, 1, 0);
+
+            var page = new Panel { Margin = new Padding(0), BackColor = Surface, Font = SetupFont };
+            page.Controls.Add(grid);     // fill first, docked edge last (docking runs in reverse add order)
+            page.Controls.Add(footer);
+            return page;
+        }
+
+        private static Label TrayLabel(string text)
+        {
+            return new Label
+            {
+                Text = text, AutoSize = true, ForeColor = TextMuted, Anchor = AnchorStyles.Left, Margin = new Padding(0, 0, 12, 0)
+            };
+        }
+
+        /// <summary>Unit heading over a column of spin boxes ("X (mm)"): the same in both languages.</summary>
+        private static Label ColumnHead(string text)
+        {
+            return Lang.Keep(new Label
+            {
+                Text = text, AutoSize = true, ForeColor = TextMuted, Font = Theme.Small,
+                Anchor = AnchorStyles.Left | AnchorStyles.Bottom, Margin = new Padding(1, 0, 0, 0)
+            });
+        }
+
+        private static NumericUpDown TrayNumber()
+        {
+            NumericUpDown n = MakeNumber();
+            n.Width = 68;
+            n.Anchor = AnchorStyles.Left;
+            n.Margin = new Padding(0, 0, 8, 0);
+            return n;
+        }
+
+        /// <summary>
+        /// Card-on-tray pictograms: a card with a header stripe along the card's top edge, turned the way the option turns
+        /// the printed image (Horizontal = stripe on top; turn right 90° = stripe on the right; turn left 90° = on the left).
+        /// </summary>
+        private static void DrawOrientationGlyph(Graphics g, int index, RectangleF bounds, Color ink)
+        {
+            bool vertical = index != 0;
+            float w = vertical ? 11f : 17f, h = vertical ? 17f : 11f;
+            var card = new RectangleF(bounds.X + (bounds.Width - w) / 2f, bounds.Y + (bounds.Height - h) / 2f, w, h);
+            RectangleF stripe =
+                index == 1 ? new RectangleF(card.Right - 4f, card.Top, 4f, card.Height) :
+                index == 2 ? new RectangleF(card.Left, card.Top, 4f, card.Height) :
+                             new RectangleF(card.Left, card.Top, card.Width, 4f);
+            using (System.Drawing.Drawing2D.GraphicsPath p = Theme.RoundRect(card, 2f))
+            {
+                System.Drawing.Drawing2D.GraphicsState st = g.Save();
+                g.SetClip(p);
+                using (var b = new SolidBrush(ink)) g.FillRectangle(b, stripe);
+                g.Restore(st);
+                using (var pen = new Pen(ink, 1.3f)) g.DrawPath(pen, p);
+            }
         }
 
         /// <summary>
@@ -1089,11 +1262,23 @@ namespace NPIC_CARD_APP
             SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, Lang.T(text));
         }
 
-        /// <summary>Rebinds the grid to the students that match the search box.</summary>
+        /// <summary>Rebinds the grid to the students that match the search box (and the Gallery pick, while there is one).</summary>
         private void ApplyFilter()
         {
+            if (_picked != null && !ReferenceEquals(_pickedFrom, _students)) _picked = null;   // another list was loaded
+            if (_pickBar != null) _pickBar.Visible = _picked != null;
+
             string q = (_txtSearch.Text ?? "").Trim();
-            _view = q.Length == 0 ? _students : _students.Where(s => Matches(s, q)).ToList();
+            IEnumerable<Student> view = _students;
+            if (_picked != null) view = view.Where(s => _picked.Contains(s.StudentId ?? ""));
+            if (q.Length > 0) view = view.Where(s => Matches(s, q));
+            _view = _picked == null && q.Length == 0 ? _students : view.ToList();
+            if (_picked != null)
+            {
+                int chosen = _students.Count(s => _picked.Contains(s.StudentId ?? ""));
+                _lblPicked.Text = Lang.F(chosen == 1 ? "Showing {0} student chosen in the Gallery" : "Showing {0} students chosen in the Gallery",
+                    chosen);
+            }
             _grid.DataSource = null;
             _grid.DataSource = _view;
             UpdateEmptyState();
@@ -1127,7 +1312,9 @@ namespace NPIC_CARD_APP
             _lblEmpty.Text = _students.Count == 0
                 ? "No students loaded yet.\n\nClick  Import Students…  in the sidebar (Ctrl+L) to load them from Excel, CSV, API or SQL Server.\n" +
                   "No list yet? Save an Excel template there to fill in.\n\nNew to Card Studio? Press F1 for the user guide."
-                : "No students match “" + _txtSearch.Text.Trim() + "”.\n\nPress Esc to clear the search.";
+                : _picked != null && _txtSearch.Text.Trim().Length == 0
+                    ? "None of the students chosen in the Gallery are in this list.\n\nClick  Show all  to see every student."
+                    : "No students match “" + _txtSearch.Text.Trim() + "”.\n\nPress Esc to clear the search.";
             _lblEmpty.Visible = _view.Count == 0;
         }
 
@@ -1142,6 +1329,7 @@ namespace NPIC_CARD_APP
 
             _statStudents.Value = _students.Count.ToString("N0");
             _statStudents.Caption = _students.Count == 0 ? "No list loaded"
+                : _picked != null ? _view.Count.ToString("N0") + " chosen in the Gallery"
                 : _view.Count != _students.Count ? _view.Count.ToString("N0") + " match the search"
                 : _source.Length > 0 ? "from " + _source : "in the list";
             _statSelected.Value = selected.ToString("N0");
@@ -1201,10 +1389,10 @@ namespace NPIC_CARD_APP
             _numS1Y.Value = Clamp(_numS1Y, _settings.Slot1Y);
             _numS2X.Value = Clamp(_numS2X, _settings.Slot2X);
             _numS2Y.Value = Clamp(_numS2Y, _settings.Slot2Y);
-            _cboSlots.SelectedIndex = (int)_settings.SlotMode;
+            _segSlots.SelectedIndex = (int)_settings.SlotMode;
             _chkRotateBack.Checked = _settings.RotateBack180;
             _chkRotateFront.Checked = _settings.RotateFront180;
-            _cboOrientation.SelectedIndex = (int)_settings.CardOrientation;
+            _segOrientation.SelectedIndex = (int)_settings.CardOrientation;
             _loading = false;
         }
 
@@ -1222,10 +1410,10 @@ namespace NPIC_CARD_APP
             _settings.Slot1Y = (float)_numS1Y.Value;
             _settings.Slot2X = (float)_numS2X.Value;
             _settings.Slot2Y = (float)_numS2Y.Value;
-            if (_cboSlots.SelectedIndex >= 0) _settings.SlotMode = (SlotMode)_cboSlots.SelectedIndex;
+            if (_segSlots.SelectedIndex >= 0) _settings.SlotMode = (SlotMode)_segSlots.SelectedIndex;
             _settings.RotateBack180 = _chkRotateBack.Checked;
             _settings.RotateFront180 = _chkRotateFront.Checked;
-            if (_cboOrientation.SelectedIndex >= 0) _settings.CardOrientation = (CardOrientation)_cboOrientation.SelectedIndex;
+            if (_segOrientation.SelectedIndex >= 0) _settings.CardOrientation = (CardOrientation)_segOrientation.SelectedIndex;
         }
 
         private void SaveSettings(bool notify)
@@ -1245,16 +1433,24 @@ namespace NPIC_CARD_APP
 
         private void UpdatePageInfo()
         {
-            if (string.IsNullOrEmpty(_settings.PrinterName)) { _lblPage.Text = "No card printer selected."; return; }
-            try { _lblPage.Text = new CardPrinter(_settings).DescribePage().Replace("  |  ", Environment.NewLine); }
+            if (string.IsNullOrEmpty(_settings.PrinterName))
+            {
+                _lblPage.Text = "No card printer selected.";
+                _trayMap.PageMm = null;
+                UpdateSlotHint();
+                return;
+            }
+            var printer = new CardPrinter(_settings);
+            try { _lblPage.Text = printer.DescribePage().Replace("  |  ", Environment.NewLine); }
             catch (Exception ex) { _lblPage.Text = ex.Message; }
+            _trayMap.PageMm = printer.TryGetPageSizeMm();
             UpdateSlotHint();   // the page size decides whether slot 2 fits
         }
 
         /// <summary>Shows next to the Slots box how the selected cards will be split into tray loads.</summary>
         private void UpdateSlotHint()
         {
-            if (_loading || _lblSlotHint == null || _cboSlots.SelectedIndex < 0) return;
+            if (_loading || _lblSlotHint == null || _segSlots.SelectedIndex < 0) return;
             ReadUiToSettings();
 
             int count = SelectedStudents().Count;
@@ -1267,6 +1463,10 @@ namespace NPIC_CARD_APP
                 text += perLoad == 2 ? ", 2 per load" : ", slot 1 only — slot 2 not usable";
             _lblSlotHint.Text = text;
             _lblSlotHint.ForeColor = reason != null ? Warning : TextMuted;
+            _trayMap.SetSlots(
+                new RectangleF(_settings.Slot1X, _settings.Slot1Y, _settings.SlotWidthMm, _settings.SlotHeightMm),
+                new RectangleF(_settings.Slot2X, _settings.Slot2Y, _settings.SlotWidthMm, _settings.SlotHeightMm),
+                _settings.SlotMode == SlotMode.One ? TraySlotUse.Off : perLoad == 2 ? TraySlotUse.InUse : TraySlotUse.Idle);
             _statSelected.Caption = count == 0
                 ? "Select rows in the list"
                 : string.Format("{0} tray load(s)  ·  {1} side", loads, PrintFront ? "front" : "back");
@@ -2019,7 +2219,7 @@ namespace NPIC_CARD_APP
 
             string slotReason;
             int perLoad = printer.CardsPerLoad(2, out slotReason);
-            string slots = "Slots per tray load: " + _cboSlots.Text +
+            string slots = "Slots per tray load: " + _segSlots.SelectedText +
                 (_settings.SlotMode == SlotMode.Auto
                     ? " (" + (perLoad == 2 ? "2 cards when 2+ are selected" : "slot 1 only — " + slotReason) + ")"
                     : "");
@@ -2496,18 +2696,58 @@ namespace NPIC_CARD_APP
         private void ShowGallery()
         {
             Student current = CurrentStudent();
-            using (var form = new StudentGalleryForm(_students, _settings, current == null ? null : current.StudentId))
+            // The rows selected here open already chosen in the Gallery, so a pick can be adjusted there and sent back
+            List<string> selected = SelectedStudents().Select(s => s.StudentId ?? "").ToList();
+            using (var form = new StudentGalleryForm(_students, _settings, current == null ? null : current.StudentId, selected))
             {
-                if (form.ShowDialog(this) == DialogResult.OK) SelectStudentById(form.SelectedStudentId);
+                if (form.ShowDialog(this) != DialogResult.OK) return;
+                ShowGalleryPick(form.SelectedStudentIds, form.SelectedStudentId);
             }
         }
 
-        /// <summary>Selects the student in the grid (clearing the search if it hides them). False when not loaded.</summary>
+        /// <summary>
+        /// The student list shows only the students chosen in the Gallery, all of them selected (ready for Print Selected),
+        /// with <paramref name="focusId"/> as the current row (card preview). The search box is cleared so none is hidden.
+        /// </summary>
+        private void ShowGalleryPick(IEnumerable<string> ids, string focusId)
+        {
+            var pick = new HashSet<string>(ids ?? new string[0], StringComparer.OrdinalIgnoreCase);
+            if (pick.Count == 0) return;
+            _picked = pick;
+            _pickedFrom = _students;
+            if (_txtSearch.TextLength > 0) _txtSearch.Clear();   // rebinds the grid (ApplyFilter)
+            else ApplyFilter();
+
+            int focus = Math.Max(0, _view.FindIndex(s => string.Equals(s.StudentId, focusId, StringComparison.OrdinalIgnoreCase)));
+            SelectRow(focus);
+            if (_grid.Rows.Count > 1) _grid.SelectAll();          // keeps the current row: its card stays in the preview
+            if (focus < _grid.Rows.Count) _grid.FirstDisplayedScrollingRowIndex = focus;
+            SetStatus(_view.Count == 1
+                ? "Showing the student chosen in the Gallery. Click Show all to see every student."
+                : string.Format("Showing the {0} students chosen in the Gallery, all selected. Click Show all to see every student.", _view.Count));
+        }
+
+        /// <summary>Ends a Gallery pick: every student shows again, and the current student stays selected.</summary>
+        private void ClearGalleryPick()
+        {
+            if (_picked == null) return;
+            Student current = CurrentStudent();
+            _picked = null;
+            ApplyFilter();
+            if (current != null) SelectStudentById(current.StudentId);
+        }
+
+        /// <summary>Selects the student in the grid (clearing the search or Gallery pick if it hides them). False when not loaded.</summary>
         private bool SelectStudentById(string studentId)
         {
             Func<Student, bool> same = s => string.Equals(s.StudentId, studentId, StringComparison.OrdinalIgnoreCase);
             if (!_students.Any(same)) return false;
-            if (!_view.Any(same)) _txtSearch.Clear();   // rebinds the grid to every student
+            if (!_view.Any(same))
+            {
+                _picked = null;
+                if (_txtSearch.TextLength > 0) _txtSearch.Clear();   // rebinds the grid to every student
+                else ApplyFilter();
+            }
 
             int index = _view.FindIndex(s => same(s));
             SelectRow(index);

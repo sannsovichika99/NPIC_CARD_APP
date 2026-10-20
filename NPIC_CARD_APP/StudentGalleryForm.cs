@@ -21,8 +21,10 @@ namespace NPIC_CARD_APP
     /// large photo and every field of the selected student. Shows at a glance whose photo is missing and
     /// whose card is already printed (from <see cref="PrintHistory"/>).
     /// Thumbnails load in the background, so long lists open immediately.
-    ///   Enter / double-click = select the student in the main list, F5 = reload photos, Ctrl+F = search,
-    ///   Ctrl+B = remove background, Esc = close
+    /// Several students can be chosen (Ctrl / Shift + click, Ctrl+A = every tile shown); "Select in List" hands them all to
+    /// the main window, whose student list then shows just those students, selected and ready to print.
+    ///   Enter / double-click = select in the main list, F5 = reload photos, Ctrl+F = search,
+    ///   Ctrl+A = choose every tile shown, Ctrl+B = remove background, Esc = close
     /// </summary>
     public class StudentGalleryForm : ModalForm
     {
@@ -83,7 +85,16 @@ namespace NPIC_CARD_APP
         /// <summary>StudentId the user chose with Enter / double-click / "Select in List" (DialogResult = OK).</summary>
         public string SelectedStudentId { get; private set; }
 
-        public StudentGalleryForm(List<Student> students, AppSettings settings, string startStudentId)
+        /// <summary>
+        /// Every StudentId chosen when the gallery closed with OK, in tile order (the one the details panel showed is
+        /// <see cref="SelectedStudentId"/>). One entry when a single student was chosen.
+        /// </summary>
+        public IReadOnlyList<string> SelectedStudentIds { get; private set; } = new string[0];
+
+        /// <param name="startStudentId">Student shown in the details panel when the gallery opens.</param>
+        /// <param name="startSelectedIds">Students chosen when it opens (e.g. the rows selected in the main list); may be null.</param>
+        public StudentGalleryForm(List<Student> students, AppSettings settings, string startStudentId,
+            IEnumerable<string> startSelectedIds = null)
         {
             _students = students ?? new List<Student>();
             _photoFolder = settings.PhotoFolder ?? "";
@@ -103,7 +114,7 @@ namespace NPIC_CARD_APP
             // ---- Top bar: search + filter ----
             _txtSearch = new TextBox { Width = 260, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(0, 5, 14, 0) };
             _txtSearch.HandleCreated += (s, e) => SetCueBanner(_txtSearch, "Search ID, name or faculty…  (Ctrl+F)");
-            _txtSearch.TextChanged += (s, e) => ShowStudents(CurrentId());
+            _txtSearch.TextChanged += (s, e) => ShowStudents(CurrentId(), ChosenIds());
             _txtSearch.KeyDown += (s, e) =>
             {
                 if (e.KeyCode == Keys.Down && _list.Items.Count > 0) { _list.Focus(); e.SuppressKeyPress = true; }
@@ -113,7 +124,7 @@ namespace NPIC_CARD_APP
             _cboFilter = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 170, Margin = new Padding(3, 4, 14, 0) };
             _cboFilter.Items.AddRange(new object[] { "All students", "Missing photo", "Not printed yet", "Partly printed", "Fully printed" });
             _cboFilter.SelectedIndex = 0;
-            _cboFilter.SelectedIndexChanged += (s, e) => ShowStudents(CurrentId());
+            _cboFilter.SelectedIndexChanged += (s, e) => ShowStudents(CurrentId(), ChosenIds());
 
             var top = ModalUi.Toolbar();
             top.Controls.Add(_txtSearch);
@@ -124,11 +135,11 @@ namespace NPIC_CARD_APP
             // ---- Tiles ----
             _list = new GalleryList
             {
-                Dock = DockStyle.Fill, View = View.Tile, OwnerDraw = true, TileSize = TileSize, MultiSelect = false,
+                Dock = DockStyle.Fill, View = View.Tile, OwnerDraw = true, TileSize = TileSize, MultiSelect = true,
                 HideSelection = false, BorderStyle = BorderStyle.None, BackColor = AppBack
             };
             _list.DrawItem += DrawTile;
-            _list.SelectedIndexChanged += (s, e) => ShowDetails();
+            _list.SelectedIndexChanged += (s, e) => { ShowDetails(); UpdateChoice(); };
             _list.ItemActivate += (s, e) => ChooseCurrent();   // double-click or Enter
 
             _lblEmpty = new Label
@@ -212,7 +223,7 @@ namespace NPIC_CARD_APP
             };
 
             ReadPhotosAndHistory();
-            ShowStudents(startStudentId);
+            ShowStudents(startStudentId, startSelectedIds == null ? null : new HashSet<string>(startSelectedIds, StringComparer.OrdinalIgnoreCase));
         }
 
         protected override void OnShown(EventArgs e)
@@ -256,6 +267,11 @@ namespace NPIC_CARD_APP
             else if (e.KeyCode == Keys.F5) { Reload(); e.Handled = true; }
             else if (e.KeyData == (Keys.Control | Keys.F)) { _txtSearch.Focus(); _txtSearch.SelectAll(); e.Handled = true; }
             else if (e.KeyData == (Keys.Control | Keys.B)) { RemoveBackground(); e.Handled = e.SuppressKeyPress = true; }
+            else if (e.KeyData == (Keys.Control | Keys.A) && !_txtSearch.Focused)   // in the search box Ctrl+A selects its text
+            {
+                ChooseAllShown();
+                e.Handled = e.SuppressKeyPress = true;
+            }
         }
 
         // ===================== Data =====================
@@ -296,9 +312,10 @@ namespace NPIC_CARD_APP
                 foreach (Bitmap b in _thumbs.Values) b.Dispose();
                 _thumbs.Clear();
             }
+            HashSet<string> chosen = ChosenIds();
             ReadPhotosAndHistory();
             _detailStudent = null;   // the photo file may have changed: load it again
-            ShowStudents(current);
+            ShowStudents(current, chosen);
             StartThumbnailLoader();
         }
 
@@ -333,26 +350,42 @@ namespace NPIC_CARD_APP
                    Has(s.Faculty, q) || Has(s.Generation, q);
         }
 
-        /// <summary>Rebuilds the tiles from the search + filter, keeping selectId selected when it is still shown.</summary>
-        private void ShowStudents(string selectId)
+        /// <summary>
+        /// Rebuilds the tiles from the search + filter. Students in <paramref name="chosenIds"/> that are still shown stay
+        /// chosen; <paramref name="focusId"/> gets the focus (and the details panel). With nothing chosen, the focused tile
+        /// (or the first one) is chosen.
+        /// </summary>
+        private void ShowStudents(string focusId, ICollection<string> chosenIds)
         {
             string q = _txtSearch.Text.Trim();
             List<Student> shown = _students.Where(s => Matches(s, q) && PassesFilter(s)).ToList();
 
             _list.BeginUpdate();
             _list.Items.Clear();
-            ListViewItem select = null;
+            ListViewItem focus = null, firstChosen = null;
+            bool anyChosen = false;
             foreach (Student s in shown)
             {
                 var item = new ListViewItem(s.StudentId ?? "") { Tag = s };
                 _list.Items.Add(item);
-                if (select == null && selectId != null && string.Equals(s.StudentId, selectId, StringComparison.OrdinalIgnoreCase))
-                    select = item;
+                if (focus == null && focusId != null && string.Equals(s.StudentId, focusId, StringComparison.OrdinalIgnoreCase))
+                    focus = item;
+                if (chosenIds != null && chosenIds.Contains(s.StudentId ?? ""))
+                {
+                    item.Selected = true;
+                    anyChosen = true;
+                    if (firstChosen == null) firstChosen = item;
+                }
             }
-            if (select == null && _list.Items.Count > 0) select = _list.Items[0];
-            if (select != null) { select.Selected = true; select.Focused = true; }
+            if (focus != null && anyChosen && !focus.Selected) focus = firstChosen;   // the details panel shows a chosen student
+            if (focus == null) focus = firstChosen ?? (_list.Items.Count > 0 ? _list.Items[0] : null);
+            if (focus != null)
+            {
+                if (!anyChosen) focus.Selected = true;
+                focus.Focused = true;
+            }
             _list.EndUpdate();
-            if (select != null && _list.IsHandleCreated) select.EnsureVisible();
+            if (focus != null && _list.IsHandleCreated) focus.EnsureVisible();
 
             _lblEmpty.Text = _students.Count == 0
                 ? "No students loaded.\n\nImport a student list in the main window first."
@@ -367,12 +400,47 @@ namespace NPIC_CARD_APP
                 _photoFolder.Length == 0 ? "(not chosen)" : _photoFolder);
 
             ShowDetails();
+            UpdateChoice();
             if (_loaderCts != null) StartThumbnailLoader();   // load the newly shown tiles first
         }
 
+        /// <summary>The student the details panel shows: the focused tile when it is chosen, else the first chosen one.</summary>
         private Student CurrentStudent()
         {
+            ListViewItem focused = _list.FocusedItem;
+            if (focused != null && focused.Selected) return focused.Tag as Student;
             return _list.SelectedItems.Count == 0 ? null : _list.SelectedItems[0].Tag as Student;
+        }
+
+        /// <summary>StudentIds of the chosen tiles, in tile order.</summary>
+        private List<string> ChosenIdList()
+        {
+            return _list.SelectedItems.Cast<ListViewItem>()
+                .OrderBy(i => i.Index)
+                .Select(i => ((Student)i.Tag).StudentId ?? "")
+                .ToList();
+        }
+
+        private HashSet<string> ChosenIds()
+        {
+            return new HashSet<string>(ChosenIdList(), StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>Ctrl+A: chooses every tile the search + filter show.</summary>
+        private void ChooseAllShown()
+        {
+            if (_list.Items.Count == 0) return;
+            _list.BeginUpdate();
+            foreach (ListViewItem item in _list.Items) item.Selected = true;
+            _list.EndUpdate();
+            _list.Focus();
+        }
+
+        /// <summary>"Select in List" names how many students it hands over.</summary>
+        private void UpdateChoice()
+        {
+            int n = _list.SelectedItems.Count;
+            _btnSelect.Text = n > 1 ? Lang.F("Select {0} in List", n) : Lang.T("Select in List");
         }
 
         private string CurrentId()
@@ -508,6 +576,18 @@ namespace NPIC_CARD_APP
                 bx = Badge(g, Lang.T(c.Front > 0 ? "FRONT ✓" : "FRONT –"), c.Front > 0 ? Success : Danger, bx, by);
                 bx = Badge(g, Lang.T(c.Back > 0 ? "BACK ✓" : "BACK –"), c.Back > 0 ? Success : Danger, bx, by);
                 if (c.Front > 1 || c.Back > 1) Badge(g, Lang.T("REPRINTED"), Warning, bx, by);
+            }
+
+            // Chosen tiles get a check in the corner, so several chosen students stand out at a glance
+            if (selected)
+            {
+                var dot = new Rectangle(tile.Right - 26, tile.Y + 6, 18, 18);
+                using (var b = new SolidBrush(Accent)) g.FillEllipse(b, dot);
+                using (var pen = new Pen(Color.White, 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                    g.DrawLines(pen, new[]
+                    {
+                        new Point(dot.X + 5, dot.Y + 9), new Point(dot.X + 8, dot.Y + 12), new Point(dot.X + 13, dot.Y + 6)
+                    });
             }
         }
 
@@ -654,6 +734,7 @@ namespace NPIC_CARD_APP
             Student s = CurrentStudent();
             if (s == null) return;
             SelectedStudentId = s.StudentId;
+            SelectedStudentIds = ChosenIdList();
             DialogResult = DialogResult.OK;
         }
 
@@ -707,7 +788,7 @@ namespace NPIC_CARD_APP
                 }
             }
             _detailStudent = null;   // reload the large photo
-            ShowStudents(id);        // also restarts the thumbnail loader
+            ShowStudents(id, ChosenIds());   // also restarts the thumbnail loader
         }
 
         private void ShowError(string what, Exception ex)

@@ -674,7 +674,342 @@ namespace NPIC_CARD_APP
     }
 
     /// <summary>
-    /// Header language picker: the current language's flag and code with a ▾ chevron. Clicking it (or Enter / Space /
+    /// Compact segmented choice for tight forms: a row of segments on a soft track, the chosen one filled with the soft
+    /// accent. A segment shows its text, or a pictogram drawn by <see cref="DrawGlyph"/> (then the text is only its name).
+    /// ←/→ move the choice, like <see cref="PillTabs"/>. <see cref="SelectedIndex"/> is -1 until the owner sets it.
+    /// </summary>
+    internal sealed class SegmentPicker : Control
+    {
+        private const int Track = 2, H = 26;
+        private readonly string[] _items;
+        private readonly int _glyphWidth;
+        private Rectangle[] _rects = new Rectangle[0];
+        private int _selected = -1, _hover = -1;
+        public event EventHandler SelectedIndexChanged;
+
+        /// <summary>Draws segment <c>i</c>'s pictogram in the bounds, in the colour given. Set it for a glyph picker.</summary>
+        public Action<Graphics, int, RectangleF, Color> DrawGlyph;
+
+        /// <param name="items">Segment text (English: translated here). For a glyph picker, the segment names.</param>
+        /// <param name="glyphWidth">0 = text segments sized to their text; otherwise every segment is this wide (pictograms).</param>
+        public SegmentPicker(string[] items, int glyphWidth = 0)
+        {
+            SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.OptimizedDoubleBuffer |
+                     ControlStyles.AllPaintingInWmPaint | ControlStyles.ResizeRedraw | ControlStyles.UserPaint |
+                     ControlStyles.Selectable, true);
+            _items = items.Select(Lang.T).ToArray();
+            _glyphWidth = glyphWidth;
+            BackColor = Color.Transparent;
+            Font = Theme.Small;
+            Cursor = Cursors.Hand;
+            TabStop = true;
+            AccessibleRole = AccessibleRole.ComboBox;
+            Relayout();
+        }
+
+        public int SelectedIndex
+        {
+            get { return _selected; }
+            set
+            {
+                if (value < -1 || value >= _items.Length || value == _selected) return;
+                _selected = value;
+                AccessibleDescription = SelectedText;
+                Invalidate();
+                if (SelectedIndexChanged != null) SelectedIndexChanged(this, EventArgs.Empty);
+            }
+        }
+
+        /// <summary>Name of the chosen segment in the app's language ("" when nothing is chosen).</summary>
+        public string SelectedText { get { return _selected < 0 ? "" : _items[_selected]; } }
+
+        /// <summary>Name of segment <paramref name="index"/> in the app's language.</summary>
+        public string ItemText(int index) { return _items[index]; }
+
+        private void Relayout()
+        {
+            _rects = new Rectangle[_items.Length];
+            int x = Track;
+            for (int i = 0; i < _items.Length; i++)
+            {
+                int w = _glyphWidth > 0 ? _glyphWidth : TextRenderer.MeasureText(_items[i], Font).Width + 14;
+                _rects[i] = new Rectangle(x, Track, w, H - 2 * Track);
+                x += w;
+            }
+            Size = new Size(x + Track, H);
+        }
+
+        protected override void OnFontChanged(EventArgs e) { base.OnFontChanged(e); Relayout(); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = -1; Invalidate(); base.OnMouseLeave(e); }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            int hit = Array.FindIndex(_rects, r => r.Contains(e.Location));
+            if (hit != _hover) { _hover = hit; Invalidate(); }
+            base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            Focus();
+            int hit = Array.FindIndex(_rects, r => r.Contains(e.Location));
+            if (hit >= 0) SelectedIndex = hit;
+            base.OnMouseDown(e);
+        }
+
+        protected override bool IsInputKey(Keys keyData)
+        {
+            return keyData == Keys.Left || keyData == Keys.Right || base.IsInputKey(keyData);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Left) SelectedIndex = Math.Max(0, _selected - 1);
+            else if (e.KeyCode == Keys.Right) SelectedIndex = Math.Min(_items.Length - 1, _selected + 1);
+            base.OnKeyDown(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            Graphics g = e.Graphics;
+            Theme.HighQuality(g);
+            g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+
+            var track = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
+            using (GraphicsPath p = Theme.RoundRect(track, 8))
+            {
+                using (var b = new SolidBrush(Theme.Tile)) g.FillPath(b, p);
+                Color edge = Focused && ShowFocusCues ? Color.FromArgb(150, Theme.Accent) : Theme.Border;
+                using (var pen = new Pen(edge)) g.DrawPath(pen, p);
+            }
+
+            for (int i = 0; i < _items.Length; i++)
+            {
+                RectangleF r = _rects[i];
+                bool sel = i == _selected;
+                if (sel || i == _hover)
+                {
+                    using (GraphicsPath p = Theme.RoundRect(r, 6))
+                    {
+                        using (var b = new SolidBrush(sel ? Theme.AccentSoft : Theme.SurfaceHover)) g.FillPath(b, p);
+                        if (sel) using (var pen = new Pen(Theme.AccentOutline)) g.DrawPath(pen, p);
+                    }
+                }
+                Color ink = sel ? Theme.Accent : Theme.TextSoft;
+                if (DrawGlyph != null) DrawGlyph(g, i, r, ink);
+                else Theme.DrawText(g, _items[i], Font, ink, r, StringAlignment.Center);
+            }
+        }
+    }
+
+    /// <summary>What the next print job does with tray slot 2 (slot 1 is always printed).</summary>
+    internal enum TraySlotUse { Off, Idle, InUse }
+
+    /// <summary>
+    /// Mini map of the printer page as the Tray page types it: X runs right, Y runs down, in mm. Each slot is drawn at
+    /// its X / Y with the card size of the chosen orientation. Accent fill = the next job prints there, dashed = set up but
+    /// not used now, amber = cannot be used (outside the page, or slot 2 on top of slot 1). Clicking a slot raises
+    /// <see cref="SlotClicked"/> with 1 or 2. With the page size unknown (no printer), A4 is drawn with a dashed edge.
+    /// </summary>
+    internal sealed class TrayMap : Control
+    {
+        private const float Tolerance = 3f;   // same slack as CardPrinter: a card this far past the edge still prints
+        private static readonly SizeF A4 = new SizeF(210f, 297f);
+
+        private SizeF? _page;
+        private RectangleF _slot1, _slot2;
+        private TraySlotUse _slot2Use = TraySlotUse.Off;
+        private RectangleF[] _hit = new RectangleF[2];
+        private int _hover = -1;
+
+        /// <summary>1 or 2: the slot the user clicked.</summary>
+        public event Action<int> SlotClicked;
+
+        public TrayMap()
+        {
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.ResizeRedraw |
+                     ControlStyles.UserPaint, true);
+            BackColor = Theme.Surface;
+            AccessibleRole = AccessibleRole.Graphic;
+        }
+
+        /// <summary>Printer page in mm, or null when it cannot be read.</summary>
+        public SizeF? PageMm
+        {
+            get { return _page; }
+            set { if (_page == value) return; _page = value; Invalidate(); }
+        }
+
+        /// <summary>Slot rectangles in page mm (X, Y, card width, card height) and what happens to slot 2.</summary>
+        public void SetSlots(RectangleF slot1, RectangleF slot2, TraySlotUse slot2Use)
+        {
+            _slot1 = slot1;
+            _slot2 = slot2;
+            _slot2Use = slot2Use;
+            Invalidate();
+        }
+
+        private bool Outside(RectangleF s)
+        {
+            if (!_page.HasValue) return false;
+            SizeF p = _page.Value;
+            return s.X < -Tolerance || s.Y < -Tolerance || s.Right > p.Width + Tolerance || s.Bottom > p.Height + Tolerance;
+        }
+
+        private bool Overlaps()
+        {
+            return Math.Abs(_slot2.X - _slot1.X) < _slot1.Width - 1f && Math.Abs(_slot2.Y - _slot1.Y) < _slot1.Height - 1f;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            int hit = HitSlot(e.Location);
+            if (hit != _hover) { _hover = hit; Cursor = hit >= 0 ? Cursors.Hand : Cursors.Default; Invalidate(); }
+            base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseLeave(EventArgs e) { _hover = -1; Invalidate(); base.OnMouseLeave(e); }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            int hit = HitSlot(e.Location);
+            if (hit >= 0 && SlotClicked != null) SlotClicked(hit + 1);
+            base.OnMouseDown(e);
+        }
+
+        /// <summary>0 / 1 for slot 1 / 2 under the point; slot 2 wins where they overlap (it is drawn on top).</summary>
+        private int HitSlot(Point pt)
+        {
+            if (_slot2Use != TraySlotUse.Off && _hit[1].Contains(pt)) return 1;
+            return _hit[0].Contains(pt) ? 0 : -1;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.Clear(Theme.Surface);
+            Theme.HighQuality(g);
+            g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+
+            SizeF page = _page ?? A4;
+            // Fit the page, and any slot hanging off it, so a misplaced slot is still visible.
+            RectangleF view = new RectangleF(0, 0, page.Width, page.Height);
+            view = RectangleF.Union(view, _slot1);
+            if (_slot2Use != TraySlotUse.Off) view = RectangleF.Union(view, _slot2);
+
+            const float pad = 3f, gap = 12f;
+            float availW = Width - 2 * pad, availH = Height - 2 * pad;
+            if (availW < 8 || availH < 8 || view.Width <= 0 || view.Height <= 0) return;
+
+            // Legend beside the page when the column is wide enough, so the colours explain themselves
+            string[] legend =
+            {
+                Lang.T("Prints"), Lang.T("Not used now"), Lang.T("Problem"),
+                _page.HasValue
+                    ? string.Format(System.Globalization.CultureInfo.InvariantCulture, Lang.T("Page {0:0.#} × {1:0.#} mm"), page.Width, page.Height)
+                    : Lang.T("Page size unknown")
+            };
+            float legendW = 0;
+            foreach (string s in legend) legendW = Math.Max(legendW, g.MeasureString(s, Theme.Small).Width);
+            legendW += 16f;
+            float tallScale = Math.Min(availW / view.Width, availH / view.Height);
+            bool showLegend = availW - view.Width * tallScale >= legendW + gap && availH >= 4 * 16f;
+            float mapW = showLegend ? availW - legendW - gap : availW;
+
+            float scale = Math.Min(mapW / view.Width, availH / view.Height);
+            float groupW = view.Width * scale + (showLegend ? gap + legendW : 0);
+            float ox = (Width - groupW) / 2f - view.X * scale;
+            float oy = (Height - view.Height * scale) / 2f - view.Y * scale;
+            if (showLegend) DrawLegend(g, legend, new PointF(ox + view.Right * scale + gap, oy + view.Bottom * scale));
+            Func<RectangleF, RectangleF> px = r => new RectangleF(ox + r.X * scale, oy + r.Y * scale, r.Width * scale, r.Height * scale);
+
+            // Page: tile fill, faint 10 mm grid, dashed edge when the size is a guess
+            RectangleF pageRect = px(new RectangleF(0, 0, page.Width, page.Height));
+            using (GraphicsPath p = Theme.RoundRect(pageRect, 4))
+            {
+                using (var b = new SolidBrush(Theme.Tile)) g.FillPath(b, p);
+                if (10f * scale >= 6f)
+                {
+                    GraphicsState st = g.Save();
+                    g.SetClip(p);
+                    using (var grid = new Pen(Theme.GridLine))
+                    {
+                        for (float mm = 10f; mm < page.Width; mm += 10f)
+                            g.DrawLine(grid, ox + mm * scale, pageRect.Top, ox + mm * scale, pageRect.Bottom);
+                        for (float mm = 10f; mm < page.Height; mm += 10f)
+                            g.DrawLine(grid, pageRect.Left, oy + mm * scale, pageRect.Right, oy + mm * scale);
+                    }
+                    g.Restore(st);
+                }
+                using (var pen = new Pen(Theme.Border) { DashStyle = _page.HasValue ? DashStyle.Solid : DashStyle.Dash })
+                    g.DrawPath(pen, p);
+            }
+
+            // Origin mark: X / Y count from the page's top-left corner
+            using (var pen = new Pen(Theme.TextMuted, 1.4f))
+            {
+                float l = Math.Min(10f, pageRect.Width / 4f);
+                g.DrawLine(pen, pageRect.Left + 1.5f, pageRect.Top + 1.5f, pageRect.Left + 1.5f + l, pageRect.Top + 1.5f);
+                g.DrawLine(pen, pageRect.Left + 1.5f, pageRect.Top + 1.5f, pageRect.Left + 1.5f, pageRect.Top + 1.5f + l);
+            }
+
+            _hit[0] = px(_slot1);
+            _hit[1] = px(_slot2);
+            bool slot2Bad = _slot2Use != TraySlotUse.Off && (Outside(_slot2) || Overlaps());
+            // Slot 2 goes on top only when it prints, so an overlap shows the slot that is wrong
+            if (_slot2Use != TraySlotUse.InUse) DrawSlot(g, _hit[1], 2, _slot2Use, slot2Bad, _hover == 1);
+            DrawSlot(g, _hit[0], 1, TraySlotUse.InUse, Outside(_slot1), _hover == 0);
+            if (_slot2Use == TraySlotUse.InUse) DrawSlot(g, _hit[1], 2, _slot2Use, slot2Bad, _hover == 1);
+        }
+
+        /// <summary>Swatch + name for each slot look, then the page size, stacked up from <paramref name="bottomLeft"/>.</summary>
+        private static void DrawLegend(Graphics g, string[] lines, PointF bottomLeft)
+        {
+            const float lineH = 16f;
+            float y = bottomLeft.Y - lines.Length * lineH;
+            for (int i = 0; i < lines.Length; i++, y += lineH)
+            {
+                float textX = bottomLeft.X;
+                if (i < 3)
+                {
+                    var swatch = new RectangleF(bottomLeft.X, y + 4f, 11f, 8f);
+                    if (i == 0) DrawSlot(g, swatch, 0, TraySlotUse.InUse, false, false);
+                    else if (i == 1) DrawSlot(g, swatch, 0, TraySlotUse.Idle, false, false);
+                    else DrawSlot(g, swatch, 0, TraySlotUse.InUse, true, false);
+                    textX += 16f;
+                }
+                Theme.DrawText(g, lines[i], Theme.Small, i < 3 ? Theme.TextSoft : Theme.TextMuted,
+                    new RectangleF(textX, y, 400f, lineH));
+            }
+        }
+
+        /// <summary>One slot (or a legend swatch: <paramref name="number"/> 0 draws no number).</summary>
+        private static void DrawSlot(Graphics g, RectangleF r, int number, TraySlotUse use, bool bad, bool hover)
+        {
+            if (r.Width < 2 || r.Height < 2) return;
+            float radius = Math.Max(1.5f, Math.Min(r.Width, r.Height) * 0.08f);
+            Color fill, edge, ink;
+            DashStyle dash = DashStyle.Solid;
+            if (bad) { fill = Theme.WarningSoft; edge = Theme.Warning; ink = Theme.Warning; }
+            else if (use == TraySlotUse.InUse) { fill = Theme.AccentSoft; edge = Theme.Accent; ink = Theme.Accent; }
+            else if (use == TraySlotUse.Idle) { fill = Theme.Surface; edge = Theme.AccentOutline; ink = Theme.TextSoft; dash = DashStyle.Dash; }
+            else { fill = Color.Empty; edge = Theme.Border; ink = Theme.TextMuted; dash = DashStyle.Dot; }
+
+            using (GraphicsPath p = Theme.RoundRect(r, radius))
+            {
+                if (!fill.IsEmpty) using (var b = new SolidBrush(fill)) g.FillPath(b, p);
+                using (var pen = new Pen(edge, hover ? 2f : 1.3f) { DashStyle = dash }) g.DrawPath(pen, p);
+            }
+            if (number > 0 && Math.Min(r.Width, r.Height) >= 11f)
+                Theme.DrawText(g, number.ToString(), use == TraySlotUse.Off ? Theme.Small : Theme.NavBold, ink, r, StringAlignment.Center);
+        }
+    }
+
+    /// <summary>
+    /// Header language picker:the current language's flag and code with a ▾ chevron. Clicking it (or Enter / Space /
     /// ↓ while it has focus) raises <see cref="Control.Click"/>; the owner opens the language menu below it.
     /// </summary>
     internal sealed class LanguageButton : Control

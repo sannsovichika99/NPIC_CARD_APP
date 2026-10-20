@@ -19,6 +19,7 @@ namespace NPIC_CARD_APP
             A("No photo", "គ្មានរូបថត");
             A("Loading…", "កំពុងផ្ទុក…");
             A("Select in List", "ជ្រើសក្នុងបញ្ជី");
+            A("Select {0} in List", "ជ្រើស {0} ក្នុងបញ្ជី");
             A("Open Photo", "បើករូបថត");
             A("Show in Folder", "បង្ហាញក្នុងថត");
             A("Remove Background… (Ctrl+B)", "លុបផ្ទៃខាងក្រោយ… (Ctrl+B)");

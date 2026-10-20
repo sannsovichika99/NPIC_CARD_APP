@@ -197,6 +197,18 @@ namespace NPIC_CARD_APP
             A("{0} card sides printed in total", "បានបោះពុម្ពសរុប {0} ផ្នែកកាត");
             A("Print history unavailable", "មិនអាចប្រើប្រវត្តិបោះពុម្ពបាន");
             A("{0} match the search", "{0} ត្រូវនឹងការស្វែងរក");
+            A("{0} chosen in the Gallery", "{0} បានជ្រើសក្នុងវិចិត្រសាល");
+            A("Showing {0} student chosen in the Gallery", "បង្ហាញនិស្សិត {0} នាក់ ដែលបានជ្រើសក្នុងវិចិត្រសាល");
+            A("Showing {0} students chosen in the Gallery", "បង្ហាញនិស្សិត {0} នាក់ ដែលបានជ្រើសក្នុងវិចិត្រសាល");
+            A("Show every student in the list again (Esc in the search box)",
+                "បង្ហាញនិស្សិតទាំងអស់ក្នុងបញ្ជីម្ដងទៀត (Esc ក្នុងប្រអប់ស្វែងរក)");
+            A("None of the students chosen in the Gallery are in this list.",
+                "គ្មាននិស្សិតដែលបានជ្រើសក្នុងវិចិត្រសាល នៅក្នុងបញ្ជីនេះទេ។");
+            A("Click  Show all  to see every student.", "ចុច  បង្ហាញទាំងអស់  ដើម្បីមើលនិស្សិតទាំងអស់។");
+            A("Showing the student chosen in the Gallery. Click Show all to see every student.",
+                "កំពុងបង្ហាញនិស្សិតដែលបានជ្រើសក្នុងវិចិត្រសាល។ ចុច បង្ហាញទាំងអស់ ដើម្បីមើលនិស្សិតទាំងអស់។");
+            A("Showing the {0} students chosen in the Gallery, all selected. Click Show all to see every student.",
+                "កំពុងបង្ហាញនិស្សិត {0} នាក់ ដែលបានជ្រើសក្នុងវិចិត្រសាល ហើយបានជ្រើសទាំងអស់។ ចុច បង្ហាញទាំងអស់ ដើម្បីមើលនិស្សិតទាំងអស់។");
             A("from {0}", "ពី {0}");
             A("in the list", "ក្នុងបញ្ជី");
             A("{0} tray load(s)  ·  {1} side", "ដាក់ថាស {0} ដង  ·  ផ្នែក{1}");
@@ -286,6 +298,17 @@ namespace NPIC_CARD_APP
             A("Rotate the front side 180° when printing", "បង្វិលផ្នែកមុខ 180° ពេលបោះពុម្ព");
             A("Rotate the back side 180° when printing", "បង្វិលផ្នែកក្រោយ 180° ពេលបោះពុម្ព");
             A("Save slot positions and print options", "រក្សាទុកទីតាំងរន្ធ និងជម្រើសបោះពុម្ព");
+            A("Slot 1 X: distance from the left edge of the page (mm)", "រន្ធ 1 X៖ ចម្ងាយពីគែមឆ្វេងនៃទំព័រ (mm)");
+            A("Slot 1 Y: distance from the top edge of the page (mm)", "រន្ធ 1 Y៖ ចម្ងាយពីគែមខាងលើនៃទំព័រ (mm)");
+            A("Slot 2 X: distance from the left edge of the page (mm)", "រន្ធ 2 X៖ ចម្ងាយពីគែមឆ្វេងនៃទំព័រ (mm)");
+            A("Slot 2 Y: distance from the top edge of the page (mm)", "រន្ធ 2 Y៖ ចម្ងាយពីគែមខាងលើនៃទំព័រ (mm)");
+            A("Prints", "បោះពុម្ព");
+            A("Not used now", "មិនប្រើពេលនេះ");
+            A("Problem", "មានបញ្ហា");
+            A("Page {0:0.#} × {1:0.#} mm", "ទំព័រ {0:0.#} × {1:0.#} mm");
+            A("Page size unknown", "មិនស្គាល់ទំហំទំព័រ");
+            A("Where slot 1 and slot 2 land on the printer page. Click a slot to edit its X / Y.",
+                "ទីតាំងរន្ធ 1 និងរន្ធ 2 នៅលើទំព័របោះពុម្ព។ ចុចលើរន្ធមួយ ដើម្បីកែ X / Y របស់វា។");
             A("{0} card(s) → {1} tray load(s)", "កាត {0} → ដាក់ថាស {1} ដង");
             A("{0} card(s) → {1} tray load(s), 2 per load", "កាត {0} → ដាក់ថាស {1} ដង, 2 ក្នុងមួយដង");
             A("{0} card(s) → {1} tray load(s), slot 1 only — slot 2 not usable",
