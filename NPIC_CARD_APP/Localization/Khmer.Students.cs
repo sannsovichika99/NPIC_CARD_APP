@@ -20,6 +20,9 @@ namespace NPIC_CARD_APP
             A("Loading…", "កំពុងផ្ទុក…");
             A("Select in List", "ជ្រើសក្នុងបញ្ជី");
             A("Select {0} in List", "ជ្រើស {0} ក្នុងបញ្ជី");
+            A("Choose at most {0} students", "ជ្រើសបានច្រើនបំផុត {0} នាក់");
+            A("You can choose at most {0} students: one card per tray slot.",
+                "អ្នកអាចជ្រើសនិស្សិតបានច្រើនបំផុត {0} នាក់៖ កាតមួយក្នុងមួយរន្ធថាស។");
             A("Open Photo", "បើករូបថត");
             A("Show in Folder", "បង្ហាញក្នុងថត");
             A("Remove Background… (Ctrl+B)", "លុបផ្ទៃខាងក្រោយ… (Ctrl+B)");

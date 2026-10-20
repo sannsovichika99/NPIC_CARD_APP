@@ -38,17 +38,21 @@ namespace NPIC_CARD_APP
 
         private const int FieldLabelWidth = 96;
 
-        private static readonly Dictionary<string, string> ColumnTitles = new Dictionary<string, string>
-        {
-            { "StudentId", "ID" }, { "NameKh", "Name (KH)" }, { "NameEn", "Name (EN)" }, { "Gender", "Sex" },
-            { "DateOfBirth", "Date of birth" }, { "Faculty", "Faculty" }, { "Level", "Level" },
-            { "Generation", "Gen." }, { "ValidUntil", "Valid until" }, { "QrData", "QR data" }
-        };
+        private const int MaxSuggestions = 200;   // matches listed under the search box (type more to narrow them down)
+
+        /// <summary>Most students selected at once: one card per tray slot (slot 1 + slot 2 = one tray load).</summary>
+        private const int MaxSelected = 2;
 
         // ===================== State =====================
         private readonly AppSettings _settings;
         private List<Student> _students = new List<Student>();
-        private List<Student> _view = new List<Student>();   // _students filtered by the search box = what the grid shows
+        private List<Student> _view = new List<Student>();   // _students filtered by the search box (and the Gallery pick)
+
+        /// <summary>Student whose card is previewed; null until one is picked (the preview stays empty until then).</summary>
+        private Student _current;
+
+        /// <summary>Students Print Selected sends, in list order: the picked student, or every student chosen in the Gallery.</summary>
+        private List<Student> _selection = new List<Student>();
 
         /// <summary>Students chosen in the Gallery: while set, the list shows only them (null = every student).</summary>
         private HashSet<string> _picked;
@@ -58,9 +62,16 @@ namespace NPIC_CARD_APP
         private bool _loading;
         private string _source = "";                          // where the list came from: file name, API host or SQL server
 
-        private DataGridView _grid;
+        private SearchField _search;
         private TextBox _txtSearch;
-        private Label _lblCount, _lblEmpty;
+        private ListBox _suggest;                            // matching students under the search box
+        private Button _btnPrev, _btnNext;
+        private Label _lblCount, _lblNoStudent;
+        private FlowLayoutPanel _chosenBar;                   // chips of the selected students (at most MaxSelected)
+        private Label _lblChosenHint;
+        private Label _capTitle1, _capSub1, _capTitle2, _capSub2;   // captions under the two preview tiles
+        private TableLayoutPanel _studentFacts;
+        private readonly Dictionary<string, Label> _factValues = new Dictionary<string, Label>();
         private PreviewTile _picFront, _picBack;
         private PillButton _btnGrid;
         private bool _showGrid;                               // mm grid over the front / back previews (screen only)
@@ -136,7 +147,8 @@ namespace NPIC_CARD_APP
 
             if (File.Exists(_settings.LastCsvPath)) LoadStudents(_settings.LastCsvPath);
             UpdatePageInfo();
-            UpdateEmptyState();
+            UpdateStudentInfo();
+            UpdateStepButtons();
             UpdateCount();
             UpdatePrintedStat();
 
@@ -193,10 +205,10 @@ namespace NPIC_CARD_APP
         //  ┌──────────┬───────────────────────────────────────────────────────────┐
         //  │ brand    │ Good afternoon, …   bell [EN ▾]  [Front|Back]  Print      │
         //  │ nav      │ [ Students ]   [ Selected ]   [ Printed today ]           │
-        //  │  …       │ ┌ Students ─────────────┐  ┌ Card preview ─────────────┐  │
-        //  │          │ │ search / grid         │  │ front | back              │  │
-        //  │          │ │                       │  ├ Print setup [Printer|Tray]┤  │
-        //  │          │ └───────────────────────┘  └───────────────────────────┘  │
+        //  │  …       │ ┌ Card preview ─────────────┐  ┌ Student ──────────────┐  │
+        //  │          │ │ search + matches  ◀ ▶     │  │ details of the pick   │  │
+        //  │          │ │ front | back              │  ├ Print setup [Printer|…┤  │
+        //  │          │ └───────────────────────────┘  └───────────────────────┘  │
         //  │          │ ● status                                                  │
         //  └──────────┴───────────────────────────────────────────────────────────┘
         private void BuildUi()
@@ -231,7 +243,7 @@ namespace NPIC_CARD_APP
             Image logo = Branding.Logo;
 
             NavItem dashboard = Nav("Dashboard", Theme.IcoHome, () => { _txtSearch.Focus(); _txtSearch.SelectAll(); },
-                "Student list, card preview and printing (Ctrl+F searches)");
+                "Find a student, check the card preview and print (Ctrl+F searches)");
             dashboard.Active = true;
             _navGallery = Nav("Gallery", Theme.IcoPhoto, ShowGallery,
                 "Photos and details of every student; shows missing photos and print status (Ctrl+G)");
@@ -490,7 +502,7 @@ namespace NPIC_CARD_APP
             });
             titles.Controls.Add(new Label
             {
-                Text = "Pick students, check the card, then print.", Font = Theme.Small,
+                Text = "Find a student, check the card, then print.", Font = Theme.Small,
                 ForeColor = TextMuted, AutoSize = true, BackColor = Color.Transparent, Margin = new Padding(3, 0, 0, 0)
             });
 
@@ -552,7 +564,7 @@ namespace NPIC_CARD_APP
             row.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
             _statStudents = new StatCard("Total students", Theme.IcoPeople, Theme.VioletA, Theme.VioletB) { Caption = "No list loaded" };
-            _statSelected = new StatCard("Selected to print", Theme.IcoMultiSelect, Theme.CoralA, Theme.CoralB) { Caption = "Select rows in the list" };
+            _statSelected = new StatCard("Selected to print", Theme.IcoMultiSelect, Theme.CoralA, Theme.CoralB) { Caption = "Search for a student" };
             _statPrinted = new StatCard("Printed today", Theme.IcoPrint, Theme.PinkA, Theme.PinkB);
 
             _statStudents.Cursor = Cursors.Hand;
@@ -574,8 +586,8 @@ namespace NPIC_CARD_APP
             {
                 Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Color.Transparent, Margin = new Padding(0)
             };
-            body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55f));
-            body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45f));
+            body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58f));
+            body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42f));
             body.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
             var side = new TableLayoutPanel
@@ -585,102 +597,86 @@ namespace NPIC_CARD_APP
             side.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
             side.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
             side.RowStyles.Add(new RowStyle(SizeType.Absolute, 262f));
-            side.Controls.Add(BuildPreviewCard(), 0, 0);
+            side.Controls.Add(BuildStudentCard(), 0, 0);
             side.Controls.Add(BuildSetupCard(), 0, 1);
 
-            body.Controls.Add(BuildStudentPanel(), 0, 0);
+            body.Controls.Add(BuildPreviewCard(), 0, 0);
             body.Controls.Add(side, 1, 0);
             return body;
         }
 
-        /// <summary>Students card: search field + student list; "View List" in the header opens the student gallery.</summary>
-        private Control BuildStudentPanel()
+        /// <summary>
+        /// Details of the student whose card is previewed (nothing until one is picked); "View List" in the header opens
+        /// the student gallery, where several students can be chosen for printing.
+        /// </summary>
+        private Control BuildStudentCard()
         {
             _lblCount = new Label { AutoSize = true, ForeColor = TextMuted, Font = Theme.Small, BackColor = Surface, Margin = new Padding(0, 13, 2, 0) };
 
-            var search = new SearchField(UiFont) { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 10) };
-            _txtSearch = search.Box;
-            _txtSearch.HandleCreated += (s, e) => SetCueBanner(_txtSearch, "Search by ID, name or faculty…   (Ctrl+F)");
-            _txtSearch.TextChanged += (s, e) => ApplyFilter();
-            _txtSearch.KeyDown += (s, e) =>
+            const int rowH = 26;
+            _studentFacts = new TableLayoutPanel
             {
-                if (e.KeyCode == Keys.Escape)
-                {
-                    // First Esc clears the search, the next one shows every student again after a Gallery pick
-                    if (_txtSearch.TextLength > 0) _txtSearch.Clear();
-                    else ClearGalleryPick();
-                    e.SuppressKeyPress = true;
-                }
-                else if (e.KeyCode == Keys.Down && _grid.Rows.Count > 0) { _grid.Focus(); e.SuppressKeyPress = true; }
+                Dock = DockStyle.Top, ColumnCount = 4, Margin = new Padding(0), BackColor = Surface, Visible = false
+            };
+            _studentFacts.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            _studentFacts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            _studentFacts.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            _studentFacts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+
+            int row = 0;
+            AddFact(row, 0, "ID", "StudentId", false);
+            AddFact(row++, 2, "Sex", "Gender", false);
+            AddFact(row++, 0, "Name (KH)", "NameKh", true);
+            AddFact(row++, 0, "Name (EN)", "NameEn", true);
+            AddFact(row, 0, "Date of birth", "DateOfBirth", false);
+            AddFact(row++, 2, "Valid until", "ValidUntil", false);
+            AddFact(row++, 0, "Faculty", "Faculty", true);
+            AddFact(row, 0, "Level", "Level", false);
+            AddFact(row++, 2, "Gen.", "Generation", false);
+            AddFact(row++, 0, "Printed", "Printed", true);
+            _studentFacts.RowCount = row;
+            for (int i = 0; i < row; i++) _studentFacts.RowStyles.Add(new RowStyle(SizeType.Absolute, rowH));
+            _studentFacts.Height = row * rowH;
+            _factValues["NameEn"].Font = SemiFont;
+
+            _lblNoStudent = new Label
+            {
+                Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, ForeColor = TextMuted, BackColor = Surface
             };
 
-            _grid = new DataGridView
-            {
-                Dock = DockStyle.Fill,
-                ReadOnly = true,
-                AllowUserToAddRows = false,
-                AllowUserToDeleteRows = false,
-                AllowUserToResizeRows = false,
-                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-                MultiSelect = true,
-                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.AllCells,
-                BackgroundColor = Surface,
-                BorderStyle = BorderStyle.None,
-                CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal,
-                GridColor = GridLine,
-                RowHeadersVisible = false,
-                EnableHeadersVisualStyles = false,
-                ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None,
-                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
-                ColumnHeadersHeight = 36
-            };
-            _grid.RowTemplate.Height = 36;
-            _grid.ColumnHeadersDefaultCellStyle.BackColor = Surface;
-            _grid.ColumnHeadersDefaultCellStyle.ForeColor = TextMuted;
-            _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Surface;
-            _grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = TextMuted;
-            _grid.ColumnHeadersDefaultCellStyle.Font = Theme.UiFont(8.25f, true);
-            _grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(8, 0, 8, 0);
-            _grid.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.False;
-            _grid.DefaultCellStyle.Font = new Font(CardFonts.UI, 9f);
-            _grid.DefaultCellStyle.BackColor = Surface;
-            _grid.DefaultCellStyle.ForeColor = TextMain;
-            _grid.DefaultCellStyle.SelectionBackColor = AccentSoft;
-            _grid.DefaultCellStyle.SelectionForeColor = Accent;
-            _grid.DefaultCellStyle.Padding = new Padding(8, 0, 8, 0);
-            _grid.AlternatingRowsDefaultCellStyle.BackColor = SurfaceAlt;
-            _grid.DataBindingComplete += (s, e) => ApplyColumnTitles();
-            _grid.SelectionChanged += (s, e) => { UpdatePreview(); UpdateSlotHint(); UpdateCount(); UpdateRfidPanel(); };
-            _grid.CellDoubleClick += (s, e) => { if (e.RowIndex >= 0) ShowFullScreen(PreviewSide.Both); };
+            var host = new Panel { Dock = DockStyle.Fill, BackColor = Surface, AutoScroll = true, Margin = new Padding(0) };
+            host.Controls.Add(_lblNoStudent);
+            host.Controls.Add(_studentFacts);
 
-            _lblEmpty = new Label
-            {
-                Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, ForeColor = TextMuted,
-                BackColor = Surface, Visible = false
-            };
-
-            var gridHost = new Panel { Dock = DockStyle.Fill, BackColor = Surface, Margin = new Padding(0) };
-            gridHost.Controls.Add(_grid);
-            gridHost.Controls.Add(_lblEmpty);
-            _lblEmpty.BringToFront();
-
-            var body = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Margin = new Padding(0) };
-            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 50f));
-            body.RowStyles.Add(new RowStyle(SizeType.AutoSize));       // Gallery pick bar (hidden = no height)
-            body.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-            body.Controls.Add(search, 0, 0);
-            body.Controls.Add(BuildPickBar(), 0, 1);
-            body.Controls.Add(gridHost, 0, 2);
-
-            return MakeCard("Students", body, _lblCount,
+            return MakeCard("Student", host, _lblCount,
                 MakeButton("Import…", PillKind.Ghost, (s, e) => ShowImportPage(),
                     "Load the student list from Excel, CSV, the web API or SQL Server (Ctrl+L)"),
                 MakeButton("View List", PillKind.Ghost, (s, e) => ShowGallery(),
-                    "View every loaded student with photo, details and print status (Ctrl+G)"));
+                    "View every loaded student with photo, details and print status; choose up to 2 to print (Ctrl+G)"));
+        }
+
+        /// <summary>One "name  value" pair of the Student card; wide = the value spans the rest of the row.</summary>
+        private void AddFact(int row, int column, string title, string key, bool wide)
+        {
+            var name = new Label
+            {
+                Text = title, AutoSize = true, ForeColor = TextMuted, Font = Theme.Small, BackColor = Surface,
+                Anchor = AnchorStyles.Left, Margin = new Padding(0, 0, 10, 0)
+            };
+            // Student data: never translated
+            Label value = Lang.Keep(new Label
+            {
+                Dock = DockStyle.Fill, AutoEllipsis = true, UseMnemonic = false, ForeColor = TextMain, BackColor = Surface,
+                TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(0, 0, 12, 0)
+            });
+            _studentFacts.Controls.Add(name, column, row);
+            _studentFacts.Controls.Add(value, column + 1, row);
+            if (wide) _studentFacts.SetColumnSpan(value, 3);
+            _factValues[key] = value;
         }
 
         /// <summary>
-        /// Soft accent strip above the student list while it shows only the students chosen in the Gallery:
+        /// Soft accent strip under the student search while it (and ◀ ▶) covers only the students chosen in the Gallery:
         /// "Showing 3 students chosen in the Gallery" + Show all.
         /// </summary>
         private Control BuildPickBar()
@@ -722,17 +718,47 @@ namespace NPIC_CARD_APP
             return bar;
         }
 
-        /// <summary>Front and back thumbnails side by side; the side that will print gets a violet outline.</summary>
+        /// <summary>
+        /// Card preview with the student search on top. Typing lists the matching students under the box; picking one
+        /// (click, or ↓ ↑ and Enter) shows that student's front and back. ◀ ▶ (Page Up / Page Down) step through the students.
+        /// Front and back sit side by side; the side that will print gets a violet outline.
+        /// </summary>
         private Control BuildPreviewCard()
         {
+            _search = new SearchField(UiFont) { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 10) };
+            _txtSearch = _search.Box;
+            _txtSearch.HandleCreated += (s, e) => SetCueBanner(_txtSearch, "Search a student by ID, name or faculty…   (Ctrl+F)");
+            _txtSearch.TextChanged += (s, e) =>
+            {
+                ApplyFilter();
+                ShowSuggestions(_txtSearch.TextLength > 0);
+            };
+            _txtSearch.KeyDown += OnSearchKeyDown;
+
+            _btnPrev = MakeButton("◀", PillKind.Ghost, (s, e) => StepStudent(-1), "Previous student (Page Up in the search box)");
+            _btnNext = MakeButton("▶", PillKind.Ghost, (s, e) => StepStudent(1), "Next student (Page Down in the search box)");
+            foreach (Button b in new[] { _btnPrev, _btnNext })
+            {
+                b.Anchor = AnchorStyles.Left;
+                b.Margin = new Padding(6, 0, 0, 10);
+            }
+
+            var searchRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = new Padding(0) };
+            searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            searchRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            searchRow.Controls.Add(_search, 0, 0);
+            searchRow.Controls.Add(_btnPrev, 1, 0);
+            searchRow.Controls.Add(_btnNext, 2, 0);
+
+            // One student: front | back. Two students: slot 1 | slot 2, each on the side that will print.
             _picFront = new PreviewTile { Margin = new Padding(0, 0, 6, 0) };
             _picBack = new PreviewTile { Margin = new Padding(6, 0, 0, 0), EmptyText = "Back side" };
-            _picFront.DoubleClick += (s, e) => ShowFullScreen(PreviewSide.Front);
-            _picBack.DoubleClick += (s, e) => ShowFullScreen(PreviewSide.Back);
-            _picFront.Click += (s, e) => _sideTabs.SelectedIndex = 0;
-            _picBack.Click += (s, e) => _sideTabs.SelectedIndex = 1;
-            _tip.SetTip(_picFront, "Click to print this side · double-click to enlarge");
-            _tip.SetTip(_picBack, "Click to print this side · double-click to enlarge");
+            _picFront.DoubleClick += (s, e) => OnTileDoubleClick(0);
+            _picBack.DoubleClick += (s, e) => OnTileDoubleClick(1);
+            _picFront.Click += (s, e) => OnTileClick(0);
+            _picBack.Click += (s, e) => OnTileClick(1);
 
             var tiles = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = new Padding(0) };
             tiles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
@@ -741,13 +767,56 @@ namespace NPIC_CARD_APP
             tiles.RowStyles.Add(new RowStyle(SizeType.Absolute, 28f));
             tiles.Controls.Add(_picFront, 0, 0);
             tiles.Controls.Add(_picBack, 1, 0);
-            tiles.Controls.Add(TileCaption("Front", "ព័ត៌មាននិស្សិត"), 0, 1);
-            tiles.Controls.Add(TileCaption("Back", "ព័ត៌មានវិទ្យាស្ថាន"), 1, 1);
+            tiles.Controls.Add(TileCaption(out _capTitle1, out _capSub1), 0, 1);
+            tiles.Controls.Add(TileCaption(out _capTitle2, out _capSub2), 1, 1);
+
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Margin = new Padding(0) };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50f));      // search + ◀ ▶
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));           // selected students (hidden = no height)
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));           // Gallery pick bar (hidden = no height)
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));      // front | back, or slot 1 | slot 2
+            layout.Controls.Add(searchRow, 0, 0);
+            layout.Controls.Add(BuildChosenBar(), 0, 1);
+            layout.Controls.Add(BuildPickBar(), 0, 2);
+            layout.Controls.Add(tiles, 0, 3);
+
+            // Matching students drop down over the preview, under the search box
+            _suggest = Lang.Keep(new ListBox
+            {
+                Visible = false, IntegralHeight = false, BorderStyle = BorderStyle.FixedSingle, TabStop = false,
+                DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 32, Font = UiFont, BackColor = Surface, ForeColor = TextMain
+            });
+            _suggest.DrawItem += DrawSuggestion;
+            _suggest.MouseMove += (s, e) =>
+            {
+                int i = _suggest.IndexFromPoint(e.Location);
+                if (i >= 0 && i != _suggest.SelectedIndex && _suggest.Items[i] is Student) _suggest.SelectedIndex = i;
+            };
+            _suggest.MouseClick += (s, e) =>
+            {
+                int i = _suggest.IndexFromPoint(e.Location);
+                if (i >= 0) PickSuggestion(i);
+            };
+            EventHandler hideLater = (s, e) =>
+            {
+                if (!IsHandleCreated || IsDisposed || Disposing) return;
+                // After the focus has moved: clicking a match moves it from the search box to the list
+                BeginInvoke((Action)(() => { if (!_txtSearch.Focused && !_suggest.Focused) _suggest.Visible = false; }));
+            };
+            _txtSearch.LostFocus += hideLater;
+            _suggest.LostFocus += hideLater;
+
+            var host = new Panel { Dock = DockStyle.Fill, BackColor = Surface, Margin = new Padding(0) };
+            host.Controls.Add(layout);
+            host.Controls.Add(_suggest);
+            _suggest.BringToFront();
+            host.Resize += (s, e) => { if (_suggest.Visible) PlaceSuggestions(); };
 
             _btnGrid = (PillButton)MakeButton("Grid", PillKind.Ghost, (s, e) => SetPreviewGrid(!_showGrid),
                 "Show / hide a millimetre grid on the front and back previews (not printed)");
 
-            return MakeCard("Card preview", tiles, _btnGrid,
+            return MakeCard("Card preview", host, _btnGrid,
                 MakeButton("3D View", PillKind.Ghost, (s, e) => Show3DPreview(),
                     "Turn the card in 3D: drag to rotate it, flip between front and back (Shift+F11)"),
                 MakeButton("Enlarge", PillKind.Ghost, (s, e) => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"));
@@ -763,12 +832,74 @@ namespace NPIC_CARD_APP
             _btnGrid.Text = show ? "Grid ✓" : "Grid";
         }
 
-        private static Control TileCaption(string side, string khmer)
+        /// <summary>Caption under a preview tile: "Front  ព័ត៌មាននិស្សិត", or "Slot 1  NPIC25161 · name" (set in UpdatePreview).</summary>
+        private static Control TileCaption(out Label title, out Label sub)
         {
             var row = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(2, 0, 0, 0), Padding = new Padding(0) };
-            row.Controls.Add(new Label { Text = side, AutoSize = true, Font = Theme.NavBold, ForeColor = TextMain, Margin = new Padding(0, 6, 4, 0) });
-            row.Controls.Add(KhmerCaption(khmer));
+            // Kept: UpdatePreview translates the fixed words itself and the student's name must stay as it is
+            title = Lang.Keep(new Label { AutoSize = true, Font = Theme.NavBold, ForeColor = TextMain, Margin = new Padding(0, 6, 4, 0) });
+            sub = Lang.Keep(KhmerCaption(""));
+            sub.UseMnemonic = false;
+            row.Controls.Add(title);
+            row.Controls.Add(sub);
             return row;
+        }
+
+        /// <summary>
+        /// Chips of the selected students under the search ("① NPIC25161 · name ✕"), at most <see cref="MaxSelected"/>:
+        /// one card per tray slot. Clicking a chip shows that student; ✕ removes it; Clear removes both.
+        /// </summary>
+        private Control BuildChosenBar()
+        {
+            _chosenBar = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Margin = new Padding(0, 0, 0, 6),
+                BackColor = Surface, Visible = false
+            };
+            _lblChosenHint = Lang.Keep(new Label   // UpdateChosenBar translates it
+            {
+                AutoSize = true, ForeColor = TextMuted, Font = Theme.Small, BackColor = Surface, Margin = new Padding(6, 11, 0, 0)
+            });
+            return _chosenBar;
+        }
+
+        /// <summary>Rebuilds the chips of the selected students and the "1 / 2" hint.</summary>
+        private void UpdateChosenBar(bool full = false)
+        {
+            if (_chosenBar == null) return;
+            _chosenBar.SuspendLayout();
+            foreach (Control c in _chosenBar.Controls.Cast<Control>().ToList())
+            {
+                _chosenBar.Controls.Remove(c);
+                if (c != _lblChosenHint) c.Dispose();
+            }
+
+            for (int i = 0; i < _selection.Count; i++)
+            {
+                Student s = _selection[i];
+                // ID only, so both chips + Clear fit on one row; the name is in the tooltip and under the tile
+                var chip = (PillButton)MakeButton((i == 0 ? "①" : "②") + "  " + s.StudentId, PillKind.Ghost, (o, e) => MoveTo(s));
+                chip.Checked = s == _current;
+                chip.UseMnemonic = false;
+                chip.Margin = new Padding(0, 4, 0, 2);
+                _tip.SetToolTip(chip, Describe(s) + Environment.NewLine +
+                    Lang.T(i == 0 ? "Slot 1 · click to show this student" : "Slot 2 · click to show this student"));
+                var remove = MakeButton("✕", PillKind.Ghost, (o, e) => RemoveFromSelection(s), "Remove from the selection");
+                remove.Margin = new Padding(0, 4, 10, 2);
+                _chosenBar.Controls.Add(Lang.Keep(chip));
+                _chosenBar.Controls.Add(remove);
+            }
+            if (_selection.Count > 0)
+                _chosenBar.Controls.Add(MakeButton("Clear", PillKind.Ghost, (o, e) => SelectStudent(null), "Remove both students from the selection"));
+
+            _lblChosenHint.Text = Lang.T(_selection.Count >= MaxSelected
+                ? "2 / 2 selected — the most for one tray load. Remove one (✕) to pick another."
+                : "1 / 2 selected — pick one more student for slot 2.");
+            _lblChosenHint.ForeColor = full ? Warning : TextMuted;
+            _chosenBar.Controls.Add(_lblChosenHint);
+
+            _chosenBar.Visible = _selection.Count > 0;
+            _chosenBar.ResumeLayout(true);
         }
 
         /// <summary>Printer and tray settings share one card; pills switch between the two pages.</summary>
@@ -1220,11 +1351,11 @@ namespace NPIC_CARD_APP
         }
 
         // ---------- Dashboard figures ----------
-        /// <summary>Violet outline on the preview tile of the side that will be printed.</summary>
+        /// <summary>Print side changed: outline the side that prints, or re-render both slots on it.</summary>
         private void UpdateSideHighlight()
         {
-            _picFront.Highlight = PrintFront;
-            _picBack.Highlight = !PrintFront;
+            if (_selection.Count > 1) UpdatePreview();   // two students: the tiles show the side that prints
+            else UpdateTileHighlight();
             UpdateSlotHint();
         }
 
@@ -1249,6 +1380,7 @@ namespace NPIC_CARD_APP
                 _statPrinted.Caption = "Print history unavailable";
             }
             UpdateRfidPanel();
+            UpdateStudentInfo();   // "Printed" of the previewed student
         }
 
         // ---------- Search / list helpers ----------
@@ -1262,7 +1394,10 @@ namespace NPIC_CARD_APP
             SendMessage(box.Handle, EM_SETCUEBANNER, (IntPtr)1, Lang.T(text));
         }
 
-        /// <summary>Rebinds the grid to the students that match the search box (and the Gallery pick, while there is one).</summary>
+        /// <summary>
+        /// Narrows <see cref="_view"/> to the students that match the search box (and the Gallery pick, while there is one).
+        /// The picked student stays in the preview while searching; only students no longer loaded are dropped.
+        /// </summary>
         private void ApplyFilter()
         {
             if (_picked != null && !ReferenceEquals(_pickedFrom, _students)) _picked = null;   // another list was loaded
@@ -1279,12 +1414,290 @@ namespace NPIC_CARD_APP
                 _lblPicked.Text = Lang.F(chosen == 1 ? "Showing {0} student chosen in the Gallery" : "Showing {0} students chosen in the Gallery",
                     chosen);
             }
-            _grid.DataSource = null;
-            _grid.DataSource = _view;
-            UpdateEmptyState();
-            UpdateCount();
+
+            var loaded = new HashSet<Student>(_students);
+            int before = _selection.Count;
+            Student current = _current;
+            _selection = _selection.Where(loaded.Contains).ToList();
+            if (_current != null && !loaded.Contains(_current)) _current = _selection.FirstOrDefault();
+
+            if (_current != current || _selection.Count != before || _current == null) OnSelectionChanged();
+            else
+            {
+                UpdateCount();
+                UpdateStepButtons();
+            }
+            if (_suggest != null && _suggest.Visible) ShowSuggestions(true);
+        }
+
+        // ---------- Picking a student ----------
+        private Student CurrentStudent()
+        {
+            return _current;
+        }
+
+        /// <summary>The students Print Selected sends, in slot order (a copy).</summary>
+        private List<Student> SelectedStudents()
+        {
+            return _selection.ToList();
+        }
+
+        /// <summary>Picks one student (null = none): preview, Student card, tray hint and RFID tab follow.</summary>
+        private void SelectStudent(Student s)
+        {
+            SetSelection(s, s == null ? new Student[0] : new[] { s });
+        }
+
+        /// <summary>
+        /// <paramref name="current"/> is previewed; <paramref name="students"/> (in slot order, plus the current one) are
+        /// selected to print — at most <see cref="MaxSelected"/>, the current one always among them.
+        /// </summary>
+        private void SetSelection(Student current, IEnumerable<Student> students)
+        {
+            var loaded = new HashSet<Student>(_students);
+            var seen = new HashSet<Student>();
+            _selection = students.Where(x => x != null && loaded.Contains(x) && seen.Add(x)).Take(MaxSelected).ToList();
+            if (current != null && loaded.Contains(current) && !_selection.Contains(current))
+            {
+                if (_selection.Count < MaxSelected) _selection.Add(current);
+                else _selection[_selection.Count - 1] = current;
+            }
+            _current = current != null && _selection.Contains(current) ? current : null;
+            if (_current == null) _selection.Clear();
+            OnSelectionChanged();
+        }
+
+        /// <summary>
+        /// Picking a match in the search: adds the student to the selection and shows their card. At most
+        /// <see cref="MaxSelected"/> students: a third one is refused until one is removed (✕).
+        /// </summary>
+        private bool AddStudent(Student s)
+        {
+            if (s == null) return false;
+            if (!_selection.Contains(s))
+            {
+                if (_selection.Count >= MaxSelected)
+                {
+                    UpdateChosenBar(true);   // the "2 / 2 selected" hint turns orange
+                    SetStatus(string.Format("Not added: {0}. 2 students are already selected (one per tray slot) — remove one (✕) first.",
+                        Describe(s)));
+                    System.Media.SystemSounds.Beep.Play();
+                    return false;
+                }
+                _selection.Add(s);
+            }
+            _current = s;
+            OnSelectionChanged();
+            return true;
+        }
+
+        /// <summary>✕ on a chip: the student leaves the selection; the other one (if any) is shown.</summary>
+        private void RemoveFromSelection(Student s)
+        {
+            if (!_selection.Remove(s)) return;
+            if (_current == s) _current = _selection.FirstOrDefault();
+            OnSelectionChanged();
+        }
+
+        /// <summary>
+        /// Shows <paramref name="s"/> (◀ ▶, the full-screen preview, the next student after an RFID upload). A selected
+        /// student just comes to the front; any other one takes the slot of the student shown now, so the other slot stays.
+        /// </summary>
+        private void MoveTo(Student s)
+        {
+            if (s == null) return;
+            if (!_selection.Contains(s))
+            {
+                int slot = _current == null ? -1 : _selection.IndexOf(_current);
+                if (slot >= 0) _selection[slot] = s;
+                else if (_selection.Count < MaxSelected) _selection.Add(s);
+                else _selection[_selection.Count - 1] = s;
+            }
+            _current = s;
+            OnSelectionChanged();
+        }
+
+        /// <summary>Click on a preview tile: one student = print that side; two = show that slot's student.</summary>
+        private void OnTileClick(int tile)
+        {
+            if (_selection.Count > 1) MoveTo(_selection[tile]);
+            else _sideTabs.SelectedIndex = tile;
+        }
+
+        private void OnTileDoubleClick(int tile)
+        {
+            if (_selection.Count > 1)
+            {
+                MoveTo(_selection[tile]);
+                ShowFullScreen(PrintFront ? PreviewSide.Front : PreviewSide.Back);
+            }
+            else ShowFullScreen(tile == 0 ? PreviewSide.Front : PreviewSide.Back);
+        }
+
+        private void OnSelectionChanged()
+        {
             UpdatePreview();
+            UpdateChosenBar();
+            UpdateStudentInfo();
             UpdateSlotHint();
+            UpdateCount();
+            UpdateRfidPanel();
+            UpdateStepButtons();
+        }
+
+        /// <summary>
+        /// Students ◀ ▶ and the full-screen / 3D previews step through: the search (or Gallery) matches when they include
+        /// the previewed student, else every loaded student.
+        /// </summary>
+        private List<Student> BrowseList()
+        {
+            return _current == null || _view.Contains(_current) ? _view : _students;
+        }
+
+        private void StepStudent(int delta)
+        {
+            List<Student> list = BrowseList();
+            if (list.Count == 0) return;
+            int i = _current == null ? (delta > 0 ? 0 : list.Count - 1) : list.IndexOf(_current) + delta;
+            if (i < 0 || i >= list.Count) return;
+            MoveTo(list[i]);
+        }
+
+        private void UpdateStepButtons()
+        {
+            if (_btnPrev == null) return;
+            List<Student> list = BrowseList();
+            int i = _current == null ? -1 : list.IndexOf(_current);
+            _btnPrev.Enabled = list.Count > 0 && i != 0;
+            _btnNext.Enabled = list.Count > 0 && i < list.Count - 1;
+        }
+
+        // ---------- Search matches under the box ----------
+        /// <summary>Lists the matching students under the search box (or hides the list).</summary>
+        private void ShowSuggestions(bool show)
+        {
+            if (_suggest == null) return;
+            if (!show || !_txtSearch.Focused)
+            {
+                _suggest.Visible = false;
+                return;
+            }
+
+            int shown = Math.Min(_view.Count, MaxSuggestions);
+            _suggest.BeginUpdate();
+            _suggest.Items.Clear();
+            if (_view.Count == 0)
+                _suggest.Items.Add(_students.Count == 0
+                    ? Lang.T("No students loaded yet. Click Import… to load them (Ctrl+L).")
+                    : Lang.F("No students match “{0}”.", _txtSearch.Text.Trim()));
+            for (int i = 0; i < shown; i++) _suggest.Items.Add(_view[i]);
+            if (_view.Count > shown)
+                _suggest.Items.Add(Lang.F("{0} more — type more of the ID or name to narrow the list.", (_view.Count - shown).ToString("N0")));
+
+            int at = _current == null ? -1 : _view.IndexOf(_current);
+            _suggest.SelectedIndex = shown == 0 ? -1 : at >= 0 && at < shown ? at : 0;
+            _suggest.EndUpdate();
+
+            PlaceSuggestions();
+            _suggest.Visible = true;
+            _suggest.BringToFront();
+        }
+
+        /// <summary>Puts the match list right under the search box, as tall as its items (within the preview card).</summary>
+        private void PlaceSuggestions()
+        {
+            Control host = _suggest.Parent;
+            if (host == null) return;
+            Point at = host.PointToClient(_search.Parent.PointToScreen(new Point(_search.Left, _search.Bottom + 2)));
+            int room = Math.Max(_suggest.ItemHeight + 2, host.ClientSize.Height - at.Y - 6);
+            int height = Math.Min(room, Math.Max(1, _suggest.Items.Count) * _suggest.ItemHeight + 2);
+            _suggest.SetBounds(at.X, at.Y, _search.Width, height);
+        }
+
+        private void MoveSuggestion(int delta)
+        {
+            int students = Math.Min(_view.Count, MaxSuggestions);
+            if (students == 0) return;
+            int i = _suggest.SelectedIndex < 0 ? (delta > 0 ? 0 : students - 1) : _suggest.SelectedIndex + delta;
+            _suggest.SelectedIndex = Math.Max(0, Math.Min(students - 1, i));
+        }
+
+        private void PickSuggestion(int index)
+        {
+            var s = index >= 0 && index < _suggest.Items.Count ? _suggest.Items[index] as Student : null;
+            if (s == null) return;   // a hint line ("No students match…")
+            if (!AddStudent(s)) return;   // already 2 selected: the list stays open, the hint says why
+            _suggest.Visible = false;
+            _txtSearch.Focus();
+            _txtSearch.SelectAll();   // typing again starts a new search
+        }
+
+        private void OnSearchKeyDown(object sender, KeyEventArgs e)
+        {
+            bool open = _suggest.Visible;
+            switch (e.KeyCode)
+            {
+                case Keys.Down:
+                    if (open) MoveSuggestion(1);
+                    else ShowSuggestions(true);
+                    break;
+                case Keys.Up:
+                    if (open) MoveSuggestion(-1);
+                    break;
+                case Keys.PageDown:
+                case Keys.PageUp:
+                    int dir = e.KeyCode == Keys.PageDown ? 1 : -1;
+                    if (open) MoveSuggestion(dir * Math.Max(1, _suggest.ClientSize.Height / _suggest.ItemHeight - 1));
+                    else StepStudent(dir);
+                    break;
+                case Keys.Enter:
+                    if (open) PickSuggestion(_suggest.SelectedIndex);
+                    else ShowSuggestions(true);
+                    break;
+                case Keys.Escape:
+                    // Closes the matches, then clears the search, then ends a Gallery pick
+                    if (open) _suggest.Visible = false;
+                    else if (_txtSearch.TextLength > 0) _txtSearch.Clear();
+                    else ClearGalleryPick();
+                    break;
+                default:
+                    return;
+            }
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        }
+
+        /// <summary>One match: the ID in bold, then name (EN), name (KH) and faculty; hint lines in muted text.</summary>
+        private void DrawSuggestion(object sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0 || e.Index >= _suggest.Items.Count) return;
+            Graphics g = e.Graphics;
+            object item = _suggest.Items[e.Index];
+            var s = item as Student;
+            bool selected = s != null && (e.State & DrawItemState.Selected) != 0;
+            bool chosen = s != null && _selection.Contains(s);
+            bool blocked = s != null && !chosen && _selection.Count >= MaxSelected;   // can't be added: 2 already selected
+            using (var b = new SolidBrush(selected ? AccentSoft : Surface)) g.FillRectangle(b, e.Bounds);
+
+            const TextFormatFlags flags = TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine |
+                                          TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis;
+            Rectangle r = Rectangle.Inflate(e.Bounds, -12, 0);
+            if (s == null)
+            {
+                TextRenderer.DrawText(g, item.ToString(), CaptionFont, r, TextMuted, flags);
+                return;
+            }
+
+            string id = s.StudentId ?? "";
+            int idWidth = Math.Min(r.Width, TextRenderer.MeasureText(g, id, SemiFont, r.Size, flags).Width);
+            TextRenderer.DrawText(g, id, SemiFont, new Rectangle(r.X, r.Y, idWidth, r.Height),
+                blocked ? TextMuted : selected ? Accent : TextMain, flags);
+
+            string rest = string.Join("  ·  ", new[] { s.NameEn, s.NameKh, s.Faculty }.Where(t => !string.IsNullOrWhiteSpace(t)));
+            var restBox = new Rectangle(r.X + idWidth + 10, r.Y, Math.Max(0, r.Width - idWidth - 10 - 24), r.Height);   // 24 = ✓
+            TextRenderer.DrawText(g, rest, UiFont, restBox, selected && !blocked ? Accent : TextMuted, flags);
+            if (chosen)
+                Theme.DrawIcon(g, Theme.IcoCheck, 12f, Accent, new RectangleF(e.Bounds.Right - 30, e.Bounds.Y, 24, e.Bounds.Height));
         }
 
         private static bool Matches(Student s, string q)
@@ -1297,35 +1710,52 @@ namespace NPIC_CARD_APP
             return value != null && value.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        private void ApplyColumnTitles()
+        /// <summary>Student card: the previewed student's details, or how to pick one.</summary>
+        private void UpdateStudentInfo()
         {
-            foreach (DataGridViewColumn col in _grid.Columns)
+            if (_studentFacts == null) return;
+            Student s = _current;
+            _studentFacts.Visible = s != null;
+            _lblNoStudent.Visible = s == null;
+            if (s == null)
             {
-                string title;
-                if (ColumnTitles.TryGetValue(col.DataPropertyName, out title)) col.HeaderText = Lang.T(title);
+                _lblNoStudent.Text = _students.Count == 0
+                    ? "No students loaded yet.\n\nClick  Import Students…  in the sidebar (Ctrl+L) to load them from Excel, CSV, API or SQL Server.\n" +
+                      "No list yet? Save an Excel template there to fill in.\n\nNew to Card Studio? Press F1 for the user guide."
+                    : "No student selected.\n\nSearch for a student above the card preview (Ctrl+F) to see their card,\n" +
+                      "or click  View List  to choose students in the Gallery.";
+                return;
             }
+
+            SetFact("StudentId", s.StudentId);
+            SetFact("Gender", s.Gender);
+            SetFact("NameKh", s.NameKh);
+            SetFact("NameEn", s.NameEn);
+            SetFact("DateOfBirth", s.DateOfBirth);
+            SetFact("ValidUntil", s.ValidUntil);
+            SetFact("Faculty", s.Faculty);
+            SetFact("Level", s.Level);
+            SetFact("Generation", s.Generation);
+
+            DateTime printed;
+            bool done = _lastPrinted.TryGetValue((s.StudentId ?? "").Trim(), out printed);
+            SetFact("Printed", done ? printed.ToString("dd/MM/yyyy HH:mm") : Lang.T("Not printed yet"));
+            _factValues["Printed"].ForeColor = done ? Success : Warning;
         }
 
-        private void UpdateEmptyState()
+        private void SetFact(string key, string value)
         {
-            if (_lblEmpty == null) return;
-            _lblEmpty.Text = _students.Count == 0
-                ? "No students loaded yet.\n\nClick  Import Students…  in the sidebar (Ctrl+L) to load them from Excel, CSV, API or SQL Server.\n" +
-                  "No list yet? Save an Excel template there to fill in.\n\nNew to Card Studio? Press F1 for the user guide."
-                : _picked != null && _txtSearch.Text.Trim().Length == 0
-                    ? "None of the students chosen in the Gallery are in this list.\n\nClick  Show all  to see every student."
-                    : "No students match “" + _txtSearch.Text.Trim() + "”.\n\nPress Esc to clear the search.";
-            _lblEmpty.Visible = _view.Count == 0;
+            Label label = _factValues[key];
+            label.Text = string.IsNullOrWhiteSpace(value) ? "–" : value.Trim();
+            _tip.SetToolTip(label, label.Text);   // the whole value when it is cut off
         }
 
         private void UpdateCount()
         {
             if (_lblCount == null) return;
-            int selected = _grid.SelectedRows.Count;
-            string total = _view.Count == _students.Count
-                ? string.Format("{0} students", _students.Count)
-                : string.Format("{0} of {1} students", _view.Count, _students.Count);
-            _lblCount.Text = selected > 1 ? total + "  ·  " + selected + " selected" : total;
+            int selected = _selection.Count;
+            // Short, so the Student card title keeps its room (matches and the selection show elsewhere)
+            _lblCount.Text = string.Format("{0} students", _students.Count);
 
             _statStudents.Value = _students.Count.ToString("N0");
             _statStudents.Caption = _students.Count == 0 ? "No list loaded"
@@ -1468,7 +1898,7 @@ namespace NPIC_CARD_APP
                 new RectangleF(_settings.Slot2X, _settings.Slot2Y, _settings.SlotWidthMm, _settings.SlotHeightMm),
                 _settings.SlotMode == SlotMode.One ? TraySlotUse.Off : perLoad == 2 ? TraySlotUse.InUse : TraySlotUse.Idle);
             _statSelected.Caption = count == 0
-                ? "Select rows in the list"
+                ? "Search for a student"
                 : string.Format("{0} tray load(s)  ·  {1} side", loads, PrintFront ? "front" : "back");
             _tip.SetTip(_lblSlotHint, reason ?? "");
         }
@@ -1877,7 +2307,7 @@ namespace NPIC_CARD_APP
             Student s = CurrentStudent();
             if (s == null)
             {
-                AppDialog.Show(this, "Select a student in the list first.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                AppDialog.Show(this, "Search for a student first (Ctrl+F).", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             if (string.IsNullOrEmpty(_settings.PhotoFolder) || !Directory.Exists(_settings.PhotoFolder))
@@ -2019,32 +2449,77 @@ namespace NPIC_CARD_APP
             SetStatus("Card text saved.");
         }
 
-        private Student CurrentStudent()
-        {
-            return _grid.CurrentRow == null ? null : _grid.CurrentRow.DataBoundItem as Student;
-        }
-
-        private List<Student> SelectedStudents()
-        {
-            return _grid.SelectedRows.Cast<DataGridViewRow>()
-                .OrderBy(r => r.Index)
-                .Select(r => r.DataBoundItem as Student)
-                .Where(s => s != null)
-                .ToList();
-        }
-
         // ===================== Preview =====================
+        /// <summary>Front and back of the picked student; empty tiles (with a hint) until a student is picked.</summary>
+        /// <remarks>
+        /// One student selected: their front | back, the side that prints outlined. Two: slot 1 | slot 2, both on the side
+        /// that prints (what one tray load will look like), the student shown in the Student card outlined.
+        /// </remarks>
         private void UpdatePreview()
         {
             Student s = CurrentStudent();
+            bool pair = _selection.Count > 1;
+            if (s == null)
+            {
+                _picFront.EmptyText = _students.Count == 0 ? "No students loaded yet" : "Search for a student to see the card";
+                _picBack.EmptyText = "Back side";
+            }
+
+            if (pair)
+            {
+                string side = Lang.T(PrintFront ? "Front" : "Back");
+                SetCaption(_capTitle1, _capSub1, Lang.T("Slot 1"), side + " · " + Describe(_selection[0]));
+                SetCaption(_capTitle2, _capSub2, Lang.T("Slot 2"), side + " · " + Describe(_selection[1]));
+                _tip.SetTip(_picFront, "Slot 1 · click to show this student · double-click to enlarge");
+                _tip.SetTip(_picBack, "Slot 2 · click to show this student · double-click to enlarge");
+            }
+            else
+            {
+                SetCaption(_capTitle1, _capSub1, Lang.T("Front"), "ព័ត៌មាននិស្សិត");
+                SetCaption(_capTitle2, _capSub2, Lang.T("Back"), "ព័ត៌មានវិទ្យាស្ថាន");
+                _tip.SetTip(_picFront, "Click to print this side · double-click to enlarge");
+                _tip.SetTip(_picBack, "Click to print this side · double-click to enlarge");
+            }
+
             try
             {
-                ReplaceImage(_picFront, s == null ? null : CardRenderer.RenderFront(s, _settings));
-                ReplaceImage(_picBack, CardRenderer.RenderBack(_settings));
+                if (pair)
+                {
+                    ReplaceImage(_picFront, PrintFront ? CardRenderer.RenderFront(_selection[0], _settings) : CardRenderer.RenderBack(_settings));
+                    ReplaceImage(_picBack, PrintFront ? CardRenderer.RenderFront(_selection[1], _settings) : CardRenderer.RenderBack(_settings));
+                }
+                else
+                {
+                    ReplaceImage(_picFront, s == null ? null : CardRenderer.RenderFront(s, _settings));
+                    ReplaceImage(_picBack, s == null ? null : CardRenderer.RenderBack(_settings));
+                }
             }
             catch (Exception ex)
             {
                 SetStatus("Preview error: " + ex.Message);
+            }
+            UpdateTileHighlight();
+        }
+
+        private static void SetCaption(Label title, Label sub, string titleText, string subText)
+        {
+            if (title == null) return;
+            title.Text = titleText;
+            sub.Text = subText;
+        }
+
+        /// <summary>Violet outline: the side that prints (one student), or the student shown in the Student card (two).</summary>
+        private void UpdateTileHighlight()
+        {
+            if (_selection.Count > 1)
+            {
+                _picFront.Highlight = _current == _selection[0];
+                _picBack.Highlight = _current == _selection[1];
+            }
+            else
+            {
+                _picFront.Highlight = PrintFront;
+                _picBack.Highlight = !PrintFront;
             }
         }
 
@@ -2101,37 +2576,33 @@ namespace NPIC_CARD_APP
 
         private void ShowFullScreen(PreviewSide side)
         {
-            int index = _grid.CurrentRow != null ? _grid.CurrentRow.Index : 0;
-            using (var form = new CardPreviewForm(_view, index, _settings, side, _showGrid))
+            List<Student> list = BrowseList();
+            int index = Math.Max(0, list.IndexOf(_current));
+            using (var form = new CardPreviewForm(list, index, _settings, side, _showGrid))
             {
                 form.ShowDialog(this);
                 SetPreviewGrid(form.ShowGrid);   // keep whatever was chosen in full screen
-                if (_view.Count > 0 && form.CurrentIndex != index)
-                    SelectRow(form.CurrentIndex);
+                AfterBrowsing(list, index, form.CurrentIndex);
             }
         }
 
         /// <summary>3D View: the current student's card as a real card that can be turned, flipped and zoomed.</summary>
         private void Show3DPreview()
         {
-            int index = _grid.CurrentRow != null ? _grid.CurrentRow.Index : 0;
-            using (var form = new CardPreview3DForm(_view, index, _settings))
+            List<Student> list = BrowseList();
+            int index = Math.Max(0, list.IndexOf(_current));
+            using (var form = new CardPreview3DForm(list, index, _settings))
             {
                 form.ShowDialog(this);
-                if (_view.Count > 0 && form.CurrentIndex != index)
-                    SelectRow(form.CurrentIndex);
+                AfterBrowsing(list, index, form.CurrentIndex);
             }
         }
 
-        /// <summary>Selects a grid row (this also refreshes the small preview).</summary>
-        private void SelectRow(int index)
+        /// <summary>The student shown last in the full-screen / 3D preview becomes the previewed one here.</summary>
+        private void AfterBrowsing(List<Student> list, int openedAt, int closedAt)
         {
-            if (index < 0 || index >= _grid.Rows.Count) return;
-            DataGridViewCell cell = _grid.Rows[index].Cells.Cast<DataGridViewCell>().FirstOrDefault(c => c.Visible);
-            if (cell == null) return;
-            _grid.ClearSelection();
-            _grid.CurrentCell = cell;
-            _grid.Rows[index].Selected = true;
+            if (closedAt == openedAt || closedAt < 0 || closedAt >= list.Count) return;
+            if (_students.Contains(list[closedAt])) MoveTo(list[closedAt]);
         }
 
         // ===================== Printing =====================
@@ -2266,7 +2737,8 @@ namespace NPIC_CARD_APP
             List<Student> list = SelectedStudents();
             if (list.Count == 0)
             {
-                AppDialog.Show(this, "Select at least one student in the list.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                AppDialog.Show(this, "Search for a student first, or click View List to choose several students in the Gallery.",
+                    Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             if (!EnsureCardPrinter()) return;
@@ -2698,7 +3170,8 @@ namespace NPIC_CARD_APP
             Student current = CurrentStudent();
             // The rows selected here open already chosen in the Gallery, so a pick can be adjusted there and sent back
             List<string> selected = SelectedStudents().Select(s => s.StudentId ?? "").ToList();
-            using (var form = new StudentGalleryForm(_students, _settings, current == null ? null : current.StudentId, selected))
+            using (var form = new StudentGalleryForm(_students, _settings, current == null ? null : current.StudentId, selected)
+                   { MaxChosen = MaxSelected })
             {
                 if (form.ShowDialog(this) != DialogResult.OK) return;
                 ShowGalleryPick(form.SelectedStudentIds, form.SelectedStudentId);
@@ -2706,8 +3179,8 @@ namespace NPIC_CARD_APP
         }
 
         /// <summary>
-        /// The student list shows only the students chosen in the Gallery, all of them selected (ready for Print Selected),
-        /// with <paramref name="focusId"/> as the current row (card preview). The search box is cleared so none is hidden.
+        /// The search and ◀ ▶ cover only the students chosen in the Gallery, all of them selected (ready for Print Selected),
+        /// with <paramref name="focusId"/> in the card preview. The search box is cleared so none is hidden.
         /// </summary>
         private void ShowGalleryPick(IEnumerable<string> ids, string focusId)
         {
@@ -2715,13 +3188,12 @@ namespace NPIC_CARD_APP
             if (pick.Count == 0) return;
             _picked = pick;
             _pickedFrom = _students;
-            if (_txtSearch.TextLength > 0) _txtSearch.Clear();   // rebinds the grid (ApplyFilter)
+            if (_txtSearch.TextLength > 0) _txtSearch.Clear();   // re-filters (ApplyFilter)
             else ApplyFilter();
 
-            int focus = Math.Max(0, _view.FindIndex(s => string.Equals(s.StudentId, focusId, StringComparison.OrdinalIgnoreCase)));
-            SelectRow(focus);
-            if (_grid.Rows.Count > 1) _grid.SelectAll();          // keeps the current row: its card stays in the preview
-            if (focus < _grid.Rows.Count) _grid.FirstDisplayedScrollingRowIndex = focus;
+            Student focus = _view.FirstOrDefault(s => string.Equals(s.StudentId, focusId, StringComparison.OrdinalIgnoreCase))
+                            ?? _view.FirstOrDefault();
+            SetSelection(focus, _view);
             SetStatus(_view.Count == 1
                 ? "Showing the student chosen in the Gallery. Click Show all to see every student."
                 : string.Format("Showing the {0} students chosen in the Gallery, all selected. Click Show all to see every student.", _view.Count));
@@ -2731,28 +3203,23 @@ namespace NPIC_CARD_APP
         private void ClearGalleryPick()
         {
             if (_picked == null) return;
-            Student current = CurrentStudent();
             _picked = null;
-            ApplyFilter();
-            if (current != null) SelectStudentById(current.StudentId);
+            ApplyFilter();   // the selected students stay selected
         }
 
-        /// <summary>Selects the student in the grid (clearing the search or Gallery pick if it hides them). False when not loaded.</summary>
+        /// <summary>Previews the student (clearing the search or Gallery pick if it hides them). False when not loaded.</summary>
         private bool SelectStudentById(string studentId)
         {
-            Func<Student, bool> same = s => string.Equals(s.StudentId, studentId, StringComparison.OrdinalIgnoreCase);
-            if (!_students.Any(same)) return false;
-            if (!_view.Any(same))
+            Student found = _students.FirstOrDefault(s => string.Equals(s.StudentId, studentId, StringComparison.OrdinalIgnoreCase));
+            if (found == null) return false;
+            if (!_view.Contains(found))
             {
                 _picked = null;
-                if (_txtSearch.TextLength > 0) _txtSearch.Clear();   // rebinds the grid to every student
+                if (_txtSearch.TextLength > 0) _txtSearch.Clear();   // re-filters to every student
                 else ApplyFilter();
             }
-
-            int index = _view.FindIndex(s => same(s));
-            SelectRow(index);
-            if (index >= 0 && index < _grid.Rows.Count) _grid.FirstDisplayedScrollingRowIndex = index;
-            return index >= 0;
+            SelectStudent(found);
+            return true;
         }
 
         /// <summary>Shows the Windows print queue of the selected printer (cancel stuck jobs).</summary>
@@ -2994,23 +3461,26 @@ namespace NPIC_CARD_APP
 
         /// <summary>
         /// Removes a student whose RFID card was saved from the loaded list (not from the Excel / CSV / database it came from)
-        /// and selects the student now in that row, so the next card can be tapped straight away. False when not in the list.
+        /// and previews the next student, so the next card can be tapped straight away. False when not in the list.
         /// </summary>
         private bool RemoveFromList(Student s)
         {
             int at = _students.IndexOf(s);
             if (at < 0) return false;
-            int row = _view.IndexOf(s);
+
+            // Next: the other selected student (the second card of the same tray load), else the student after it in the
+            // list being stepped through (or before it, at the end).
+            Student partner = _selection.FirstOrDefault(x => x != s);
+            List<Student> list = BrowseList();
+            int row = list.IndexOf(s);
+            Student next = partner
+                         ?? (row >= 0 && row + 1 < list.Count ? list[row + 1]
+                         : row > 0 ? list[row - 1]
+                         : null);
 
             _students.RemoveAt(at);
-            ApplyFilter();   // rebinds the grid to the shorter list and updates the counts
-
-            if (_view.Count > 0)
-            {
-                int next = Math.Max(0, Math.Min(row < 0 ? 0 : row, _view.Count - 1));
-                SelectRow(next);
-                if (next < _grid.Rows.Count) _grid.FirstDisplayedScrollingRowIndex = Math.Max(0, next - 2);
-            }
+            ApplyFilter();   // drops it from the selection and updates the counts
+            if (next != null) MoveTo(next);
 
             // The RFID box now belongs to the newly selected student (the change happened while the upload was busy).
             Student current = CurrentStudent();
@@ -3056,6 +3526,7 @@ namespace NPIC_CARD_APP
             if (text.StartsWith("Printing cancelled")) { title = "Printing stopped"; return NoticeKind.Warning; }
             if (text.StartsWith("License expires")) { title = "License expiring soon"; action = ShowLicense; return NoticeKind.Warning; }
             if (text.StartsWith("Could not")) { title = "Something went wrong"; return NoticeKind.Warning; }
+            if (text.StartsWith("Not added")) return NoticeKind.Warning;   // a 3rd student picked: orange dot, no notification
 
             // ---- finished jobs and news ----
             if (text.StartsWith("Update available")) { title = "Update available"; action = () => ShowUpdates(); return NoticeKind.Info; }

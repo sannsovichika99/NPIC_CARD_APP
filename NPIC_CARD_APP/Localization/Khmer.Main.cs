@@ -90,8 +90,8 @@ namespace NPIC_CARD_APP
             // ---- Sidebar ----
             A("ID Card Printer", "បោះពុម្ពកាតសម្គាល់ខ្លួន");
             A("Dashboard", "ផ្ទាំងគ្រប់គ្រង");
-            A("Student list, card preview and printing (Ctrl+F searches)",
-                "បញ្ជីនិស្សិត មើលកាតជាមុន និងការបោះពុម្ព (Ctrl+F ដើម្បីស្វែងរក)");
+            A("Find a student, check the card preview and print (Ctrl+F searches)",
+                "ស្វែងរកនិស្សិត មើលកាតជាមុន និងបោះពុម្ព (Ctrl+F ដើម្បីស្វែងរក)");
             A("Gallery", "វិចិត្រសាល");
             A("Photos and details of every student; shows missing photos and print status (Ctrl+G)",
                 "រូបថត និងព័ត៌មានលម្អិតរបស់និស្សិតគ្រប់រូប បង្ហាញរូបថតដែលខ្វះ និងស្ថានភាពបោះពុម្ព (Ctrl+G)");
@@ -179,7 +179,7 @@ namespace NPIC_CARD_APP
             A("Good morning, {0}", "អរុណសួស្តី {0}");
             A("Good afternoon, {0}", "ទិវាសួស្តី {0}");
             A("Good evening, {0}", "សាយណ្ហសួស្តី {0}");
-            A("Pick students, check the card, then print.", "ជ្រើសនិស្សិត ពិនិត្យកាត រួចបោះពុម្ព។");
+            A("Find a student, check the card, then print.", "ស្វែងរកនិស្សិត ពិនិត្យកាត រួចបោះពុម្ព។");
             A("Side of the card that Print Selected sends to the printer",
                 "ផ្នែកនៃកាតដែល បោះពុម្ពដែលបានជ្រើស ផ្ញើទៅម៉ាស៊ីនបោះពុម្ព");
             A("Print side", "ផ្នែកបោះពុម្ព");
@@ -189,7 +189,7 @@ namespace NPIC_CARD_APP
             A("Total students", "និស្សិតសរុប");
             A("No list loaded", "មិនទាន់ផ្ទុកបញ្ជី");
             A("Selected to print", "បានជ្រើសដើម្បីបោះពុម្ព");
-            A("Select rows in the list", "ជ្រើសជួរក្នុងបញ្ជី");
+            A("Search for a student", "ស្វែងរកនិស្សិតម្នាក់");
             A("Printed today", "បោះពុម្ពថ្ងៃនេះ");
             A("Open the student gallery (Ctrl+G)", "បើកវិចិត្រសាលនិស្សិត (Ctrl+G)");
             A("Open the print history (Ctrl+H)", "បើកប្រវត្តិបោះពុម្ព (Ctrl+H)");
@@ -213,13 +213,36 @@ namespace NPIC_CARD_APP
             A("in the list", "ក្នុងបញ្ជី");
             A("{0} tray load(s)  ·  {1} side", "ដាក់ថាស {0} ដង  ·  ផ្នែក{1}");
 
-            // ---- Students card ----
-            A("Search by ID, name or faculty…   (Ctrl+F)", "ស្វែងរកតាមអត្តលេខ ឈ្មោះ ឬមហាវិទ្យាល័យ…   (Ctrl+F)");
+            // ---- Student search (on the card preview) and Student card ----
+            A("Search a student by ID, name or faculty…   (Ctrl+F)", "ស្វែងរកនិស្សិតតាមអត្តលេខ ឈ្មោះ ឬមហាវិទ្យាល័យ…   (Ctrl+F)");
+            A("Previous student (Page Up in the search box)", "និស្សិតមុន (Page Up ក្នុងប្រអប់ស្វែងរក)");
+            A("Next student (Page Down in the search box)", "និស្សិតបន្ទាប់ (Page Down ក្នុងប្រអប់ស្វែងរក)");
+            A("No students loaded yet. Click Import… to load them (Ctrl+L).",
+                "មិនទាន់មាននិស្សិតត្រូវបានផ្ទុកនៅឡើយទេ។ ចុច នាំចូល… ដើម្បីផ្ទុក (Ctrl+L)។");
+            A("{0} more — type more of the ID or name to narrow the list.",
+                "{0} នាក់ទៀត — វាយអត្តលេខ ឬឈ្មោះបន្ថែម ដើម្បីបង្រួមបញ្ជី។");
+            A("No student selected.", "មិនទាន់ជ្រើសនិស្សិតទេ។");
+            A("Search for a student above the card preview (Ctrl+F) to see their card,",
+                "ស្វែងរកនិស្សិតនៅខាងលើការមើលកាតជាមុន (Ctrl+F) ដើម្បីមើលកាតរបស់គាត់");
+            A("or click  View List  to choose students in the Gallery.", "ឬចុច  មើលបញ្ជី  ដើម្បីជ្រើសនិស្សិតក្នុងវិចិត្រសាល។");
             A("Load the student list from Excel, CSV, the web API or SQL Server (Ctrl+L)",
                 "ផ្ទុកបញ្ជីនិស្សិតពី Excel, CSV, web API ឬ SQL Server (Ctrl+L)");
             A("View List", "មើលបញ្ជី");
-            A("View every loaded student with photo, details and print status (Ctrl+G)",
-                "មើលនិស្សិតដែលបានផ្ទុកទាំងអស់ ជាមួយរូបថត ព័ត៌មានលម្អិត និងស្ថានភាពបោះពុម្ព (Ctrl+G)");
+            A("View every loaded student with photo, details and print status; choose up to 2 to print (Ctrl+G)",
+                "មើលនិស្សិតដែលបានផ្ទុកទាំងអស់ ជាមួយរូបថត ព័ត៌មានលម្អិត និងស្ថានភាពបោះពុម្ព ហើយជ្រើសរហូតដល់ 2 នាក់ដើម្បីបោះពុម្ព (Ctrl+G)");
+            // Selected students (at most 2: one per tray slot)
+            A("1 / 2 selected — pick one more student for slot 2.", "បានជ្រើស 1 / 2 — ជ្រើសនិស្សិតម្នាក់ទៀតសម្រាប់រន្ធ 2។");
+            A("2 / 2 selected — the most for one tray load. Remove one (✕) to pick another.",
+                "បានជ្រើស 2 / 2 — ច្រើនបំផុតសម្រាប់ការដាក់ថាសម្ដង។ ដកម្នាក់ចេញ (✕) ដើម្បីជ្រើសម្នាក់ទៀត។");
+            A("Not added: {0}. 2 students are already selected (one per tray slot) — remove one (✕) first.",
+                "មិនបានបន្ថែម៖ {0}។ បានជ្រើសនិស្សិត 2 នាក់រួចហើយ (ម្នាក់ក្នុងមួយរន្ធ) — សូមដកម្នាក់ចេញ (✕) ជាមុនសិន។");
+            A("Slot 1 · click to show this student", "រន្ធ 1 · ចុចដើម្បីបង្ហាញនិស្សិតនេះ");
+            A("Slot 2 · click to show this student", "រន្ធ 2 · ចុចដើម្បីបង្ហាញនិស្សិតនេះ");
+            A("Slot 1 · click to show this student · double-click to enlarge", "រន្ធ 1 · ចុចដើម្បីបង្ហាញនិស្សិតនេះ · ចុចពីរដងដើម្បីពង្រីក");
+            A("Slot 2 · click to show this student · double-click to enlarge", "រន្ធ 2 · ចុចដើម្បីបង្ហាញនិស្សិតនេះ · ចុចពីរដងដើម្បីពង្រីក");
+            A("Remove from the selection", "ដកចេញពីការជ្រើស");
+            A("Clear", "សម្អាត");
+            A("Remove both students from the selection", "ដកនិស្សិតទាំងពីរចេញពីការជ្រើស");
             A("{0} students", "និស្សិត {0} នាក់");
             A("{0} of {1} students", "និស្សិត {0} ក្នុងចំណោម {1} នាក់");
             A("{0}  ·  {1} selected", "{0}  ·  បានជ្រើស {1}");
@@ -245,6 +268,8 @@ namespace NPIC_CARD_APP
             // ---- Card preview ----
             A("Card preview", "មើលកាតជាមុន");
             A("Select a student", "ជ្រើសនិស្សិតម្នាក់");
+            A("Search for a student to see the card", "ស្វែងរកនិស្សិតដើម្បីមើលកាត");
+            A("No students loaded yet", "មិនទាន់មាននិស្សិតត្រូវបានផ្ទុក");
             A("Back side", "ផ្នែកខាងក្រោយ");
             A("Click to print this side · double-click to enlarge", "ចុចដើម្បីបោះពុម្ពផ្នែកនេះ · ចុចពីរដងដើម្បីពង្រីក");
             A("Grid", "ក្រឡា");
@@ -395,7 +420,7 @@ namespace NPIC_CARD_APP
             A("No photo folder is set yet (or it no longer exists).", "មិនទាន់កំណត់ថតរូបថតទេ (ឬវាលែងមានហើយ)។");
             A("Choose one now?", "ជ្រើសរើសមួយឥឡូវនេះ?");
             A("Opened photo folder: {0}", "បានបើកថតរូបថត៖ {0}");
-            A("Select a student in the list first.", "សូមជ្រើសនិស្សិតក្នុងបញ្ជីជាមុនសិន។");
+            A("Search for a student first (Ctrl+F).", "សូមស្វែងរកនិស្សិតជាមុនសិន (Ctrl+F)។");
             A("Choose the photo folder first (Photo Folder… in the sidebar).", "សូមជ្រើសថតរូបថតជាមុនសិន (ថតរូបថត… នៅរបារចំហៀង)។");
             A("No photo found for {0}.", "រកមិនឃើញរូបថតសម្រាប់ {0} ទេ។");
             A("Expected {0}.jpg / .png in:", "ត្រូវមាន {0}.jpg / .png នៅក្នុង៖");
@@ -434,7 +459,8 @@ namespace NPIC_CARD_APP
                 "បន្ទាត់ដាច់នៅខាងស្ដាំ → បន្ថយ X។   នៅខាងឆ្វេង → បង្កើន X។");
             A("Lines cut off at the BOTTOM → decrease Y.   At the TOP → increase Y.",
                 "បន្ទាត់ដាច់នៅខាងក្រោម → បន្ថយ Y។   នៅខាងលើ → បង្កើន Y។");
-            A("Select at least one student in the list.", "សូមជ្រើសនិស្សិតយ៉ាងហោចណាស់ម្នាក់ក្នុងបញ្ជី។");
+            A("Search for a student first, or click View List to choose several students in the Gallery.",
+                "សូមស្វែងរកនិស្សិតជាមុនសិន ឬចុច មើលបញ្ជី ដើម្បីជ្រើសនិស្សិតច្រើននាក់ក្នុងវិចិត្រសាល។");
             A("Wait until the previous card is finished and the tray is ejected.",
                 "រង់ចាំរហូតដល់កាតមុនបោះពុម្ពរួច ហើយថាសត្រូវបានបញ្ចេញ។");
             A("Auto slots: printing 1 card per tray load.", "រន្ធស្វ័យប្រវត្តិ៖ បោះពុម្ពកាត 1 ក្នុងមួយថាស។");

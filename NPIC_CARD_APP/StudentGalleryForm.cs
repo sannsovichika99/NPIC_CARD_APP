@@ -91,6 +91,17 @@ namespace NPIC_CARD_APP
         /// </summary>
         public IReadOnlyList<string> SelectedStudentIds { get; private set; } = new string[0];
 
+        /// <summary>
+        /// Most students that may be chosen at once (0 = any number). The main window allows 2: one card per tray slot.
+        /// Choosing more disables "Select in List" and Ctrl+A.
+        /// </summary>
+        public int MaxChosen { get; set; }
+
+        private bool TooMany(int count)
+        {
+            return MaxChosen > 0 && count > MaxChosen;
+        }
+
         /// <param name="startStudentId">Student shown in the details panel when the gallery opens.</param>
         /// <param name="startSelectedIds">Students chosen when it opens (e.g. the rows selected in the main list); may be null.</param>
         public StudentGalleryForm(List<Student> students, AppSettings settings, string startStudentId,
@@ -429,7 +440,7 @@ namespace NPIC_CARD_APP
         /// <summary>Ctrl+A: chooses every tile the search + filter show.</summary>
         private void ChooseAllShown()
         {
-            if (_list.Items.Count == 0) return;
+            if (_list.Items.Count == 0 || TooMany(_list.Items.Count)) return;
             _list.BeginUpdate();
             foreach (ListViewItem item in _list.Items) item.Selected = true;
             _list.EndUpdate();
@@ -440,7 +451,10 @@ namespace NPIC_CARD_APP
         private void UpdateChoice()
         {
             int n = _list.SelectedItems.Count;
-            _btnSelect.Text = n > 1 ? Lang.F("Select {0} in List", n) : Lang.T("Select in List");
+            bool tooMany = TooMany(n);
+            _btnSelect.Enabled = !tooMany;
+            _btnSelect.Text = tooMany ? Lang.F("Choose at most {0} students", MaxChosen)
+                            : n > 1 ? Lang.F("Select {0} in List", n) : Lang.T("Select in List");
         }
 
         private string CurrentId()
@@ -733,8 +747,15 @@ namespace NPIC_CARD_APP
         {
             Student s = CurrentStudent();
             if (s == null) return;
+            List<string> chosen = ChosenIdList();
+            if (TooMany(chosen.Count))
+            {
+                AppDialog.Show(this, Lang.F("You can choose at most {0} students: one card per tray slot.", MaxChosen),
+                    Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
             SelectedStudentId = s.StudentId;
-            SelectedStudentIds = ChosenIdList();
+            SelectedStudentIds = chosen;
             DialogResult = DialogResult.OK;
         }
 
