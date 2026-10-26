@@ -965,6 +965,7 @@ namespace NPIC_CARD_APP
             w.Key("F1", T("This guide", "ការណែនាំនេះ"));
             w.Key("Ctrl+F", T("Search the student list", "ស្វែងរកក្នុងបញ្ជីនិស្សិត"));
             w.Key("Ctrl+P", T("Print the selected students", "បោះពុម្ពនិស្សិតដែលបានជ្រើស"));
+            w.Key("Ctrl+Shift+P", T("Print card backs (no student needed)", "បោះពុម្ពខាងក្រោយកាត (មិនចាំបាច់ជ្រើសនិស្សិត)"));
             w.Key("F11", T("Full-screen card preview", "មើលកាតជាមុនពេញអេក្រង់"));
             w.Key("Shift+F11", T("3D card preview", "មើលកាតជាមុន 3D"));
             w.Key("Ctrl+Shift+N", T("Notifications", "ការជូនដំណឹង"));

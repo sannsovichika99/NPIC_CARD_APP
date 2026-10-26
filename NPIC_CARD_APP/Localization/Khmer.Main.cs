@@ -186,6 +186,23 @@ namespace NPIC_CARD_APP
             A("Print Selected", "បោះពុម្ពដែលបានជ្រើស");
             A("Print the selected students, tray load by tray load (Ctrl+P)",
                 "បោះពុម្ពនិស្សិតដែលបានជ្រើស ម្ដងមួយថាសៗ (Ctrl+P)");
+            A("Print Back…", "បោះពុម្ពខាងក្រោយ…");
+            A("Print copies of the card back — the same for every student, no student needed (Ctrl+Shift+P)",
+                "បោះពុម្ពច្បាប់ចម្លងនៃខាងក្រោយកាត — ដូចគ្នាសម្រាប់និស្សិតទាំងអស់ មិនចាំបាច់ជ្រើសនិស្សិត (Ctrl+Shift+P)");
+
+            // ---- Print Back popup (PrintBackForm) ----
+            A("Print Back", "បោះពុម្ពខាងក្រោយ");
+            A("The back is the same for every student — no student needs to be selected",
+                "ខាងក្រោយកាតដូចគ្នាសម្រាប់និស្សិតទាំងអស់ — មិនចាំបាច់ជ្រើសនិស្សិតទេ");
+            A("Uses \"Rotate back 180°\" and the slot positions from Print setup. Blank backs are not added to the print history.",
+                "ប្រើ \"បង្វិលផ្នែកក្រោយ 180°\" និងទីតាំងរន្ធពី ការរៀបចំបោះពុម្ព។ ខាងក្រោយទទេមិនត្រូវបានបញ្ចូលក្នុងប្រវត្តិបោះពុម្ពទេ។");
+            A("1 tray load", "1 ថាស");
+            A("{0} tray loads", "{0} ថាស");
+            A("Print", "បោះពុម្ព");
+            A("Slot 1: Back side", "រន្ធ 1៖ ផ្នែកខាងក្រោយ");
+            A("Slot 2: Back side", "រន្ធ 2៖ ផ្នែកខាងក្រោយ");
+            A("Printing cancelled after {0} card back(s).", "បានបោះបង់ការបោះពុម្ព បន្ទាប់ពីខាងក្រោយកាត {0}។");
+            A("Done: {0} card back(s) printed.", "រួចរាល់៖ បានបោះពុម្ពខាងក្រោយកាត {0}។");
             A("Total students", "និស្សិតសរុប");
             A("No list loaded", "មិនទាន់ផ្ទុកបញ្ជី");
             A("Selected to print", "បានជ្រើសដើម្បីបោះពុម្ព");

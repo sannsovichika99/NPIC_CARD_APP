@@ -536,6 +536,8 @@ namespace NPIC_CARD_APP
             });
             actions.Controls.Add(_sideTabs);
             actions.Controls.Add(new Panel { Width = 1, Height = 26, BackColor = Border, Margin = new Padding(8, 9, 6, 0) });
+            actions.Controls.Add(MakeButton("Print Back…", PillKind.Secondary, (s, e) => PrintBacks(),
+                "Print copies of the card back — the same for every student, no student needed (Ctrl+Shift+P)"));
             actions.Controls.Add(MakeButton("Print Selected", PillKind.Primary, (s, e) => PrintSelected(),
                 "Print the selected students, tray load by tray load (Ctrl+P)"));
 
@@ -2556,6 +2558,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.Shift | Keys.O: ShowOneDrivePhotos(); return true;
                 case Keys.Control | Keys.Shift | Keys.G: ImportGoogleSheet(); return true;
                 case Keys.Control | Keys.P: PrintSelected(); return true;
+                case Keys.Control | Keys.Shift | Keys.P: PrintBacks(); return true;
                 case Keys.Control | Keys.B: RemovePhotoBackground(); return true;
                 case Keys.Control | Keys.H: ShowPrintHistory(); return true;
                 case Keys.Control | Keys.G: ShowGallery(); return true;
@@ -2799,6 +2802,74 @@ namespace NPIC_CARD_APP
             _setupTabs.SelectedIndex = 2;
             UpdateRfidPanel();
             _txtRfid.Focus();
+        }
+
+        /// <summary>
+        /// Header "Print Back…": prints any number of card backs without picking students (the back is the same for
+        /// everyone), tray load by tray load, both slots used when available. Not added to the print history — the
+        /// cards belong to no student yet. Printing the back for specific students is still Print side = Back + Print Selected.
+        /// </summary>
+        private void PrintBacks()
+        {
+            if (!EnsureCardPrinter()) return;
+            SaveSettings(false);
+            var printer = new CardPrinter(_settings);
+
+            string slotReason;
+            int perLoadMany = printer.CardsPerLoad(2, out slotReason);
+            int copies;
+            using (var dlg = new PrintBackForm(_settings, Math.Max(1, SelectedStudents().Count), perLoadMany))
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                copies = dlg.Copies;
+            }
+            if (!ConfirmPrinterReady(printer)) return;
+
+            int perLoad = printer.CardsPerLoad(copies, out slotReason);
+            int totalLoads = (copies + perLoad - 1) / perLoad;
+            const string side = "BACK";
+
+            Bitmap back;
+            try { back = RenderSide(null, false); }   // turned for the tray once, reused for every slot
+            catch (Exception ex) { ShowError(ex); return; }
+
+            using (back)
+            {
+                int sent = 0;
+                for (int load = 1; sent < copies; load++)
+                {
+                    bool two = perLoad == 2 && copies - sent >= 2;
+                    string message =
+                        (load > 1 ? "Wait until the previous card is finished and the tray is ejected.\n\n" : "") +
+                        (load == 1 && slotReason != null ? "Auto slots: printing 1 card per tray load.\n" + slotReason + "\n\n" : "") +
+                        "Side: " + side + "\n\n" +
+                        "Slot 1: Back side\n" +
+                        (two ? "Slot 2: Back side\n" : "") +
+                        "\nClick OK to send the job, then insert the tray when the printer light turns on.";
+
+                    DialogResult answer = AppDialog.Show(this, message,
+                        string.Format("Tray load {0} of {1}", load, totalLoads),
+                        MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
+                    if (answer != DialogResult.OK)
+                    {
+                        SetStatus(sent == 0 ? "Printing cancelled." : string.Format("Printing cancelled after {0} card back(s).", sent));
+                        return;
+                    }
+
+                    try
+                    {
+                        printer.Print(back, two ? back : null, string.Format("Card Studio BACK {0} of {1}", load, totalLoads));
+                    }
+                    catch (Exception ex)
+                    {
+                        ShowError(ex);
+                        return;
+                    }
+                    sent += two ? 2 : 1;
+                    SetStatus(string.Format("Sent tray load {0} of {1} ({2}).", load, totalLoads, side));
+                }
+                SetStatus(string.Format("Done: {0} card back(s) printed.", copies));
+            }
         }
 
         /// <summary>

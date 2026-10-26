@@ -89,6 +89,9 @@
     <Compile Include="PrintQueueForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="PrintBackForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="EpsonDriverForm.cs">
       <SubType>Form</SubType>
     </Compile>
