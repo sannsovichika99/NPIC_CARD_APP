@@ -174,6 +174,143 @@ namespace NPIC_CARD_APP
             A("Not exported:", "មិនបាននាំចេញ៖");
             A("… and {0} more", "… និង {0} ទៀត");
             A("Open the folder now?", "បើកថតឥឡូវនេះឬ?");
+
+            // ---- Design Preview & PDF (PdfExportForm) ----
+            A("Preview & PDF", "មើលជាមុន និង PDF");
+            A("Preview & PDF…", "មើលជាមុន និង PDF…");
+            A("Preview the card design on paper at real size and export it as a PDF (Ctrl+Shift+V)",
+                "មើលការរចនាកាតលើក្រដាសតាមទំហំពិត ហើយនាំចេញជា PDF (Ctrl+Shift+V)");
+            A("Design Preview", "មើលការរចនាជាមុន");
+            A("See the cards on paper at real size, then export them as a PDF",
+                "មើលកាតលើក្រដាសតាមទំហំពិត រួចនាំចេញជា PDF");
+            A("No students loaded — the design is shown with a sample student",
+                "មិនទាន់មាននិស្សិត — ការរចនាត្រូវបានបង្ហាញជាមួយនិស្សិតគំរូ");
+            A("Sample student", "និស្សិតគំរូ");
+            A("Current", "បច្ចុប្បន្ន");
+            A("Selected ({0})", "បានជ្រើស ({0})");
+            A("All in list ({0})", "ទាំងអស់ក្នុងបញ្ជី ({0})");
+            A("Layout", "ប្លង់");
+            A("A4 sheet", "ក្រដាស A4");
+            A("Card size", "ទំហំកាត");
+            A("Cut marks", "សញ្ញាកាត់");
+            A("Card design", "ការរចនាកាត");
+            A("Student ID cards", "ប័ណ្ណសម្គាល់ខ្លួននិស្សិត");
+            A("card", "កាត");
+            A("print at 100%", "បោះពុម្ព 100%");
+            A("{0} student(s)", "និស្សិត {0} នាក់");
+            A("1 student", "និស្សិត 1 នាក់");
+            A("{0} card side(s)", "ផ្ទៃកាត {0}");
+            A("1 page", "1 ទំព័រ");
+            A("{0} pages", "{0} ទំព័រ");
+            A("Page {0} of {1}", "ទំព័រ {0} នៃ {1}");
+            A("Print the PDF at 100% (actual size)", "បោះពុម្ព PDF នៅ 100% (ទំហំពិត)");
+            A("No student in this choice", "គ្មាននិស្សិតក្នុងជម្រើសនេះ");
+            A("No student in this choice — pick another one above.", "គ្មាននិស្សិតក្នុងជម្រើសនេះ — សូមជ្រើសជម្រើសផ្សេងខាងលើ។");
+            A("Export PDF…", "នាំចេញ PDF…");
+            A("Export PDF", "នាំចេញ PDF");
+            A("PDF document", "ឯកសារ PDF");
+            A("Exporting page {0} of {1}…", "កំពុងនាំចេញទំព័រ {0} នៃ {1}…");
+            A("Could not export the PDF:", "មិនអាចនាំចេញ PDF បានទេ៖");
+            A("PDF saved:", "បានរក្សាទុក PDF៖");
+            A("PDF exported: {0}", "បាននាំចេញ PDF៖ {0}");
+            A("Student list", "បញ្ជីនិស្សិត");
+            A("{0} portrait", "{0} បញ្ឈរ");
+            A("{0} landscape", "{0} ផ្ដេក");
+            A("Page Design…", "រចនាទំព័រ…");
+            A("Page Design", "រចនាទំព័រ");
+            A("Paper, margins, fonts and the text above and below the list (Ctrl+D)",
+                "ក្រដាស គែម ពុម្ពអក្សរ និងអត្ថបទខាងលើ និងខាងក្រោមបញ្ជី (Ctrl+D)");
+            A("Student list: paper, margins, fonts and the text above and below the table",
+                "បញ្ជីនិស្សិត៖ ក្រដាស គែម ពុម្ពអក្សរ និងអត្ថបទខាងលើ និងខាងក្រោមតារាង");
+            A("Paper", "ក្រដាស");
+            A("Paper size", "ទំហំក្រដាស");
+            A("Orientation", "ទិស");
+            A("Portrait", "បញ្ឈរ");
+            A("Landscape", "ផ្ដេក");
+            A("Margins (inches)", "គែម (អ៊ីញ)");
+            A("Top", "លើ");
+            A("Left", "ឆ្វេង");
+            A("Bottom", "ក្រោម");
+            A("Right", "ស្ដាំ");
+            A("Font style", "ពុម្ពអក្សរ");
+            A("Latin", "ឡាតាំង");
+            A("Complex (Khmer)", "អក្សរស្មុគស្មាញ (ខ្មែរ)");
+            A("Size (pt)", "ទំហំ (pt)");
+            A("Heading", "ចំណងជើង");
+            A("Text", "អត្ថបទ");
+            A("Above the table", "ខាងលើតារាង");
+            A("Below the table", "ខាងក្រោមតារាង");
+            A("Placeholders: [total]  [total male]  [total female]  [name]  [date]",
+                "កន្លែងជំនួស៖ [total]  [total male]  [total female]  [name]  [date]");
+            A("Heading lines are bold; a line with a placeholder is printed at the table size. A blank line adds space. [name] is the Prepared by name.",
+                "បន្ទាត់ចំណងជើងជាអក្សរដិត បន្ទាត់ដែលមានកន្លែងជំនួសប្រើទំហំដូចតារាង។ បន្ទាត់ទទេបន្ថែមចន្លោះ។ [name] ជាឈ្មោះអ្នករៀបចំ។");
+            A("A4 portrait, 0.5\" margins, Times New Roman + Khmer OS Siemreap, the standard text",
+                "A4 បញ្ឈរ គែម 0.5\" Times New Roman + Khmer OS Siemreap និងអត្ថបទស្តង់ដារ");
+            A("The margins leave too little room for the table. Make them smaller.",
+                "គែមធំពេក មិនសល់កន្លែងគ្រប់គ្រាន់សម្រាប់តារាង។ សូមបន្ថយគែម។");
+            A("This font is not installed on this PC, so a default font is used instead:",
+                "ពុម្ពអក្សរនេះមិនបានដំឡើងលើកុំព្យូទ័រនេះទេ ដូច្នេះប្រើពុម្ពអក្សរលំនាំដើមជំនួស៖");
+            A("Save anyway?", "រក្សាទុកដដែលឬ?");
+
+            // ---- Student list designs (like Card Template) ----
+            A("Design", "ការរចនា");
+            A("Name", "ឈ្មោះ");
+            A("built-in", "មានស្រាប់");
+            A("NPIC standard (A4)", "ស្តង់ដារ NPIC (A4)");
+            A("A4 landscape", "A4 ផ្ដេក");
+            A("Compact (A4, more rows)", "បង្រួម (A4 ច្រើនជួរ)");
+            A("Table only (A4)", "តារាងតែប៉ុណ្ណោះ (A4)");
+            A("(copy)", "(ចម្លង)");
+            A("My design", "ការរចនារបស់ខ្ញុំ");
+            A("New design, delete design", "ការរចនាថ្មី លុបការរចនា");
+            A("Copy and edit…", "ចម្លង និងកែ…");
+            A("Edit design…", "កែការរចនា…");
+            A("New design from this one…", "ការរចនាថ្មីពីការរចនានេះ…");
+            A("Delete design…", "លុបការរចនា…");
+            A("Delete the design \"{0}\"?", "លុបការរចនា \"{0}\" ឬ?");
+            A("Reset to Standard", "កំណត់ទៅស្តង់ដារវិញ");
+            A("A new design: Save adds it to My designs. The built-in designs stay as they are.",
+                "ការរចនាថ្មី៖ រក្សាទុកនឹងបន្ថែមវាទៅការរចនារបស់ខ្ញុំ។ ការរចនាដែលមានស្រាប់នៅដដែល។");
+            A("Give the design a name.", "សូមដាក់ឈ្មោះឱ្យការរចនា។");
+            A("Another design already has this name.", "មានការរចនាផ្សេងទៀតប្រើឈ្មោះនេះរួចហើយ។");
+
+            // ---- Page Design: Table tab ----
+            A("Page & text", "ទំព័រ និងអត្ថបទ");
+            A("Table", "តារាង");
+            A("Print the text above the table on every page", "បោះពុម្ពអត្ថបទខាងលើតារាងនៅគ្រប់ទំព័រ");
+            A("Grey header row", "ជួរចំណងជើងពណ៌ប្រផេះ");
+            A("Add column", "បន្ថែមជួរឈរ");
+            A("Remove", "ដកចេញ");
+            A("Move up", "ផ្លាស់ឡើងលើ");
+            A("Move down", "ផ្លាស់ចុះក្រោម");
+            A("Standard columns", "ជួរឈរស្តង់ដារ");
+            A("Shows", "បង្ហាញ");
+            A("Header text", "អត្ថបទចំណងជើង");
+            A("Width", "ទទឹង");
+            A("Align", "តម្រឹម");
+            A("Centre", "កណ្ដាល");
+            A("Width must be a number from 1 to 500.", "ទទឹងត្រូវតែជាលេខពី 1 ដល់ 500។");
+            A("The table needs at least one column.", "តារាងត្រូវមានជួរឈរយ៉ាងហោចណាស់មួយ។");
+            A("Widths are shared out across the page inside the margins: a column with 20 is twice as wide as one with 10, on any paper size. ≈ mm is the width on the paper chosen in Page & text.",
+                "ទទឹងត្រូវបានចែកពេញទំព័រក្នុងគែម៖ ជួរឈរ 20 ធំជាងជួរឈរ 10 ពីរដង លើក្រដាសគ្រប់ទំហំ។ ≈ mm ជាទទឹងលើក្រដាសដែលបានជ្រើសក្នុង ទំព័រ និងអត្ថបទ។");
+            A("Signature sheet (A4)", "សន្លឹកហត្ថលេខា (A4)");
+            A("No. (1, 2, 3)", "ល.រ (1, 2, 3)");
+            A("No. in Khmer digits (១, ២, ៣)", "ល.រ ជាលេខខ្មែរ (១, ២, ៣)");
+            A("Name (Khmer)", "ឈ្មោះ (ខ្មែរ)");
+            A("Name (Latin, CAPITALS)", "ឈ្មោះ (ឡាតាំង អក្សរធំ)");
+            A("Name (Latin, as typed)", "ឈ្មោះ (ឡាតាំង ដូចបានវាយ)");
+            A("Gender (ប្រុស / ស្រី)", "ភេទ (ប្រុស / ស្រី)");
+            A("Gender (as typed)", "ភេទ (ដូចបានវាយ)");
+            A("Date of birth (01/03/2005)", "ថ្ងៃខែឆ្នាំកំណើត (01/03/2005)");
+            A("Date of birth (០១ មីនា ២០០៥)", "ថ្ងៃខែឆ្នាំកំណើត (០១ មីនា ២០០៥)");
+            A("Empty (signature, remarks…)", "ទទេ (ហត្ថលេខា កំណត់សម្គាល់…)");
+            A("Prepared by", "រៀបចំដោយ");
+            A("No.", "ល.រ");
+            A("Name (Khmer)", "ឈ្មោះ (ខ្មែរ)");
+            A("Name (English)", "ឈ្មោះ (ឡាតាំង)");
+            A("Gender", "ភេទ");
+            A("Date of birth", "ថ្ងៃខែឆ្នាំកំណើត");
+            A("Gen.", "ជំនាន់");
         }
     }
 }

@@ -278,6 +278,8 @@ namespace NPIC_CARD_APP
                     "Design your own card: place text, student fields, photo, QR codes, images and shapes on the front and back"),
                 Nav("Card Text…", Theme.IcoFont, EditCardText,
                     "Edit the fixed text printed on the cards and choose the director signature"),
+                Nav("Preview & PDF…", Theme.IcoDocument, ShowDesignPreview,
+                    "Preview the card design on paper at real size and export it as a PDF (Ctrl+Shift+V)"),
 
                 Section("APP"),
                 Nav("Full Screen", Theme.IcoFullScreen, () => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"),
@@ -819,6 +821,8 @@ namespace NPIC_CARD_APP
                 "Show / hide a millimetre grid on the front and back previews (not printed)");
 
             return MakeCard("Card preview", host, _btnGrid,
+                MakeButton("Preview & PDF", PillKind.Ghost, (s, e) => ShowDesignPreview(),
+                    "Preview the card design on paper at real size and export it as a PDF (Ctrl+Shift+V)"),
                 MakeButton("3D View", PillKind.Ghost, (s, e) => Show3DPreview(),
                     "Turn the card in 3D: drag to rotate it, flip between front and back (Shift+F11)"),
                 MakeButton("Enlarge", PillKind.Ghost, (s, e) => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"));
@@ -2548,6 +2552,7 @@ namespace NPIC_CARD_APP
                 case Keys.F1: ShowHelp(_students.Count == 0 ? HelpForm.Page.QuickStart : HelpForm.Page.Overview); return true;
                 case Keys.F11: ShowFullScreen(PreviewSide.Both); return true;
                 case Keys.Shift | Keys.F11: Show3DPreview(); return true;
+                case Keys.Control | Keys.Shift | Keys.V: ShowDesignPreview(); return true;
                 case Keys.Control | Keys.F: _txtSearch.Focus(); _txtSearch.SelectAll(); return true;
                 case Keys.Control | Keys.L: ShowImportPage(); return true;
                 case Keys.Control | Keys.O: ImportCsv(); return true;
@@ -2598,6 +2603,26 @@ namespace NPIC_CARD_APP
             {
                 form.ShowDialog(this);
                 AfterBrowsing(list, index, form.CurrentIndex);
+            }
+        }
+
+        /// <summary>
+        /// Preview &amp; PDF: the card design laid out on paper (A4 sheet with cut marks, or one card per page) for the
+        /// current, selected or listed students, and Export PDF. Works with no students loaded (sample student).
+        /// </summary>
+        private void ShowDesignPreview()
+        {
+            try
+            {
+                using (var form = new PdfExportForm(_settings, CurrentDesignName(), CurrentStudent(), SelectedStudents(), BrowseList()))
+                {
+                    form.ShowDialog(this);
+                    if (form.ExportedPath != null) SetStatus("PDF exported: " + form.ExportedPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowError(ex);
             }
         }
 

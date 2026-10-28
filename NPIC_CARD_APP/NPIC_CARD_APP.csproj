@@ -122,6 +122,12 @@
     <Compile Include="PhotoCropView.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="PdfExportForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="PageDesignForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="BackgroundRemovalForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -201,6 +207,9 @@
     <Compile Include="Rendering\PositionGrid.cs" />
     <Compile Include="Rendering\QrEncoder.cs" />
     <Compile Include="Rendering\Mp4VideoWriter.cs" />
+    <Compile Include="Rendering\PdfWriter.cs" />
+    <Compile Include="Rendering\MixedText.cs" />
+    <Compile Include="Services\ListPageDesign.cs" />
     <Compile Include="Printing\CardPrinter.cs" />
     <Compile Include="Printing\PrinterDevMode.cs" />
     <Compile Include="Printing\PrinterStatus.cs" />

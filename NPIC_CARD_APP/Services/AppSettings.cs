@@ -265,6 +265,16 @@ namespace NPIC_CARD_APP.Services
         /// </summary>
         public string CustomDesignId { get; set; }
 
+        /// <summary>Name after "រៀបចំដោយលោក" on the Student list report (Preview &amp; PDF).</summary>
+        public string ListPreparedBy { get; set; }
+
+        /// <summary>Student list designs saved by the user ("My designs"; the built-in ones are in ListDesigns).</summary>
+        [XmlArray("ListDesigns"), XmlArrayItem("Design")]
+        public System.Collections.Generic.List<ListPageDesign> ListDesigns { get; set; }
+
+        /// <summary>Id of the Student list design in use (ListDesigns.DefaultId = the standard NPIC list).</summary>
+        public string ListDesignId { get; set; }
+
         /// <summary>Card design used for preview and printing (Card Template…).</summary>
         [XmlIgnore]
         public CardTemplate CardTemplate
@@ -319,6 +329,9 @@ namespace NPIC_CARD_APP.Services
             CardText = new CardText();
             CardTemplateText = "";
             CustomDesignId = "";
+            ListPreparedBy = "";
+            ListDesigns = new System.Collections.Generic.List<ListPageDesign>();
+            ListDesignId = NPIC_CARD_APP.Services.ListDesigns.DefaultId;
         }
 
         public bool IsCardPrinter(string printerName)
