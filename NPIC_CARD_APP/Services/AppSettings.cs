@@ -153,6 +153,25 @@ namespace NPIC_CARD_APP.Services
         /// </summary>
         public string RfidCsvPath { get; set; }
 
+        // ---- Mobile App page (Card Studio mobile app on the same Wi-Fi) ----
+        /// <summary>Start the mobile app link when Card Studio starts (turned on with Start on the Mobile App page).</summary>
+        public bool MobileLinkEnabled { get; set; }
+
+        /// <summary>TCP port the mobile app connects to (default 8765).</summary>
+        public int MobileLinkPort { get; set; }
+
+        /// <summary>Pairing code the phones must send, DPAPI-encrypted. Use <see cref="MobileLinkToken"/>.</summary>
+        public string MobileLinkTokenProtected { get; set; }
+
+        [XmlIgnore]
+        public string MobileLinkToken
+        {
+            get { return Unprotect(MobileLinkTokenProtected, MobileTokenEntropy); }
+            set { MobileLinkTokenProtected = Protect(value, MobileTokenEntropy); }
+        }
+
+        private static readonly byte[] MobileTokenEntropy = Encoding.UTF8.GetBytes("NPIC_CARD_APP.MobileLinkToken");
+
         /// <summary>Look for a new version (at most once a day) when Card Studio starts.</summary>
         public bool CheckUpdatesOnStartup { get; set; }
 
@@ -315,6 +334,9 @@ namespace NPIC_CARD_APP.Services
             SqlTrustServerCertificate = true;
             SqlQuery = "";
             RfidCsvPath = "";
+            MobileLinkEnabled = false;
+            MobileLinkPort = 8765;
+            MobileLinkTokenProtected = "";
             CheckUpdatesOnStartup = true;
             LastUpdateCheck = DateTime.MinValue;
             SkippedUpdateVersion = "";
@@ -453,6 +475,7 @@ namespace NPIC_CARD_APP.Services
             copy.DriveApiKeyProtected = "";
             copy.OneDriveRefreshTokenProtected = "";
             copy.OneDriveAccount = "";
+            copy.MobileLinkTokenProtected = "";   // each PC pairs its own phones
             // The default folders are under this Windows user's AppData: the PC that imports the file uses its own defaults.
             if (IsDefaultPhotoFolder(copy.PhotoFolder)) copy.PhotoFolder = "";
             if (IsDefaultCsvFolder(copy.CsvFolder)) copy.CsvFolder = "";

@@ -14,7 +14,7 @@ using NPIC_CARD_APP.Services;
 
 namespace NPIC_CARD_APP
 {
-    public class MainForm : Form
+    public partial class MainForm : Form
     {
         // ===================== Theme =====================
         // Lavender dashboard palette — tokens live in UiKit.Theme; these aliases keep the dialogs below short.
@@ -191,10 +191,12 @@ namespace NPIC_CARD_APP
             WarnIfLicenseExpiresSoon();
             CheckForUpdatesQuietly();
             AutoBackupQuietly();
+            StartMobileLinkQuietly();
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            StopMobileLink();
             SaveSettings(false);
             ReplaceImage(_picFront, null);
             ReplaceImage(_picBack, null);
@@ -284,6 +286,8 @@ namespace NPIC_CARD_APP
                     "Design your own PDF page: write text anywhere, add tables and pictures, move and clone them (Ctrl+Shift+T)"),
 
                 Section("APP"),
+                Nav("Mobile App…", Theme.IcoPhone, ShowMobileLink,
+                    "Connect the Card Studio phone app over Wi-Fi: browse students, take student photos, check printed cards (Ctrl+Shift+M)"),
                 Nav("Full Screen", Theme.IcoFullScreen, () => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"),
                 Nav("Settings & Help…", Theme.IcoSettings, ShowSettingsHub,
                     Lang.F("{0}, Theme Color, Language (Ctrl+Shift+L), Folders (Ctrl+Shift+F), All Settings (Ctrl+,), " +
@@ -2576,6 +2580,7 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.Shift | Keys.C: ShowCsvFiles(); return true;
                 case Keys.Control | Keys.Shift | Keys.E: DriverSetup(); return true;
                 case Keys.Control | Keys.Shift | Keys.R: ShowRfidList(); return true;
+                case Keys.Control | Keys.Shift | Keys.M: ShowMobileLink(); return true;
                 case Keys.Control | Keys.Shift | Keys.I: ShowHelp(HelpForm.Page.SystemInfo); return true;
                 case Keys.Control | Keys.U: ShowUpdates(); return true;
                 case Keys.Control | Keys.Shift | Keys.L: SwitchLanguage(!Lang.Khmer); return true;
@@ -3650,6 +3655,7 @@ namespace NPIC_CARD_APP
             if (text.StartsWith("Loaded ")) { title = "Students loaded"; action = ShowGallery; return NoticeKind.Success; }
             if (text.StartsWith("Downloaded ")) { title = "Photos downloaded"; action = ShowPhotoFolderPage; return NoticeKind.Success; }
             if (text.StartsWith("RFID card ")) { title = "RFID card saved"; action = ShowRfidList; return NoticeKind.Success; }
+            if (text.StartsWith("Photo from phone")) { title = "Photo from phone"; action = ShowGallery; return NoticeKind.Success; }
             if (text.StartsWith("Settings imported")) { title = "Settings imported"; return NoticeKind.Success; }
             if (text.StartsWith("Card design “")) { title = "Card design saved"; action = ShowCardDesigner; return NoticeKind.Success; }
             return NoticeKind.Success;

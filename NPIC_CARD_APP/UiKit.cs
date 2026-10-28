@@ -163,6 +163,8 @@ namespace NPIC_CARD_APP
 
         public const string IcoBackup = "";   // SaveLocal: Backup & Restore…
 
+        public const string IcoPhone = "";   // CellPhone: Mobile App…
+
         // Popup header / message icons
         public const string IcoInfo = "", IcoWarning = "", IcoError = "", IcoQuestion = "",
             IcoLocation = "", IcoMove = "";

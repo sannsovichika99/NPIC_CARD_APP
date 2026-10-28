@@ -65,6 +65,7 @@
     <Compile Include="Localization\Khmer.Settings.cs" />
     <Compile Include="Localization\Khmer.Activation.cs" />
     <Compile Include="Localization\Khmer.Services.cs" />
+    <Compile Include="Localization\Khmer.Mobile.cs" />
     <Compile Include="..\Version.cs">
       <Link>Version.cs</Link>
     </Compile>
@@ -97,6 +98,12 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="RfidListForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="MainForm.Mobile.cs">
+      <DependentUpon>MainForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="MobileLinkForm.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="StudentGalleryForm.cs">
@@ -194,6 +201,7 @@
     <Compile Include="Services\OneDrivePhotoSync.cs" />
     <Compile Include="Services\PrintHistory.cs" />
     <Compile Include="Services\RfidCardWriter.cs" />
+    <Compile Include="Services\MobileLinkServer.cs" />
     <Compile Include="Services\SqlStudentLoader.cs" />
     <Compile Include="Services\UpdateService.cs" />
     <Compile Include="Rendering\AssetStore.cs" />

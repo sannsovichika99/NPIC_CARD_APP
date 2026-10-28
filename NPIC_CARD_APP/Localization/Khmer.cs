@@ -35,6 +35,7 @@ namespace NPIC_CARD_APP
             Settings();
             Activation();
             Services();
+            Mobile();
             Dictionary<string, string> d = _d;
             _d = null;
             return d;
