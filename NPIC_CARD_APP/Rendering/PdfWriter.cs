@@ -82,6 +82,81 @@ namespace NPIC_CARD_APP.Rendering
             return id;
         }
 
+        /// <summary>
+        /// Stores a picture with its transparency (lossless, Flate) and returns its id for <see cref="DrawImage"/>: the
+        /// colours as RGB and the alpha channel as a soft mask, so what is under it on the page shows through. Used for
+        /// text drawn by GDI+ (PDF Designer) and for logos with a transparent background.
+        /// </summary>
+        public int AddAlphaImage(Bitmap image)
+        {
+            if (image == null) throw new ArgumentNullException("image");
+            int w = image.Width, h = image.Height;
+            var rgb = new byte[w * h * 3];
+            var alpha = new byte[w * h];
+            var rect = new Rectangle(0, 0, w, h);
+            BitmapData data = image.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            try
+            {
+                var row = new byte[w * 4];
+                for (int y = 0; y < h; y++)
+                {
+                    System.Runtime.InteropServices.Marshal.Copy(IntPtr.Add(data.Scan0, y * data.Stride), row, 0, row.Length);
+                    for (int x = 0; x < w; x++)
+                    {
+                        int s = x * 4, p = y * w + x;
+                        rgb[p * 3] = row[s + 2];       // GDI+ order is B, G, R, A
+                        rgb[p * 3 + 1] = row[s + 1];
+                        rgb[p * 3 + 2] = row[s];
+                        alpha[p] = row[s + 3];
+                    }
+                }
+            }
+            finally { image.UnlockBits(data); }
+
+            byte[] mask = Zlib(alpha);
+            int maskId = _nextId++;
+            BeginObject(maskId);
+            WriteAscii(string.Format(CultureInfo.InvariantCulture,
+                "<< /Type /XObject /Subtype /Image /Width {0} /Height {1} /ColorSpace /DeviceGray /BitsPerComponent 8 " +
+                "/Filter /FlateDecode /Length {2} >>\nstream\n", w, h, mask.Length));
+            _out.Write(mask, 0, mask.Length);
+            WriteAscii("\nendstream\nendobj\n");
+
+            byte[] colours = Zlib(rgb);
+            int id = _nextId++;
+            BeginObject(id);
+            WriteAscii(string.Format(CultureInfo.InvariantCulture,
+                "<< /Type /XObject /Subtype /Image /Width {0} /Height {1} /ColorSpace /DeviceRGB /BitsPerComponent 8 " +
+                "/Filter /FlateDecode /SMask {2} 0 R /Length {3} >>\nstream\n", w, h, maskId, colours.Length));
+            _out.Write(colours, 0, colours.Length);
+            WriteAscii("\nendstream\nendobj\n");
+            return id;
+        }
+
+        /// <summary>zlib stream (what PDF's FlateDecode reads): 2-byte header, raw deflate, Adler-32 checksum.</summary>
+        private static byte[] Zlib(byte[] raw)
+        {
+            using (var ms = new MemoryStream())
+            {
+                ms.WriteByte(0x78);
+                ms.WriteByte(0x9C);
+                using (var deflate = new System.IO.Compression.DeflateStream(ms, System.IO.Compression.CompressionLevel.Optimal, true))
+                    deflate.Write(raw, 0, raw.Length);
+                uint a = 1, b = 0;
+                foreach (byte v in raw)
+                {
+                    a = (a + v) % 65521;
+                    b = (b + a) % 65521;
+                }
+                uint adler = (b << 16) | a;
+                ms.WriteByte((byte)(adler >> 24));
+                ms.WriteByte((byte)(adler >> 16));
+                ms.WriteByte((byte)(adler >> 8));
+                ms.WriteByte((byte)adler);
+                return ms.ToArray();
+            }
+        }
+
         private static byte[] EncodeJpeg(Bitmap bmp, int quality)
         {
             ImageCodecInfo codec = null;

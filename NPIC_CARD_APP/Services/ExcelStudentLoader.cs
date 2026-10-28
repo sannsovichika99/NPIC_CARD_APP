@@ -27,7 +27,8 @@ namespace NPIC_CARD_APP.Services
             return ext == ".xlsx" || ext == ".xlsm" || ext == ".xls";
         }
 
-        public static List<Student> Load(string path)
+        /// <summary><paramref name="requireStudentId"/> false: any sheet is read (PDF Designer data), every column kept.</summary>
+        public static List<Student> Load(string path, bool requireStudentId = true)
         {
             if (string.Equals(Path.GetExtension(path), ".xls", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException(
@@ -58,7 +59,7 @@ namespace NPIC_CARD_APP.Services
                 }
 
                 ConvertDateSerials(chosen, date1904);
-                return CsvStudentLoader.FromRows(chosen, "The first row of the Excel sheet");
+                return CsvStudentLoader.FromRows(chosen, "The first row of the Excel sheet", requireStudentId);
             }
         }
 

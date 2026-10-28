@@ -275,6 +275,9 @@ namespace NPIC_CARD_APP.Services
         /// <summary>Id of the Student list design in use (ListDesigns.DefaultId = the standard NPIC list).</summary>
         public string ListDesignId { get; set; }
 
+        /// <summary>PDF Designer: the design opened last (file in %AppData%\NPIC_CARD_APP\PdfDesigns), "" = none.</summary>
+        public string PdfDesignId { get; set; }
+
         /// <summary>Card design used for preview and printing (Card Template…).</summary>
         [XmlIgnore]
         public CardTemplate CardTemplate

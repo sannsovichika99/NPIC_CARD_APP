@@ -15,13 +15,14 @@ namespace NPIC_CARD_APP.Services
         /// <summary>Header row of a new, empty student CSV (same columns and order as the Excel template).</summary>
         public const string Header = "StudentId,NameKh,NameEn,Gender,DateOfBirth,Faculty,Level,Generation,ValidUntil,QrData";
 
-        public static List<Student> Load(string path)
+        /// <summary><paramref name="requireStudentId"/> false: any table is read (PDF Designer data), every column kept.</summary>
+        public static List<Student> Load(string path, bool requireStudentId = true)
         {
-            return FromText(File.ReadAllText(path, Encoding.UTF8), "CSV header");
+            return FromText(File.ReadAllText(path, Encoding.UTF8), "CSV header", requireStudentId);
         }
 
         /// <summary>Reads students from CSV text (a file's contents, or a CSV download from the API).</summary>
-        internal static List<Student> FromText(string text, string headerName)
+        internal static List<Student> FromText(string text, string headerName, bool requireStudentId = true)
         {
             string[] lines = (text ?? "").Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None);
             var rows = new List<List<string>>(lines.Length);
@@ -30,14 +31,14 @@ namespace NPIC_CARD_APP.Services
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 rows.Add(ParseLine(line));
             }
-            return FromRows(rows, headerName);
+            return FromRows(rows, headerName, requireStudentId);
         }
 
         /// <summary>
         /// Turns a table (first non-blank row = header) into students. Shared by the CSV and Excel loaders
         /// so both accept exactly the same columns.
         /// </summary>
-        internal static List<Student> FromRows(IList<List<string>> rows, string headerName)
+        internal static List<Student> FromRows(IList<List<string>> rows, string headerName, bool requireStudentId = true)
         {
             var students = new List<Student>();
             int headerRow = 0;
@@ -52,7 +53,7 @@ namespace NPIC_CARD_APP.Services
                 if (name.Length > 0 && !map.ContainsKey(name)) map[name] = i;
             }
 
-            if (!map.ContainsKey("StudentId"))
+            if (requireStudentId && !map.ContainsKey("StudentId"))
                 throw new InvalidDataException(headerName + " must contain a 'StudentId' column.");
 
             for (int r = headerRow + 1; r < rows.Count; r++)

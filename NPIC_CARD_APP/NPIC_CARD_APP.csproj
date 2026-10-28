@@ -60,6 +60,7 @@
     <Compile Include="Localization\Khmer.Photos.cs" />
     <Compile Include="Localization\Khmer.Cards.cs" />
     <Compile Include="Localization\Khmer.Designer.cs" />
+    <Compile Include="Localization\Khmer.PdfDesigner.cs" />
     <Compile Include="Localization\Khmer.Printing.cs" />
     <Compile Include="Localization\Khmer.Settings.cs" />
     <Compile Include="Localization\Khmer.Activation.cs" />
@@ -126,6 +127,9 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="PageDesignForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="PdfDesignerForm.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="BackgroundRemovalForm.cs">
@@ -208,6 +212,7 @@
     <Compile Include="Rendering\QrEncoder.cs" />
     <Compile Include="Rendering\Mp4VideoWriter.cs" />
     <Compile Include="Rendering\PdfWriter.cs" />
+    <Compile Include="Rendering\PdfDesign.cs" />
     <Compile Include="Rendering\MixedText.cs" />
     <Compile Include="Services\ListPageDesign.cs" />
     <Compile Include="Printing\CardPrinter.cs" />

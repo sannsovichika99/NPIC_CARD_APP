@@ -280,6 +280,8 @@ namespace NPIC_CARD_APP
                     "Edit the fixed text printed on the cards and choose the director signature"),
                 Nav("Preview & PDF…", Theme.IcoDocument, ShowDesignPreview,
                     "Preview the card design on paper at real size and export it as a PDF (Ctrl+Shift+V)"),
+                Nav("PDF Designer…", Theme.IcoEdit, ShowPdfDesigner,
+                    "Design your own PDF page: write text anywhere, add tables and pictures, move and clone them (Ctrl+Shift+T)"),
 
                 Section("APP"),
                 Nav("Full Screen", Theme.IcoFullScreen, () => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"),
@@ -2553,6 +2555,7 @@ namespace NPIC_CARD_APP
                 case Keys.F11: ShowFullScreen(PreviewSide.Both); return true;
                 case Keys.Shift | Keys.F11: Show3DPreview(); return true;
                 case Keys.Control | Keys.Shift | Keys.V: ShowDesignPreview(); return true;
+                case Keys.Control | Keys.Shift | Keys.T: ShowPdfDesigner(); return true;
                 case Keys.Control | Keys.F: _txtSearch.Focus(); _txtSearch.SelectAll(); return true;
                 case Keys.Control | Keys.L: ShowImportPage(); return true;
                 case Keys.Control | Keys.O: ImportCsv(); return true;
@@ -2615,6 +2618,23 @@ namespace NPIC_CARD_APP
             try
             {
                 using (var form = new PdfExportForm(_settings, CurrentDesignName(), CurrentStudent(), SelectedStudents(), BrowseList()))
+                {
+                    form.ShowDialog(this);
+                    if (form.ExportedPath != null) SetStatus("PDF exported: " + form.ExportedPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowError(ex);
+            }
+        }
+
+        /// <summary>PDF Designer: a free page of text, tables and pictures, exported as a PDF (Ctrl+Shift+T).</summary>
+        private void ShowPdfDesigner()
+        {
+            try
+            {
+                using (var form = new PdfDesignerForm(_settings, BrowseList(), SelectedStudents()))
                 {
                     form.ShowDialog(this);
                     if (form.ExportedPath != null) SetStatus("PDF exported: " + form.ExportedPath);

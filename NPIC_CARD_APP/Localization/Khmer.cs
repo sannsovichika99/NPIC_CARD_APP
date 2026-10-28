@@ -30,6 +30,7 @@ namespace NPIC_CARD_APP
             Photos();
             Cards();
             Designer();
+            PdfDesigner();
             Printing();
             Settings();
             Activation();
