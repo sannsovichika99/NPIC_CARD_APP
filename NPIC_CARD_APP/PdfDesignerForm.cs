@@ -71,15 +71,22 @@ namespace NPIC_CARD_APP
         private bool _showFieldNames;      // show {NameKh} instead of the record's values
         private PdfFieldContext _fields;   // what the page fills the fields with (null = field names)
 
+        // Preview (F5): the pages as Export writes them. A data table is filled with every record and, when the list is
+        // longer than the page, continues on the next pages (header repeated). Read only: F5 / Esc goes back to editing.
+        private bool _preview;
+        private List<List<PdfItem>> _previewPages;
+        private int _previewIndex;
+        private readonly List<Control> _editTools = new List<Control>();   // disabled while previewing
+
         private readonly PdfPageCanvas _canvas;
         private readonly PdfScrollHost _scroller;
         private readonly PropertyGrid _props;
         private readonly Label _propsTitle, _status, _pageLabel, _zoomLabel, _recordLabel;
-        private readonly Panel _textPanel, _tablePanel;
+        private readonly Panel _textPanel, _tablePanel, _side;
         private readonly TextBox _txtText;
         private readonly DataGridView _cells;
         private readonly PillButton _btnDoc, _btnPage, _btnUndo, _btnRedo, _btnPrev, _btnNext, _btnClone, _btnDelete,
-                                    _btnAlign, _btnData, _btnRecordPrev, _btnRecordNext, _btnTextField, _btnCellField;
+                                    _btnAlign, _btnData, _btnPreview, _btnRecordPrev, _btnRecordNext, _btnTextField, _btnCellField;
         private readonly ContextMenuStrip _editorMenu;
         private readonly ToolTip _tip = new ToolTip();
         private readonly System.Windows.Forms.Timer _commitTimer = new System.Windows.Forms.Timer { Interval = 700 };
@@ -118,10 +125,11 @@ namespace NPIC_CARD_APP
             _btnDoc = Tool(bar, "Design ▾", ShowDocumentMenu, "Your PDF designs: open another one, new design, save a copy, delete", false);
             _btnDoc.MaximumSize = new Size(260, 32);
             _btnDoc.AutoEllipsis = true;
+            _editTools.Add(_btnDoc);
             Divider(bar);
-            Tool(bar, "+ Text", () => AddText(null), "Add a text box and type (or double-click the page where the text should go)");
-            Tool(bar, "+ Table", () => AddTable(null), "Add a table: edit its cells on the right, drag its column lines on the page");
-            Tool(bar, "+ Picture", () => AddPicture(null), "Add a logo, stamp or photo from a file (Ctrl+V pastes a copied picture)");
+            _editTools.Add(Tool(bar, "+ Text", () => AddText(null), "Add a text box and type (or double-click the page where the text should go)"));
+            _editTools.Add(Tool(bar, "+ Table", () => AddTable(null), "Add a table: edit its cells on the right, drag its column lines on the page"));
+            _editTools.Add(Tool(bar, "+ Picture", () => AddPicture(null), "Add a logo, stamp or photo from a file (Ctrl+V pastes a copied picture)"));
             Divider(bar);
             _btnClone = Tool(bar, "Clone", CloneSelected, "Put a copy next to the selected object (Ctrl+D). Alt+drag also pulls off a copy");
             _btnDelete = Tool(bar, "Delete", DeleteSelected, "Delete the selected object (Del)");
@@ -136,6 +144,10 @@ namespace NPIC_CARD_APP
                 "Fill text and tables from the student list or an Excel / CSV file: type {NameKh}, {StudentId}… or use Insert field", false);
             _btnData.MaximumSize = new Size(200, 32);
             _btnData.AutoEllipsis = true;
+            _btnPreview = Tool(bar, "Preview", TogglePreview,
+                "See every page as it is exported: data tables filled with all the records, a long list continuing on the next pages (F5)");
+            _editTools.Add(_btnPage);
+            _editTools.Add(_btnAlign);
             Divider(bar);
             PillButton zoomOut = Tool(bar, "−", () => ZoomBy(1f / 1.2f, null), "Zoom out (Ctrl+−, or Ctrl+mouse wheel)");
             zoomOut.MinimumSize = new Size(34, 32);
@@ -166,6 +178,7 @@ namespace NPIC_CARD_APP
             _canvas.PictureDoubleClicked += ReplacePicture;
             _canvas.MenuRequested += ShowCanvasMenu;
             _canvas.ZoomRequested += (f, p) => ZoomBy(f, p);
+            _canvas.PreviewDoubleClicked += (s, e) => EndPreview();
 
             // Right-click while typing on the page: cut / copy / paste and the data fields
             _editorMenu = ThemedMenu.Create();
@@ -173,7 +186,7 @@ namespace NPIC_CARD_APP
             _canvas.EditorMenu = _editorMenu;
 
             // ---- Right: text or cells of the selection, then its properties ----
-            var right = new Panel { Dock = DockStyle.Right, Width = 360, BackColor = Theme.Surface, Padding = new Padding(14, 10, 12, 8) };
+            var right = _side = new Panel { Dock = DockStyle.Right, Width = 360, BackColor = Theme.Surface, Padding = new Padding(14, 10, 12, 8) };
             right.Paint += (s, e) =>
             {
                 using (var pen = new Pen(Theme.Border)) e.Graphics.DrawLine(pen, 0, 0, 0, right.Height);
@@ -313,6 +326,7 @@ namespace NPIC_CARD_APP
         private void OpenDesign(PdfDesign design, bool isNew)
         {
             _canvas.EndTextEdit();
+            ResetPreview();
             _doc = design;
             _doc.Normalize();
             _isNew = isNew;
@@ -408,13 +422,26 @@ namespace NPIC_CARD_APP
 
         private void UpdateCommands()
         {
+            bool edit = !_preview;
+            foreach (Control c in _editTools) c.Enabled = edit;
             bool has = _canvas.SelectedItems.Count > 0;
-            _btnClone.Enabled = _btnDelete.Enabled = has;
-            _btnUndo.Enabled = _undo.Count > 0 || _pending;
-            _btnRedo.Enabled = _redo.Count > 0;
-            _btnPrev.Enabled = _page > 0;
-            _btnNext.Enabled = _page < _doc.Pages.Count - 1;
-            _pageLabel.Text = Lang.F("Page {0} of {1}", _page + 1, _doc.Pages.Count);
+            _btnClone.Enabled = _btnDelete.Enabled = has && edit;
+            _btnUndo.Enabled = edit && (_undo.Count > 0 || _pending);
+            _btnRedo.Enabled = edit && _redo.Count > 0;
+            _btnPreview.Checked = _preview;
+            if (_preview)
+            {
+                int count = _previewPages == null ? 1 : _previewPages.Count;
+                _btnPrev.Enabled = _previewIndex > 0;
+                _btnNext.Enabled = _previewIndex < count - 1;
+                _pageLabel.Text = Lang.F("Preview: page {0} of {1}", _previewIndex + 1, count);
+            }
+            else
+            {
+                _btnPrev.Enabled = _page > 0;
+                _btnNext.Enabled = _page < _doc.Pages.Count - 1;
+                _pageLabel.Text = Lang.F("Page {0} of {1}", _page + 1, _doc.Pages.Count);
+            }
             string name = _doc.Name ?? "";
             if (name.Length > 28) name = name.Substring(0, 27) + "…";
             _btnDoc.Text = name + (Dirty ? " •" : "") + "  ▾";
@@ -1289,6 +1316,16 @@ namespace NPIC_CARD_APP
         {
             _canvas.EndTextEdit();
             FlushPending();
+            if (_preview)
+            {
+                int count = _previewPages == null ? 0 : _previewPages.Count;
+                int at = (int)Math.Max(0L, Math.Min(count - 1L, (long)_previewIndex + delta));
+                if (count == 0 || at == _previewIndex) return;
+                _previewIndex = at;
+                ShowPreviewPage();
+                _scroller.AutoScrollPosition = Point.Empty;
+                return;
+            }
             int to = Math.Max(0, Math.Min(_doc.Pages.Count - 1, _page + delta));
             if (to == _page) return;
             _page = to;
@@ -1609,6 +1646,88 @@ namespace NPIC_CARD_APP
             return s;
         }
 
+        // ===================== Preview =====================
+
+        /// <summary>F5 / Preview: shows the pages as Export writes them, or goes back to editing.</summary>
+        private void TogglePreview()
+        {
+            if (_preview)
+            {
+                EndPreview();
+                return;
+            }
+            _canvas.EndTextEdit();
+            FlushPending();
+            Select(null);
+            _preview = true;
+            _previewIndex = 0;
+            BuildPreview();
+        }
+
+        /// <summary>
+        /// Makes the exported pages again (from <see cref="PdfDesignRenderer.BuildPages"/>, the same code as Export) and shows
+        /// one of them: every data table gets one row per record and continues on new pages when the list is long.
+        /// </summary>
+        private void BuildPreview()
+        {
+            List<Student> records = Records;
+            Cursor = Cursors.WaitCursor;
+            try
+            {
+                _previewPages = PdfDesignRenderer.BuildPages(_doc.Clone(), _doc.UsesData() ? records : null);
+            }
+            catch (Exception ex) when (ex is OutOfMemoryException || ex is ArgumentException || ex is ExternalException)
+            {
+                Cursor = Cursors.Default;
+                EndPreview();
+                AppDialog.Show(this, Lang.T("The preview could not be made.") + "\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            finally { Cursor = Cursors.Default; }
+            if (_previewPages.Count == 0) _previewPages.Add(new List<PdfItem>());
+            ShowPreviewPage();
+        }
+
+        private void ShowPreviewPage()
+        {
+            _previewIndex = Math.Max(0, Math.Min(_previewPages.Count - 1, _previewIndex));
+            _canvas.ReadOnly = true;
+            _canvas.Fields = null;   // the preview pages have their fields filled in already
+            _canvas.Page = new PdfDesignPage { Items = _previewPages[_previewIndex] };
+            _canvas.Caption = Lang.F("Preview: page {0} of {1}", _previewIndex + 1, _previewPages.Count);
+            _canvas.Invalidate();
+            _side.Enabled = false;
+            _btnRecordPrev.Visible = _btnRecordNext.Visible = _recordLabel.Visible = false;
+            UpdateCommands();
+
+            int records = _doc.UsesData() ? Records.Count : 0;
+            int rows = _previewPages[_previewIndex].OfType<PdfTableItem>().Where(t => t.DataRows)
+                .Sum(t => Math.Max(0, t.Rows.Count - (t.HeaderRow ? 1 : 0)));
+            _status.Text = (records > 0 ? Lang.F("Preview with {0} records", records) : Lang.T("Preview without data")) +
+                           (rows > 0 ? "  ·  " + Lang.F("{0} rows on this page", rows) : "") +
+                           "  ·  " + Lang.T("PgUp / PgDn turn the pages; F5, Esc or a double-click goes back to editing");
+        }
+
+        /// <summary>Leaves the preview without showing the design again (a design is being opened).</summary>
+        private void ResetPreview()
+        {
+            _preview = false;
+            _previewPages = null;
+            _previewIndex = 0;
+            _canvas.ReadOnly = false;
+            _canvas.Caption = null;
+            _side.Enabled = true;
+        }
+
+        /// <summary>Back to editing, on the design page that was shown before the preview.</summary>
+        private void EndPreview()
+        {
+            if (!_preview) return;
+            ResetPreview();
+            ShowPage();
+            _canvas.Focus();
+        }
+
         // ===================== Data =====================
 
         /// <summary>The records the fields are filled from (empty = no data).</summary>
@@ -1663,6 +1782,7 @@ namespace NPIC_CARD_APP
                 _btnRecordNext.Enabled = _record < records.Count - 1;
             }
             _btnData.Text = show ? Lang.F("Data: {0} ▾", records.Count) : Lang.T("Data ▾");
+            if (_preview) BuildPreview();   // other data: the table gets the new records, and the pages they need
         }
 
         /// <summary>A short name for a record: Khmer name, Latin name, ID, else its first value.</summary>
@@ -1716,15 +1836,17 @@ namespace NPIC_CARD_APP
             m.Items.Add(new ToolStripSeparator());
             ToolStripMenuItem insert = ThemedMenu.SubMenu(Lang.T("Insert field"));
             AddFieldItems(insert.DropDownItems);
+            insert.Enabled = !_preview;
             m.Items.Add(insert);
-            m.Items.Add(ThemedMenu.Item("Add a list table of the data", AddDataTable, PdfFieldContext.FieldsOf(Records).Count > 0));
+            m.Items.Add(ThemedMenu.Item("Add a list table of the data", AddDataTable, !_preview && PdfFieldContext.FieldsOf(Records).Count > 0));
             m.Items.Add(new ToolStripSeparator());
+            m.Items.Add(ThemedMenu.Item(Check(_preview) + Lang.T("Preview the pages with the data") + "\tF5", TogglePreview));
             m.Items.Add(ThemedMenu.Item(Check(_doc.OnePerRecord) + Lang.T("One copy of the design for each record"), ToggleOnePerRecord));
             m.Items.Add(ThemedMenu.Item(Check(_showFieldNames) + Lang.T("Show field names instead of values"), () =>
             {
                 _showFieldNames = !_showFieldNames;
                 RefreshFields();
-            }, Records.Count > 0));
+            }, !_preview && Records.Count > 0));
             m.Items.Add(new ToolStripSeparator());
             m.Items.Add(ThemedMenu.Item("How data fields work…", ShowDataHelp));
             ShowMenuUnder(m, _btnData);
@@ -1916,6 +2038,7 @@ namespace NPIC_CARD_APP
             _doc.OnePerRecord = !_doc.OnePerRecord;
             if (_props.SelectedObject is PdfPageSetup) _props.Refresh();
             Commit();
+            if (_preview) BuildPreview();
             _status.Text = _doc.OnePerRecord
                 ? Lang.F("Export writes the design once for each record: {0} copies.", Math.Max(1, Records.Count))
                 : Lang.T("Export writes the design once; data tables list every record.");
@@ -1930,6 +2053,7 @@ namespace NPIC_CARD_APP
                           "\n\n" + Lang.T("A list: in a table, turn on “Repeat for each record” (5. Data). The row under the header is printed once " +
                                           "for every record; a long list continues on the next page with the header repeated.") +
                           "\n\n" + Lang.T("Objects inside the top or bottom margin (dotted line), such as “Page {Page} of {Pages}”, repeat on every page of a long list.") +
+                          "\n\n" + Lang.T("Preview (F5) shows the pages as they are exported: the table with every record, and the next pages a long list needs.") +
                           "\n\n" + Lang.T("Certificates or letters: Data ▾ › One copy of the design for each record.") +
                           "\n\n" + Lang.T("The data is the student list of the main window, its selected students, or an Excel / CSV file " +
                                           "imported here (any columns; the first row is the header). ◀ ▶ at the bottom show another record.");
@@ -2021,6 +2145,23 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.Subtract: ZoomBy(1f / 1.2f, null); return true;
                 case Keys.Control | Keys.D0:
                 case Keys.Control | Keys.NumPad0: FitZoom(); return true;
+                case Keys.F5: TogglePreview(); return true;
+            }
+
+            if (_preview)
+            {
+                // Preview: turn the pages; the editing keys do nothing until F5 / Esc goes back to the design
+                switch (keyData)
+                {
+                    case Keys.PageUp:
+                    case Keys.Left: TurnPage(-1); return true;
+                    case Keys.PageDown:
+                    case Keys.Right: TurnPage(1); return true;
+                    case Keys.Home: TurnPage(-_previewIndex); return true;
+                    case Keys.End: TurnPage(_previewPages == null ? 0 : _previewPages.Count); return true;
+                    case Keys.Escape: EndPreview(); return true;
+                }
+                return base.ProcessCmdKey(ref msg, keyData);
             }
 
             bool inText = _txtText.Focused || _props.ContainsFocus || (_cells.ContainsFocus && _cells.IsCurrentCellInEditMode);
@@ -2284,6 +2425,17 @@ namespace NPIC_CARD_APP
         /// <summary>Records in the data: shown on the badge of tables that repeat for each record.</summary>
         public int RecordCount { get; set; }
 
+        /// <summary>
+        /// Preview: the page is an exported page (fields filled, data tables with every record). Nothing can be selected
+        /// or moved; margins, badges and the outlines of empty text boxes are not drawn; a double-click asks to leave.
+        /// </summary>
+        public bool ReadOnly { get; set; }
+
+        /// <summary>Shown above the paper (preview page number); null = nothing.</summary>
+        public string Caption { get; set; }
+
+        public event EventHandler PreviewDoubleClicked;
+
         /// <summary>Right-click menu of the text box for typing on the page.</summary>
         public ContextMenuStrip EditorMenu { get; set; }
 
@@ -2403,7 +2555,7 @@ namespace NPIC_CARD_APP
 
             // Margins (Align ▾ lines up with them; not printed)
             float m = Design.Margin;
-            if (m > 0f)
+            if (m > 0f && !ReadOnly)
                 using (var pen = new Pen(Color.FromArgb(70, 110, 140, 210)) { DashStyle = DashStyle.Dot })
                 {
                     RectangleF box = ToPx(new RectangleF(m, m, Design.PageMm.Width - 2f * m, Design.PageMm.Height - 2f * m));
@@ -2419,6 +2571,12 @@ namespace NPIC_CARD_APP
             g.Restore(state);
 
             g.SmoothingMode = SmoothingMode.None;
+
+            if (!string.IsNullOrEmpty(Caption))
+                using (var font = new Font(CardFonts.UI, 9f, FontStyle.Bold))
+                    TextRenderer.DrawText(g, Caption, font, new Rectangle((int)pr.X, 0, (int)pr.Width, Gutter), Theme.Accent,
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
+            if (ReadOnly) return;   // preview: the page as it prints
 
             // Empty text boxes would be invisible: show where they are
             using (var faint = new Pen(Color.FromArgb(150, 160, 165, 185)) { DashStyle = DashStyle.Dot })
@@ -2617,7 +2775,7 @@ namespace NPIC_CARD_APP
         {
             Focus();   // also ends typing in place (the text box loses the focus)
             base.OnMouseDown(e);
-            if (Page == null) return;
+            if (Page == null || ReadOnly) return;
 
             if (e.Button == MouseButtons.Right)
             {
@@ -2699,6 +2857,11 @@ namespace NPIC_CARD_APP
         {
             base.OnMouseMove(e);
             if (Page == null) return;
+            if (ReadOnly)
+            {
+                Cursor = Cursors.Default;
+                return;
+            }
             if (_drag == Drag.None)
             {
                 int h = HandleAt(e.Location);
@@ -2801,6 +2964,11 @@ namespace NPIC_CARD_APP
         protected override void OnMouseDoubleClick(MouseEventArgs e)
         {
             base.OnMouseDoubleClick(e);
+            if (ReadOnly)
+            {
+                if (e.Button == MouseButtons.Left && PreviewDoubleClicked != null) PreviewDoubleClicked(this, EventArgs.Empty);
+                return;
+            }
             if (e.Button != MouseButtons.Left || Page == null || HandleAt(e.Location) >= 0 || ColumnLineAt(e.Location) >= 0) return;
             if ((ModifierKeys & (Keys.Shift | Keys.Control)) != 0) return;   // Shift+clicking fast is not a double-click
             PdfItem item = ItemAt(e.Location);

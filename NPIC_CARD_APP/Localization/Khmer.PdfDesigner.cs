@@ -306,6 +306,20 @@ namespace NPIC_CARD_APP
             A("Repeat for each record", "ធ្វើម្ដងទៀតសម្រាប់កំណត់ត្រានីមួយៗ");
             A("The row under the header is printed once for every record of the data (Data ▾), with its fields ({NameKh}, {StudentId}, {No}…) filled in. A long list continues on the next page with the header repeated.",
                 "ជួរនៅក្រោមក្បាលត្រូវបានបោះពុម្ពម្ដងសម្រាប់កំណត់ត្រានីមួយៗនៃទិន្នន័យ (ទិន្នន័យ ▾) ដោយបំពេញវាលរបស់វា ({NameKh}, {StudentId}, {No}…)។ បញ្ជីវែងបន្តទៅទំព័របន្ទាប់ ដោយមានក្បាលតារាងម្ដងទៀត។");
+
+            // ---- Preview (F5) ----
+            A("See every page as it is exported: data tables filled with all the records, a long list continuing on the next pages (F5)",
+                "មើលគ្រប់ទំព័រដូចពេលនាំចេញ៖ តារាងទិន្នន័យបំពេញដោយកំណត់ត្រាទាំងអស់ បញ្ជីវែងបន្តទៅទំព័របន្ទាប់ (F5)");
+            A("Preview the pages with the data", "មើលទំព័រជាមុនជាមួយទិន្នន័យ");
+            A("Preview: page {0} of {1}", "មើលជាមុន៖ ទំព័រ {0} នៃ {1}");
+            A("Preview with {0} records", "មើលជាមុនជាមួយកំណត់ត្រា {0}");
+            A("Preview without data", "មើលជាមុនដោយគ្មានទិន្នន័យ");
+            A("{0} rows on this page", "{0} ជួរនៅលើទំព័រនេះ");
+            A("PgUp / PgDn turn the pages; F5, Esc or a double-click goes back to editing",
+                "PgUp / PgDn ប្ដូរទំព័រ; F5, Esc ឬចុចពីរដង ត្រឡប់ទៅកែសម្រួលវិញ");
+            A("The preview could not be made.", "មិនអាចបង្កើតការមើលជាមុនបានទេ។");
+            A("Preview (F5) shows the pages as they are exported: the table with every record, and the next pages a long list needs.",
+                "មើលជាមុន (F5) បង្ហាញទំព័រដូចពេលនាំចេញ៖ តារាងជាមួយកំណត់ត្រាទាំងអស់ និងទំព័របន្ទាប់ដែលបញ្ជីវែងត្រូវការ។");
         }
     }
 }
