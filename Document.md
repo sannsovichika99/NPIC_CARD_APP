@@ -1,3 +1,72 @@
+### v1.0.1.1
+
+Release date: 2026-10-29
+
+This version adds the Mobile App link (a phone connects to Card Studio over Wi-Fi), PDF export and a PDF Designer, Print Back, and a new way to pick students: a search box and the Student Gallery instead of the student table.
+
+## Feature
+* Mobile App… (sidebar, or Ctrl+Shift+M): connects the Card Studio phone app (the mobile folder) to this PC over the local Wi-Fi
+* Mobile App page: Start / Stop, a pairing QR code, the PC address, Copy Link (paste it in the phone app if the camera cannot scan), and a list of what the phones did
+* The phone scans the QR code once to pair. Every request needs the pairing code. New Pairing Code makes the old one stop working (use it if a phone is lost)
+* The pairing code is stored encrypted for the Windows user, and is not included when settings are exported
+* After 10 wrong codes from one address, that address is refused for a minute
+* Allow in Firewall adds a Windows Firewall rule for private and domain networks only, never public Wi-Fi. Windows asks for administrator approval
+* The link can start by itself when Card Studio starts. The port is 8765, and can be changed if another program uses it
+* The phone can search and browse students, filter by no photo / not printed / no RFID card, and see every column of a student
+* The phone can take or replace a student's photo, which is saved into the Photo Folder
+* The phone can show a student's card (front or back), find a student by scanning a card QR code or ID, and see the latest printed cards
+* The phone can ask Card Studio to print a card side, or the students selected on the PC. The person at the PC still confirms each tray load and inserts the tray
+* A phone print is refused if the PC selection changed since the phone showed it, if another window is open on the PC, or if a card is printing
+* The status bar shows "● Phone connected: name" while a phone is in touch (checked every 30 seconds). Click it to open the Mobile App page
+* Preview & PDF… (sidebar, or Ctrl+Shift+V): shows the card design on paper at real size and exports it as a PDF, with no extra software
+* Preview & PDF: students are the current one, the selected ones or every student in the list (a sample student when none is loaded)
+* Preview & PDF: "A4 sheet" puts front and back side by side at real size with cut marks. "Card size" gives one card side per page, with the page the size of the card, for print shops
+* Preview & PDF: ◀ ▶, Page Up / Page Down or the mouse wheel turn the pages, and Ctrl+S exports
+* Preview & PDF → Student list: a table report of the students as a PDF. The standard NPIC list is A4 portrait with 0.5" margins, Times New Roman and Khmer OS Siemreap, the national motto and a title
+* Student list → Page Design… (Ctrl+D): paper size (A4, Letter…) and orientation, margins, Latin and Khmer fonts and sizes, the text above and below the table, a heading on every page
+* Page Design columns: choose what each shows, its header text, width and alignment, and the header shading. Widths are relative, so one design fits every paper size
+* Page Design text can use [total], [total male], [total female], [name] and [date]. A built-in design cannot be changed; copy it into My designs first
+* PDF Designer… (sidebar, or Ctrl+Shift+T): design your own PDF page. Write text anywhere (double-click the page), add tables and pictures, and export a PDF
+* PDF Designer: drag to move (it snaps to the page centre and to other objects), arrow keys nudge (Shift = 5 mm), Ctrl+D or Alt+drag clones, plus align, distribute, undo / redo and zoom (Ctrl+wheel)
+* PDF Designer: tables are edited in a cell grid (paste from Excel works), and column lines are dragged on the page. Long tables continue on the next page
+* PDF Designer: A4, A5, Letter or Legal, portrait or landscape, with several pages. Pictures can come from a file or the clipboard
+* PDF Designer data fields, filled from the student list: {StudentId} {NameKh} {NameEn} {Gender} {DateOfBirth} {Faculty} {Level} {Generation} {ValidUntil}, any column of the list such as {Phone}, and {No} {Count} {Date} {Page} {Pages}
+* PDF Designer formats: {DateOfBirth:KhmerDate}, {StudentId:KhmerDigits}, {NameEn:Upper} and {Gender:KhmerGender}
+* PDF Designer: "Repeat for each record" lists every student in a table. Exporting once per record makes one page per student, for certificates and letters
+* PDF Designer: the data can come from the main list, the selected students, or any other Excel or CSV table. That table does not need a StudentId column
+* PDF Designer: a preview with page navigation shows the design filled with real data. Designs are saved to %AppData%\NPIC_CARD_APP\PdfDesigns
+* Print Back… (header, or Ctrl+Shift+P): prints any number of card backs (1 to 500) with no student chosen, tray load by tray load, using both slots when available
+* Student Gallery: choose several students with Ctrl / Shift + click, or Ctrl+A for every tile shown. The button reads "Select 2 in List"
+* Student Gallery opens with the students already selected in the main window
+* Tray page: a mini map of the printer page shows where slot 1 and slot 2 land. Click a slot to edit its X / Y. A slot is amber when it is outside the page or slot 2 sits on slot 1
+* Tray page: picture buttons for how the card lies in the tray (Horizontal, turn right 90°, turn left 90°), and a compact choice for cards per tray load
+* Khmer translations for all of the above
+
+## Change
+* Main window: the student table is gone. Search a student by ID, name or faculty. Typing lists the matches, and a click (or ↓ ↑ and Enter) shows that student's front and back
+* Main window: ◀ ▶ (Page Up / Page Down in the search box) step through the students
+* Main window: at most 2 students can be selected to print: one card per tray slot, so one tray load. A third is refused until one is removed
+* Main window: the selected students appear as chips under the search ("① NPIC25161 · name ✕"). Click a chip to show that student, ✕ removes it, Clear removes both
+* Main window: "Select in List" in the Gallery narrows the main window to the chosen students, with a strip "Showing 2 students chosen in the Gallery" and a Show all button (or Esc in the search box)
+* Main window: the Student card shows the details of the picked student, for example the date of birth
+
+## Known issue
+* Print Selected sends only 1 or 2 students at a time. For a large batch, pick the next two after each tray load
+* Print Back does not add anything to the print history, because the cards belong to no student yet
+* The Mobile App link uses plain HTTP (not encrypted). Use it only on a trusted private Wi-Fi, and show the QR code only to staff
+* After an RFID card is saved, that student is gone from the list until the next start. To reprint a card first, reload the list with Import Students… (Ctrl+L). Print both sides before saving RFID numbers
+* PCs that never chose a CSV folder now see the new, empty default CSV folder in CSV Files…, not the folder of their student file. Click Change Folder… to pick it again
+* Cards printed in Classic before and after v1.0.0.8 look slightly different
+* Export video needs Windows Media Foundation. Windows N / KN editions need the Media Feature Pack first
+* Notifications are kept only until Card Studio is closed
+* The user guide (F1) does not explain Card Template…, Card Designer…, Backup & Restore…, Preview & PDF…, PDF Designer… or Mobile App… yet, and notifications only appear in the shortcut list
+* The user guide (F1 → Printing) still says to select students in the list with Ctrl+click or Shift+click, which no longer works
+* The user guide (F1) does not mention that a student leaves the list after the RFID card is saved
+* The user guide (F1 → Overview) still lists driver setup as a sidebar command
+* Help still lists .xls files, but import only accepts .xlsx / .xlsm
+
+---
+
 ### v1.0.1.0
 
 Release date: 2026-10-19
