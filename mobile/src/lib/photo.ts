@@ -10,6 +10,13 @@ const MAX_WIDTH = 1000;
 
 export type PhotoSource = 'camera' | 'library';
 
+/** The camera is not allowed for the app: the screen shows its own (translated) message. */
+export class CameraDeniedError extends Error {
+  constructor() {
+    super('Allow the camera for Card Studio in the phone settings to take photos.');
+  }
+}
+
 /**
  * Takes (or picks) a photo, lets the user crop it to the card's photo shape, and returns a JPEG ready to upload.
  * Null when cancelled. Throws with a readable message when the camera is not allowed.
@@ -25,7 +32,7 @@ export async function takeStudentPhoto(source: PhotoSource): Promise<string | nu
   let result: ImagePicker.ImagePickerResult;
   if (source === 'camera') {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) throw new Error('Allow the camera for Card Studio in the phone settings to take photos.');
+    if (!permission.granted) throw new CameraDeniedError();
     result = await ImagePicker.launchCameraAsync({ ...options, cameraType: ImagePicker.CameraType.back });
   } else {
     result = await ImagePicker.launchImageLibraryAsync(options);

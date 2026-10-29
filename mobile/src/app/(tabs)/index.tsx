@@ -5,20 +5,16 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Sty
 import { Badge, ConnectionBanner, EmptyState, StudentPhoto } from '@/components/ui';
 import { api, ApiError, StudentFilter, StudentSummary } from '@/lib/api';
 import { useConnection, usePairing } from '@/lib/connection';
+import { useT } from '@/lib/i18n';
 import { khmerText, useTheme } from '@/lib/theme';
 
 const PAGE = 50;
 
-const FILTERS: { key: StudentFilter; label: string }[] = [
-  { key: '', label: 'All' },
-  { key: 'nophoto', label: 'No photo' },
-  { key: 'notprinted', label: 'Not printed' },
-  { key: 'nocard', label: 'No RFID card' },
-];
 
 /** The student list loaded in Card Studio on the PC: search, filter, open a student. */
 export default function StudentsScreen() {
   const t = useTheme();
+  const tr = useT();
   const pairing = usePairing();
   const { info, refresh: refreshInfo } = useConnection();
   const [query, setQuery] = useState('');
@@ -75,6 +71,13 @@ export default function StudentsScreen() {
     void load(0);
   };
 
+  const filters: { key: StudentFilter; label: string }[] = [
+    { key: '', label: tr.students.all },
+    { key: 'nophoto', label: tr.common.noPhoto },
+    { key: 'notprinted', label: tr.common.notPrinted },
+    { key: 'nocard', label: tr.common.noRfidCard },
+  ];
+
   const header = (
     <View style={{ gap: 12, paddingBottom: 8 }}>
       <ConnectionBanner />
@@ -83,7 +86,7 @@ export default function StudentsScreen() {
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="ID, name (ខ្មែរ / Latin) or faculty"
+          placeholder={tr.students.search}
           placeholderTextColor={t.textMuted}
           style={[styles.searchInput, { color: t.text }]}
           autoCorrect={false}
@@ -92,7 +95,7 @@ export default function StudentsScreen() {
         />
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
-        {FILTERS.map((f) => {
+        {filters.map((f) => {
           const on = f.key === filter;
           return (
             <Pressable
@@ -108,7 +111,8 @@ export default function StudentsScreen() {
       </ScrollView>
       {info && (
         <Text style={[styles.summary, { color: t.textSoft }]}>
-          {loading ? 'Loading…' : `${total} of ${info.students} students`} · {info.withPhoto} with photo · {info.printed} printed
+          {loading ? tr.common.loading : tr.students.count(total, info.students)} · {tr.students.withPhoto(info.withPhoto)} ·{' '}
+          {tr.students.printedCount(info.printed)}
         </Text>
       )}
     </View>
@@ -132,15 +136,15 @@ export default function StudentsScreen() {
         loading ? (
           <ActivityIndicator color={t.accent} style={{ marginTop: 40 }} />
         ) : error ? (
-          <EmptyState icon="cloud-offline-outline" title="Cannot load the students" text={error} />
+          <EmptyState icon="cloud-offline-outline" title={tr.students.cannotLoad} text={error} />
         ) : info?.students === 0 ? (
           <EmptyState
             icon="document-outline"
-            title="No students loaded on the PC"
-            text="In Card Studio, use Import Students… (Ctrl+L) to load the list, then pull down here to refresh."
+            title={tr.students.noneLoaded}
+            text={tr.students.noneLoadedText}
           />
         ) : (
-          <EmptyState icon="search-outline" title="No student matches" text="Try another name or ID, or another filter." />
+          <EmptyState icon="search-outline" title={tr.students.noMatch} text={tr.students.noMatchText} />
         )
       }
       ListFooterComponent={items.length > 0 && items.length < total ? <ActivityIndicator color={t.accent} style={{ margin: 16 }} /> : undefined}
@@ -150,6 +154,7 @@ export default function StudentsScreen() {
 
 function StudentRow({ s }: { s: StudentSummary }) {
   const t = useTheme();
+  const tr = useT();
   return (
     <Pressable
       onPress={() => router.push({ pathname: '/student/[id]', params: { id: s.studentId } })}
@@ -163,9 +168,9 @@ function StudentRow({ s }: { s: StudentSummary }) {
           {s.nameEn} · {s.studentId}
         </Text>
         <View style={styles.badges}>
-          {!s.hasPhoto && <Badge label="No photo" tone="warning" icon="camera-outline" />}
-          {s.printedAt ? <Badge label="Printed" tone="success" icon="checkmark" /> : <Badge label="Not printed" />}
-          {s.rfidUid && <Badge label="RFID" tone="accent" icon="radio-outline" />}
+          {!s.hasPhoto && <Badge label={tr.common.noPhoto} tone="warning" icon="camera-outline" />}
+          {s.printedAt ? <Badge label={tr.common.printed} tone="success" icon="checkmark" /> : <Badge label={tr.common.notPrinted} />}
+          {s.rfidUid && <Badge label={tr.common.rfid} tone="accent" icon="radio-outline" />}
         </View>
       </View>
       <Ionicons name="chevron-forward" size={18} color={t.textMuted} />

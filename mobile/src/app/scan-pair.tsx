@@ -4,11 +4,13 @@ import { QrScanner } from '@/components/QrScanner';
 import { Button } from '@/components/ui';
 import { ApiError, parsePairingLink } from '@/lib/api';
 import { useConnection } from '@/lib/connection';
+import { useT } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
 
 /** Scans the QR code on the PC's Mobile App page and pairs with it. */
 export default function ScanPairScreen() {
   const t = useTheme();
+  const tr = useT();
   const { pair } = useConnection();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +18,7 @@ export default function ScanPairScreen() {
   async function onScan(data: string) {
     const p = parsePairingLink(data);
     if (!p) {
-      setError('This is not a Card Studio pairing code. Scan the QR code on the PC: Card Studio → Mobile App….');
+      setError(tr.pair.notPairingCode);
       return;
     }
     setBusy(true);
@@ -32,18 +34,18 @@ export default function ScanPairScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
-      <QrScanner onScan={onScan} paused={busy} hint="Point at the QR code on the PC screen" />
+      <QrScanner onScan={onScan} paused={busy} hint={tr.pair.hint} />
       {(busy || error) && (
         <View style={[styles.sheet, { backgroundColor: t.surface }]}>
           {busy ? (
             <View style={styles.busy}>
               <ActivityIndicator color={t.accent} />
-              <Text style={{ color: t.text, fontSize: 16 }}>Connecting to the PC…</Text>
+              <Text style={{ color: t.text, fontSize: 16 }}>{tr.pair.connectingPc}</Text>
             </View>
           ) : (
             <>
               <Text style={{ color: t.danger, fontSize: 15, lineHeight: 21 }}>{error}</Text>
-              <Button title="Scan again" kind="secondary" icon="refresh-outline" onPress={() => setError(null)} />
+              <Button title={tr.pair.scanAgain} kind="secondary" icon="refresh-outline" onPress={() => setError(null)} />
             </>
           )}
         </View>

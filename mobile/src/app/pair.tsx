@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Button } from '@/components/ui';
 import { ApiError, parsePairingLink } from '@/lib/api';
 import { useConnection } from '@/lib/connection';
+import { useT } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
 
 /**
@@ -12,6 +13,7 @@ import { useTheme } from '@/lib/theme';
  */
 export default function PairLinkScreen() {
   const t = useTheme();
+  const tr = useT();
   const { pair } = useConnection();
   const params = useLocalSearchParams<{ h?: string; p?: string; t?: string; n?: string }>();
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +23,7 @@ export default function PairLinkScreen() {
     const link = `npiccard://pair?${q('h', params.h)}&${q('p', params.p)}&${q('t', params.t)}&${q('n', params.n)}`;
     const p = parsePairingLink(link);
     if (!p) {
-      setError('This link is not a complete Card Studio pairing code.');
+      setError('incomplete');
       return;
     }
     pair(p)
@@ -33,13 +35,15 @@ export default function PairLinkScreen() {
     <View style={[styles.page, { backgroundColor: t.background }]}>
       {error ? (
         <>
-          <Text style={{ color: t.danger, fontSize: 16, textAlign: 'center', lineHeight: 22 }}>{error}</Text>
-          <Button title="Back" kind="secondary" onPress={() => router.replace('/')} />
+          <Text style={{ color: t.danger, fontSize: 16, textAlign: 'center', lineHeight: 24 }}>
+            {error === 'incomplete' ? tr.pair.incomplete : error}
+          </Text>
+          <Button title={tr.common.back} kind="secondary" onPress={() => router.replace('/')} />
         </>
       ) : (
         <>
           <ActivityIndicator color={t.accent} />
-          <Text style={{ color: t.text, fontSize: 16 }}>Connecting to {params.n || 'the PC'}…</Text>
+          <Text style={{ color: t.text, fontSize: 16 }}>{tr.pair.connectingTo(params.n)}</Text>
         </>
       )}
     </View>

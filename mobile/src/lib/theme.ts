@@ -1,8 +1,25 @@
 import { useColorScheme } from 'react-native';
 import { useConnection } from './connection';
+import { useSettings } from './settings';
 
 /** Card Studio's default violet, used until the PC tells us its Theme Color. */
 export const DEFAULT_ACCENT = '#6C63F5';
+
+/**
+ * Theme colors offered on the Settings screen. All keep white button text readable (≥ 4.3:1) and
+ * stay visible as accent text on the dark surfaces (≥ 3.5:1), like the default violet.
+ */
+export const ACCENT_PRESETS = [
+  { key: 'violet', hex: '#6C63F5' },
+  { key: 'blue', hex: '#3B6FE0' },
+  { key: 'teal', hex: '#0E7C86' },
+  { key: 'green', hex: '#1F8A4C' },
+  { key: 'orange', hex: '#D14D12' },
+  { key: 'rose', hex: '#E11D48' },
+  { key: 'magenta', hex: '#C026D3' },
+] as const;
+
+export type AccentPresetKey = (typeof ACCENT_PRESETS)[number]['key'];
 
 export type Theme = ReturnType<typeof makeTheme>;
 
@@ -30,13 +47,21 @@ function makeTheme(dark: boolean, accent: string) {
 }
 
 export function useTheme(): Theme {
-  const dark = useColorScheme() === 'dark';
-  const { info } = useConnection();
-  const accent = isHex(info?.accentColor) ? info!.accentColor : DEFAULT_ACCENT;
+  const system = useColorScheme();
+  const { appearance, accent: choice } = useSettings();
+  const pcAccent = usePcAccent();
+  const dark = appearance === 'system' ? system === 'dark' : appearance === 'dark';
+  const accent = choice !== 'pc' && isHex(choice) ? choice : pcAccent;
   return makeTheme(dark, accent);
 }
 
-function isHex(value?: string | null): value is string {
+/** The Theme Color set in Card Studio on the PC (the default violet when not paired yet). */
+export function usePcAccent(): string {
+  const { info } = useConnection();
+  return isHex(info?.accentColor) ? info!.accentColor : DEFAULT_ACCENT;
+}
+
+export function isHex(value?: string | null): value is string {
   return !!value && /^#[0-9a-f]{6}$/i.test(value);
 }
 
@@ -48,12 +73,13 @@ function withAlpha(hex: string, alpha: number) {
 /** Khmer and Latin text: Khmer glyphs need a little more line height to not clip. */
 export const khmerText = { lineHeight: 26 };
 
-/** "2026-10-28T09:41:00" → "28 Oct 2026, 09:41" */
-export function formatDateTime(iso: string | null | undefined) {
+const EN_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "2026-10-28T09:41:00" → "28 Oct 2026, 09:41" (month names from the chosen language, see useT().months). */
+export function formatDateTime(iso: string | null | undefined, months: readonly string[] = EN_MONTHS) {
   if (!iso) return '';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

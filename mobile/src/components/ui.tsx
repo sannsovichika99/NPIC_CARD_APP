@@ -4,6 +4,7 @@ import { ComponentProps, ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { photoSource, StudentSummary } from '@/lib/api';
 import { useConnection, usePairing } from '@/lib/connection';
+import { useT } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -61,6 +62,22 @@ export function Button({
   );
 }
 
+/** Gear icon that opens Settings (tab headers, Connect screen). 44 pt touch target. */
+export function SettingsButton({ onPress, style }: { onPress: () => void; style?: StyleProp<ViewStyle> }) {
+  const t = useTheme();
+  const tr = useT();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={tr.common.settings}
+      hitSlop={6}
+      style={({ pressed }) => [styles.iconButton, { opacity: pressed ? 0.6 : 1 }, style]}>
+      <Ionicons name="settings-outline" size={22} color={t.accent} />
+    </Pressable>
+  );
+}
+
 type Tone = 'success' | 'warning' | 'danger' | 'neutral' | 'accent';
 
 export function Badge({ label, tone = 'neutral', icon }: { label: string; tone?: Tone; icon?: IconName }) {
@@ -92,6 +109,7 @@ export function StudentPhoto({
   radius?: number;
 }) {
   const t = useTheme();
+  const tr = useT();
   const pairing = usePairing();
   const height = Math.round((width * 22) / 18.7); // card photo box: 18.7 × 22 mm
   if (!student.hasPhoto) {
@@ -103,7 +121,7 @@ export function StudentPhoto({
       .join('');
     return (
       <View
-        accessibilityLabel="No photo yet"
+        accessibilityLabel={tr.ui.noPhotoYet}
         style={{ width, height, borderRadius: radius, backgroundColor: t.surfaceAlt, borderColor: t.border, borderWidth: 1, alignItems: 'center', justifyContent: 'center' }}>
         <Ionicons name="person-outline" size={width * 0.38} color={t.textMuted} />
         {width > 70 && <Text style={{ color: t.textMuted, marginTop: 4, fontWeight: '600' }}>{initials}</Text>}
@@ -112,7 +130,7 @@ export function StudentPhoto({
   }
   return (
     <Image
-      accessibilityLabel={`Photo of ${student.nameEn || student.studentId}`}
+      accessibilityLabel={tr.ui.photoOf(student.nameEn || student.studentId)}
       source={photoSource(pairing, student)}
       style={{ width, height, borderRadius: radius, backgroundColor: t.surfaceAlt }}
       contentFit="cover"
@@ -126,6 +144,7 @@ export function StudentPhoto({
 /** Banner on the main screens when the PC does not answer, with a retry. */
 export function ConnectionBanner() {
   const t = useTheme();
+  const tr = useT();
   const { error, needsPairing, refresh, forget } = useConnection();
   if (!error) return null;
   return (
@@ -136,7 +155,7 @@ export function ConnectionBanner() {
       <Text style={{ flex: 1, color: needsPairing ? t.danger : t.warning }}>
         {error}
         {'\n'}
-        <Text style={{ fontWeight: '700' }}>{needsPairing ? 'Tap to pair again' : 'Tap to retry'}</Text>
+        <Text style={{ fontWeight: '700' }}>{needsPairing ? tr.ui.tapToPairAgain : tr.ui.tapToRetry}</Text>
       </Text>
     </Pressable>
   );
@@ -180,6 +199,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   buttonText: { fontSize: 16, fontWeight: '600' },
+  iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { fontSize: 12, fontWeight: '600' },
   banner: { flexDirection: 'row', gap: 10, padding: 12, marginHorizontal: 16, marginTop: 8, borderRadius: 12, alignItems: 'center' },

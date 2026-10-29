@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { useRef } from 'react';
 import { Linking, StyleSheet, Text, View } from 'react-native';
 import { Button, EmptyState } from './ui';
+import { useT } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
 
 /**
@@ -12,6 +13,7 @@ import { useTheme } from '@/lib/theme';
  */
 export function QrScanner({ onScan, paused, hint }: { onScan: (data: string) => void; paused?: boolean; hint: string }) {
   const t = useTheme();
+  const tr = useT();
   const [permission, requestPermission] = useCameraPermissions();
   const last = useRef<{ data: string; at: number }>({ data: '', at: 0 });
 
@@ -21,13 +23,13 @@ export function QrScanner({ onScan, paused, hint }: { onScan: (data: string) => 
     return (
       <EmptyState
         icon="camera-outline"
-        title="Camera needed"
-        text="Card Studio uses the camera to read QR codes."
+        title={tr.camera.needed}
+        text={tr.camera.neededText}
         action={
           permission.canAskAgain ? (
-            <Button title="Allow camera" icon="camera-outline" onPress={requestPermission} />
+            <Button title={tr.camera.allow} icon="camera-outline" onPress={requestPermission} />
           ) : (
-            <Button title="Open Settings" icon="settings-outline" onPress={() => Linking.openSettings()} />
+            <Button title={tr.camera.openSettings} icon="settings-outline" onPress={() => Linking.openSettings()} />
           )
         }
       />

@@ -4,11 +4,13 @@ import { useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, ConnectionBanner, Row } from '@/components/ui';
 import { useConnection, usePairing } from '@/lib/connection';
+import { useT } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
 
 /** The paired PC: what Card Studio has loaded, and Forget this PC. */
 export default function PcScreen() {
   const t = useTheme();
+  const tr = useT();
   const pairing = usePairing();
   const { info, error, refresh, forget } = useConnection();
   const [refreshing, setRefreshing] = useState(false);
@@ -37,7 +39,7 @@ export default function PcScreen() {
         <View style={{ flex: 1 }}>
           <Text style={{ color: t.text, fontSize: 18, fontWeight: '700' }}>{info?.computer || pairing.pcName}</Text>
           <Text style={{ color: error ? t.warning : t.success }}>
-            {error ? 'Not answering' : `Connected · ${pairing.host}:${pairing.port}`}
+            {error ? tr.pc.notAnswering : tr.pc.connected(`${pairing.host}:${pairing.port}`)}
           </Text>
         </View>
       </Card>
@@ -45,33 +47,33 @@ export default function PcScreen() {
       {info && (
         <Card>
           <Text style={[styles.section, { color: t.text }]}>Card Studio</Text>
-          <Row label="Version" value={info.version} />
-          <Row label="Student list" value={info.source || 'No list loaded'} />
-          <Row label="Students" value={String(info.students)} />
-          <Row label="With photo" value={`${info.withPhoto}${percent(info.withPhoto)}`} />
-          <Row label="Printed" value={`${info.printed}${percent(info.printed)}`} />
-          <Row label="RFID cards" value={`${info.withCard}${percent(info.withCard)}`} />
-          <Row label="Card design" value={info.template} />
+          <Row label={tr.pc.version} value={info.version} />
+          <Row label={tr.pc.studentList} value={info.source || tr.pc.noList} />
+          <Row label={tr.pc.students} value={String(info.students)} />
+          <Row label={tr.pc.withPhoto} value={`${info.withPhoto}${percent(info.withPhoto)}`} />
+          <Row label={tr.pc.printed} value={`${info.printed}${percent(info.printed)}`} />
+          <Row label={tr.pc.rfidCards} value={`${info.withCard}${percent(info.withCard)}`} />
+          <Row label={tr.pc.cardDesign} value={info.template} />
           {!info.photoFolderOk && (
             <Text style={{ color: t.warning, marginTop: 8 }}>
-              The photo folder on the PC is missing: photos cannot be saved until it is chosen again (Photo Folder… on the PC).
+              {tr.pc.photoFolderMissing}
             </Text>
           )}
         </Card>
       )}
 
       <Button
-        title="Forget this PC"
+        title={tr.pc.forget}
         icon="log-out-outline"
         kind="danger"
         onPress={() =>
-          Alert.alert('Forget this PC?', 'To connect again, scan the QR code on the PC (Card Studio → Mobile App…).', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Forget', style: 'destructive', onPress: () => void forget() },
+          Alert.alert(tr.pc.forgetTitle, tr.pc.forgetText, [
+            { text: tr.common.cancel, style: 'cancel' },
+            { text: tr.pc.forgetConfirm, style: 'destructive', onPress: () => void forget() },
           ])
         }
       />
-      <Text style={[styles.footer, { color: t.textMuted }]}>Card Studio mobile {Constants.expoConfig?.version ?? ''}</Text>
+      <Text style={[styles.footer, { color: t.textMuted }]}>{tr.pc.footer(Constants.expoConfig?.version ?? '')}</Text>
     </ScrollView>
   );
 }

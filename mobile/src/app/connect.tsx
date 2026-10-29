@@ -5,14 +5,16 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Card } from '@/components/ui';
+import { Button, Card, SettingsButton } from '@/components/ui';
 import { ApiError, DEFAULT_PORT, manualPairing, Pairing, parsePairingLink } from '@/lib/api';
 import { useConnection } from '@/lib/connection';
+import { useT } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
 
 /** First screen: pair this phone with Card Studio on a PC (scan its QR code, paste its link, or type it). */
 export default function ConnectScreen() {
   const t = useTheme();
+  const tr = useT();
   const { pair } = useConnection();
   const [manual, setManual] = useState(false);
   const [address, setAddress] = useState('');
@@ -39,7 +41,7 @@ export default function ConnectScreen() {
 
   async function pasteLink() {
     const text = await Clipboard.getStringAsync();
-    await tryPair(parsePairingLink(text), 'The clipboard has no Card Studio link. On the PC: Mobile App… → Copy Link.');
+    await tryPair(parsePairingLink(text), tr.connect.noLinkInClipboard);
   }
 
   const input = [styles.input, { backgroundColor: t.surface, borderColor: t.border, color: t.text }];
@@ -48,18 +50,19 @@ export default function ConnectScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: t.background }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
+          <SettingsButton onPress={() => router.push('/settings')} style={styles.settings} />
           <Image source={require('../../assets/icon.png')} style={styles.logo} contentFit="contain" />
           <Text style={[styles.title, { color: t.text }]}>Card Studio</Text>
           <Text style={[styles.subtitle, { color: t.textSoft }]}>
-            Connect to Card Studio on the PC to see the student list, take ID photos and check printed cards.
+            {tr.connect.subtitle}
           </Text>
 
           <Card style={{ gap: 14 }}>
-            <Step n={1} text="On the PC, open Card Studio → Mobile App… (Ctrl+Shift+M) and press Start." />
-            <Step n={2} text="Connect this phone to the same Wi-Fi as the PC." />
-            <Step n={3} text="Scan the QR code shown on the PC." />
-            <Button title="Scan PC QR code" icon="qr-code-outline" onPress={() => router.push('/scan-pair')} busy={busy} />
-            <Button title="Paste link" icon="clipboard-outline" kind="secondary" onPress={pasteLink} disabled={busy} />
+            <Step n={1} text={tr.connect.step1} />
+            <Step n={2} text={tr.connect.step2} />
+            <Step n={3} text={tr.connect.step3} />
+            <Button title={tr.connect.scanQr} icon="qr-code-outline" onPress={() => router.push('/scan-pair')} busy={busy} />
+            <Button title={tr.connect.pasteLink} icon="clipboard-outline" kind="secondary" onPress={pasteLink} disabled={busy} />
           </Card>
 
           {error && (
@@ -70,10 +73,10 @@ export default function ConnectScreen() {
           )}
 
           {!manual ? (
-            <Button title="Type the address instead" kind="ghost" onPress={() => setManual(true)} />
+            <Button title={tr.connect.typeAddress} kind="ghost" onPress={() => setManual(true)} />
           ) : (
             <Card style={{ gap: 10 }}>
-              <Text style={[styles.label, { color: t.textSoft }]}>PC address (shown on the Mobile App page)</Text>
+              <Text style={[styles.label, { color: t.textSoft }]}>{tr.connect.address}</Text>
               <TextInput
                 style={input}
                 value={address}
@@ -84,9 +87,9 @@ export default function ConnectScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              <Text style={[styles.label, { color: t.textSoft }]}>Port</Text>
+              <Text style={[styles.label, { color: t.textSoft }]}>{tr.connect.port}</Text>
               <TextInput style={input} value={port} onChangeText={setPort} keyboardType="number-pad" />
-              <Text style={[styles.label, { color: t.textSoft }]}>Pairing code (Copy Link on the PC shows it)</Text>
+              <Text style={[styles.label, { color: t.textSoft }]}>{tr.connect.code}</Text>
               <TextInput
                 style={[input, { fontFamily: 'monospace' }]}
                 value={code}
@@ -96,11 +99,11 @@ export default function ConnectScreen() {
                 secureTextEntry
               />
               <Button
-                title="Connect"
+                title={tr.connect.connect}
                 icon="link-outline"
                 busy={busy}
                 onPress={() =>
-                  tryPair(manualPairing(address, port, code), 'Fill in the PC address, the port and the pairing code.')
+                  tryPair(manualPairing(address, port, code), tr.connect.fillIn)
                 }
               />
             </Card>
@@ -125,6 +128,7 @@ function Step({ n, text }: { n: number; text: string }) {
 
 const styles = StyleSheet.create({
   page: { padding: 20, gap: 16, paddingBottom: 40 },
+  settings: { position: 'absolute', top: 4, right: 4, zIndex: 1 },
   logo: { width: 96, height: 96, alignSelf: 'center', borderRadius: 22, marginTop: 12 },
   title: { fontSize: 28, fontWeight: '700', textAlign: 'center' },
   subtitle: { fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 4 },

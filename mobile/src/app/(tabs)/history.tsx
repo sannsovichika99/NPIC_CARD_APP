@@ -4,11 +4,13 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Tex
 import { Badge, ConnectionBanner, EmptyState } from '@/components/ui';
 import { api, ApiError, HistoryPage } from '@/lib/api';
 import { usePairing } from '@/lib/connection';
+import { useT } from '@/lib/i18n';
 import { formatDateTime, khmerText, useTheme } from '@/lib/theme';
 
 /** The latest card sides sent to the printer (Card Studio's Print History). */
 export default function HistoryScreen() {
   const t = useTheme();
+  const tr = useT();
   const pairing = usePairing();
   const [page, setPage] = useState<HistoryPage | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,8 +55,8 @@ export default function HistoryScreen() {
           <ConnectionBanner />
           {page && (
             <View style={styles.stats}>
-              <Stat label="Printed today" value={page.printedToday} />
-              <Stat label="All time (sides)" value={page.total} />
+              <Stat label={tr.history.printedToday} value={page.printedToday} />
+              <Stat label={tr.history.allTime} value={page.total} />
             </View>
           )}
         </View>
@@ -62,9 +64,9 @@ export default function HistoryScreen() {
       ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
       ListEmptyComponent={
         error ? (
-          <EmptyState icon="cloud-offline-outline" title="Cannot load the print history" text={error} />
+          <EmptyState icon="cloud-offline-outline" title={tr.history.cannotLoad} text={error} />
         ) : (
-          <EmptyState icon="print-outline" title="Nothing printed yet" text="Cards printed in Card Studio show up here." />
+          <EmptyState icon="print-outline" title={tr.history.nothing} text={tr.history.nothingText} />
         )
       }
       renderItem={({ item }) => (
@@ -79,10 +81,10 @@ export default function HistoryScreen() {
               {item.nameEn} · {item.studentId}
             </Text>
             <Text style={{ color: t.textMuted, fontSize: 13 }} numberOfLines={1}>
-              {formatDateTime(item.printedAt)} · {item.printer || item.computer}
+              {formatDateTime(item.printedAt, tr.months)} · {item.printer || item.computer}
             </Text>
           </View>
-          <Badge label={item.side === 'BACK' ? 'Back' : 'Front'} tone={item.side === 'BACK' ? 'neutral' : 'accent'} />
+          <Badge label={item.side === 'BACK' ? tr.common.back_side : tr.common.front} tone={item.side === 'BACK' ? 'neutral' : 'accent'} />
         </Pressable>
       )}
     />
