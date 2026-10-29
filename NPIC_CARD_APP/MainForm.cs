@@ -85,6 +85,7 @@ namespace NPIC_CARD_APP
         private readonly ToolTip _tip = new ToolTip();
         private PillTabs _sideTabs;
         private Label _lblPage, _lblStatus, _lblStatusDot;
+        private Label _lblPhone;                              // "● Phone connected: …" at the right of the status bar
         private StatCard _statStudents, _statSelected, _statPrinted;
         private TableLayoutPanel _dashboard;
         private bool _refreshOnActivate;   // photo folder opened in Explorer: re-read photos when the user comes back
@@ -1263,8 +1264,16 @@ namespace NPIC_CARD_APP
                 Dock = DockStyle.Left, Width = 16, Text = "●", ForeColor = Success, TextAlign = ContentAlignment.MiddleLeft,
                 Font = Theme.Small, BackColor = Color.Transparent
             };
-            bar.Controls.Add(_lblStatus);
+            _lblPhone = new Label
+            {
+                Dock = DockStyle.Right, AutoSize = true, Visible = false, TextAlign = ContentAlignment.MiddleRight,
+                ForeColor = Success, Font = Theme.Small, BackColor = Color.Transparent, Cursor = Cursors.Hand,
+                Padding = new Padding(12, 0, 0, 0)
+            };
+            _lblPhone.Click += (s, e) => ShowMobileLink();
+            bar.Controls.Add(_lblStatus);       // Fill: added first so it takes the space the docked labels leave
             bar.Controls.Add(_lblStatusDot);
+            bar.Controls.Add(_lblPhone);
             return bar;
         }
 

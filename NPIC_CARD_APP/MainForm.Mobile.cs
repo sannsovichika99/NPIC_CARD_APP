@@ -20,10 +20,20 @@ namespace NPIC_CARD_APP
     {
         private MobileLinkServer _mobile;
         private bool _mobilePrintRunning;   // a print asked from the phone is waiting or running (UI thread only)
+        private System.Windows.Forms.Timer _phoneTimer;   // hides the "Phone connected" label once the phone goes quiet
 
         private MobileLinkServer Mobile
         {
-            get { return _mobile ?? (_mobile = new MobileLinkServer(this)); }
+            get
+            {
+                if (_mobile != null) return _mobile;
+                _mobile = new MobileLinkServer(this);
+                _mobile.PhonesChanged += OnPhonesChanged;
+                _phoneTimer = new System.Windows.Forms.Timer { Interval = 10000 };
+                _phoneTimer.Tick += (s, e) => UpdatePhoneLabel();
+                _phoneTimer.Start();
+                return _mobile;
+            }
         }
 
         private void ShowMobileLink()
@@ -51,7 +61,32 @@ namespace NPIC_CARD_APP
 
         private void StopMobileLink()
         {
+            if (_phoneTimer != null) _phoneTimer.Dispose();
+            _phoneTimer = null;
             if (_mobile != null) _mobile.Dispose();
+        }
+
+        // ===================== "Phone connected" label in the status bar =====================
+        private void OnPhonesChanged()   // server thread, or the UI thread when the Mobile App page stops the link
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            try { BeginInvoke((Action)UpdatePhoneLabel); }
+            catch (InvalidOperationException) { }   // the window is closing
+        }
+
+        /// <summary>Shows which paired phones were heard from lately; hidden when none (or the link is stopped).</summary>
+        private void UpdatePhoneLabel()
+        {
+            if (IsDisposed || _lblPhone == null) return;
+            List<string> phones = _mobile != null && _mobile.Running ? _mobile.ConnectedPhones() : new List<string>();
+            if (phones.Count == 0)
+            {
+                _lblPhone.Visible = false;
+                return;
+            }
+            _lblPhone.Text = phones.Count == 1 ? "● Phone connected: " + phones[0] : "● " + phones.Count + " phones connected";
+            _tip.SetTip(_lblPhone, string.Join(Environment.NewLine, phones) + Environment.NewLine + "Click to open the Mobile App page");
+            _lblPhone.Visible = true;
         }
 
         // ===================== IMobileLinkHost (server threads) =====================

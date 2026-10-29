@@ -61,6 +61,7 @@ namespace NPIC_CARD_APP.Services
     /// address that address is refused for a minute.</para>
     /// <list type="table">
     /// <item><term>GET /api/ping</term><description>App name, version, PC name (no code needed)</description></item>
+    /// <item><term>GET /api/heartbeat</term><description>Keeps the phone listed as connected on the PC (sent every 30 s)</description></item>
     /// <item><term>GET /api/info</term><description>Counts, list source, card design, accent colour</description></item>
     /// <item><term>GET /api/students?q=&amp;offset=&amp;limit=&amp;filter=nophoto|notprinted|nocard</term><description>Loaded students</description></item>
     /// <item><term>GET /api/students/{id}</term><description>One student with every column</description></item>
@@ -83,6 +84,8 @@ namespace NPIC_CARD_APP.Services
         private const int MaxBadTokens = 10;
         private static readonly TimeSpan LockoutTime = TimeSpan.FromMinutes(1);
         private const int MaxEvents = 200;
+        /// <summary>A phone that sent nothing for this long no longer counts as connected (it sends a heartbeat every 30 s).</summary>
+        public static readonly TimeSpan PhoneTimeout = TimeSpan.FromSeconds(90);
         public const string ReplacedFolderName = "_replaced";
 
         private readonly IMobileLinkHost _host;
@@ -90,15 +93,23 @@ namespace NPIC_CARD_APP.Services
         private readonly SemaphoreSlim _slots = new SemaphoreSlim(MaxConnections);
         private readonly Dictionary<string, BadTokens> _bad = new Dictionary<string, BadTokens>();
         private readonly List<MobileLinkEvent> _events = new List<MobileLinkEvent>();
+        private readonly Dictionary<string, SeenPhone> _phones = new Dictionary<string, SeenPhone>();   // Request.Device → last request
         private readonly object _lock = new object();
         private TcpListener _listener;
         private CancellationTokenSource _stop;
         private string _token;
 
         private sealed class BadTokens { public int Count; public DateTime Since; }
+        private sealed class SeenPhone { public string Name; public DateTime At; }
 
         /// <summary>Raised on a server thread for every activity line (a phone connected, a photo arrived, a wrong code…).</summary>
         public event Action<MobileLinkEvent> Activity;
+
+        /// <summary>
+        /// Raised on a server thread when a paired phone shows up, or when the server stops / the pairing code changes.
+        /// A phone that goes quiet is not announced: read <see cref="ConnectedPhones"/> again from time to time.
+        /// </summary>
+        public event Action PhonesChanged;
 
         public MobileLinkServer(IMobileLinkHost host)
         {
@@ -108,6 +119,18 @@ namespace NPIC_CARD_APP.Services
 
         public bool Running { get { return _listener != null; } }
         public int Port { get; private set; }
+
+        /// <summary>Names of the paired phones heard from within <see cref="PhoneTimeout"/>, sorted.</summary>
+        public List<string> ConnectedPhones()
+        {
+            DateTime now = DateTime.UtcNow;
+            lock (_lock)
+            {
+                foreach (string key in _phones.Where(p => now - p.Value.At > PhoneTimeout).Select(p => p.Key).ToList())
+                    _phones.Remove(key);
+                return _phones.Values.Select(p => p.Name).OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList();
+            }
+        }
 
         /// <summary>The latest activity lines, oldest first.</summary>
         public List<MobileLinkEvent> RecentEvents()
@@ -139,6 +162,7 @@ namespace NPIC_CARD_APP.Services
             try { _stop.Cancel(); } catch (ObjectDisposedException) { }
             try { listener.Stop(); } catch (SocketException) { }
             Log(null, "Stopped", false);
+            ForgetPhones();
         }
 
         /// <summary>A new pairing code: phones paired with the old one must scan the QR code again.</summary>
@@ -148,6 +172,7 @@ namespace NPIC_CARD_APP.Services
             _token = token;
             lock (_lock) _bad.Clear();
             Log(null, "New pairing code: phones must scan the QR code again", false);
+            ForgetPhones();   // they cannot connect with the old code any more
         }
 
         public void Dispose()
@@ -245,7 +270,7 @@ namespace NPIC_CARD_APP.Services
 
         private sealed class Request
         {
-            public string Method, Path, Remote, Device;
+            public string Method, Path, Remote, Device, Name;   // Device = "Name (address)", Name = phone name or address
             public Dictionary<string, string> Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             public Dictionary<string, string> Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             public byte[] Body = new byte[0];
@@ -352,9 +377,9 @@ namespace NPIC_CARD_APP.Services
             }
 
             string device;
-            req.Device = req.Headers.TryGetValue("X-Device-Name", out device) && device.Length > 0
-                ? Clip(device, 40) + " (" + remote + ")"
-                : remote;
+            bool named = req.Headers.TryGetValue("X-Device-Name", out device) && device.Length > 0;
+            req.Name = named ? Clip(device, 40) : remote;
+            req.Device = named ? req.Name + " (" + remote + ")" : remote;
 
             // ---- body (Content-Length only; the app never sends chunked bodies) ----
             string lengthText;
@@ -463,6 +488,9 @@ namespace NPIC_CARD_APP.Services
             bool get = req.Method == "GET" || req.Method == "HEAD";
             switch (parts[0])
             {
+                case "heartbeat":
+                    if (get && parts.Length == 1) return Json(new Dictionary<string, object> { { "ok", true } });
+                    break;
                 case "info":
                     if (get && parts.Length == 1) return Json(Info(req));
                     break;
@@ -521,6 +549,32 @@ namespace NPIC_CARD_APP.Services
 
             lock (_lock) _bad.Remove(req.Remote);
             if (req.Path == "/api/info") Log(req.Device, "Connected", false);
+            Seen(req);
+        }
+
+        /// <summary>Notes that a paired phone made a request; announces it when it was not counted as connected.</summary>
+        private void Seen(Request req)
+        {
+            bool isNew;
+            lock (_lock)
+            {
+                SeenPhone phone;
+                isNew = !_phones.TryGetValue(req.Device, out phone) || DateTime.UtcNow - phone.At > PhoneTimeout;
+                _phones[req.Device] = new SeenPhone { Name = req.Name, At = DateTime.UtcNow };
+            }
+            if (isNew) RaisePhonesChanged();
+        }
+
+        private void ForgetPhones()
+        {
+            lock (_lock) _phones.Clear();
+            RaisePhonesChanged();
+        }
+
+        private void RaisePhonesChanged()
+        {
+            Action handler = PhonesChanged;
+            if (handler != null) try { handler(); } catch { }
         }
 
         private static bool SameToken(string a, string b)

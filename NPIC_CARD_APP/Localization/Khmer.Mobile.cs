@@ -57,6 +57,9 @@ namespace NPIC_CARD_APP
             A("New pairing code: phones must scan the QR code again", "លេខកូដភ្ជាប់ថ្មី៖ ទូរស័ព្ទត្រូវស្កេនកូដ QR ម្ដងទៀត");
 
             // ---- Status line / notification ----
+            A("● Phone connected: {0}", "● ទូរស័ព្ទបានភ្ជាប់៖ {0}");
+            A("● {0} phones connected", "● ទូរស័ព្ទ {0} គ្រឿងបានភ្ជាប់");
+            A("Click to open the Mobile App page", "ចុចដើម្បីបើកទំព័រកម្មវិធីទូរស័ព្ទ");
             A("Photo from phone", "រូបថតពីទូរស័ព្ទ");
             A("Photo from phone saved for {0} ({1})", "បានរក្សាទុករូបថតពីទូរស័ព្ទសម្រាប់ {0} ({1})");
             A("Could not start the mobile app link on port {0}: {1}", "មិនអាចចាប់ផ្ដើមការភ្ជាប់កម្មវិធីទូរស័ព្ទលើច្រក {0}៖ {1}");

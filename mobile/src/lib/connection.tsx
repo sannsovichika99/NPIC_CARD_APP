@@ -1,6 +1,7 @@
 /**
  * The paired PC: kept in the phone's secure storage, so the app reconnects by itself after a restart.
  * Screens read it with useConnection(); `info` is refreshed when the app comes back to the foreground.
+ * While the app is open it sends a heartbeat every 30 s, so the PC shows "Phone connected" in its status bar.
  */
 import * as SecureStore from 'expo-secure-store';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
@@ -8,6 +9,8 @@ import { AppState, Platform } from 'react-native';
 import { api, ApiError, connect as connectToPc, Info, Pairing } from './api';
 
 const STORE_KEY = 'card-studio.pairing.v1';
+/** Must stay well under MobileLinkServer.PhoneTimeout on the PC (90 s). */
+const HEARTBEAT_MS = 30_000;
 
 type State = {
   /** True until the saved pairing has been read. */
@@ -111,6 +114,29 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     });
     return () => sub.remove();
   }, [refresh]);
+
+  // App in the foreground and paired → tell the PC we are still here. Failures are ignored: refresh() reports problems.
+  useEffect(() => {
+    if (!pairing) return;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const beat = () => {
+      const p = pairingRef.current;
+      if (p) api.heartbeat(p).catch(() => {});
+    };
+    const start = () => {
+      if (timer === null) timer = setInterval(beat, HEARTBEAT_MS);
+    };
+    const stop = () => {
+      if (timer !== null) clearInterval(timer);
+      timer = null;
+    };
+    if (AppState.currentState === 'active') start();
+    const sub = AppState.addEventListener('change', (state) => (state === 'active' ? start() : stop()));
+    return () => {
+      stop();
+      sub.remove();
+    };
+  }, [pairing]);
 
   const value = useMemo<State>(
     () => ({ loading, pairing, info, error, needsPairing, pair, refresh, forget }),

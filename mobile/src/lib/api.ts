@@ -197,6 +197,9 @@ export async function connect(p: Pairing): Promise<{ pairing: Pairing; info: Inf
 export const api = {
   info: (p: Pairing) => request<Info>(p, '/api/info'),
 
+  /** Tiny request that keeps this phone shown as connected in Card Studio's status bar on the PC. */
+  heartbeat: (p: Pairing) => request<{ ok: boolean }>(p, '/api/heartbeat'),
+
   students: (p: Pairing, q: string, filter: StudentFilter, offset = 0, limit = 50) =>
     request<StudentPage>(
       p,
