@@ -41,6 +41,24 @@ namespace NPIC_CARD_APP.Services
         /// Returns null when the print was started, or why it cannot start now (another window is open on the PC…).
         /// </summary>
         string RequestPrint(Student s, bool front, string device);
+        /// <summary>The students selected for Print Selected on the PC right now (slot order) and the side shown there.</summary>
+        PcSelection Selection();
+        /// <summary>
+        /// The phone asked to print the PC's selection as it is, on the front or the back. Refused when the selection
+        /// is no longer <paramref name="expectedIds"/> (what the phone showed), so a card never prints for a student
+        /// the person did not see. Returns null when the print was started, or why it cannot start now.
+        /// </summary>
+        string RequestPrintSelection(IList<string> expectedIds, bool front, string device);
+    }
+
+    /// <summary>What is selected in Card Studio, for the phone's Print tab.</summary>
+    public class PcSelection
+    {
+        public List<Student> Students { get; set; }
+        /// <summary>The Front side tab is shown on the PC (else Back).</summary>
+        public bool Front { get; set; }
+        /// <summary>Why a print cannot start now (window open on the PC, a card printing…), or null.</summary>
+        public string Busy { get; set; }
     }
 
     /// <summary>One line of the Mobile App page's activity list.</summary>
@@ -68,6 +86,8 @@ namespace NPIC_CARD_APP.Services
     /// <item><term>GET|PUT /api/students/{id}/photo</term><description>Read or replace the photo (JPEG / PNG body)</description></item>
     /// <item><term>GET /api/students/{id}/card?side=front|back</term><description>The card as a JPEG</description></item>
     /// <item><term>POST /api/students/{id}/print?side=front|back</term><description>Starts Print Selected for that card side on the PC</description></item>
+    /// <item><term>GET /api/selected</term><description>The students selected on the PC and the side shown there</description></item>
+    /// <item><term>POST /api/selected/print?side=front|back&amp;ids=A,B</term><description>Prints the PC's selection, if it is still A,B</description></item>
     /// <item><term>GET /api/lookup?code=</term><description>Student from a scanned card QR / ID</description></item>
     /// <item><term>GET /api/history?limit=</term><description>Latest printed card sides</description></item>
     /// </list>
@@ -503,6 +523,10 @@ namespace NPIC_CARD_APP.Services
                     if (parts.Length == 3 && parts[2] == "card" && get) return Card(req, Find(parts[1]));
                     if (parts.Length == 3 && parts[2] == "print" && req.Method == "POST") return Json(Print(req, Find(parts[1])));
                     break;
+                case "selected":
+                    if (parts.Length == 1 && get) return Json(Selected());
+                    if (parts.Length == 2 && parts[1] == "print" && req.Method == "POST") return Json(PrintSelection(req));
+                    break;
                 case "lookup":
                     if (get && parts.Length == 1) return Json(Lookup(req));
                     break;
@@ -756,13 +780,54 @@ namespace NPIC_CARD_APP.Services
         /// Print button on the phone: hands the card side to Print Selected on the PC. The answer only says the print was
         /// started; the tray load is confirmed on the PC and the print history shows when the card was really printed.
         /// </summary>
-        private Dictionary<string, object> Print(Request req, Student s)
+        private Dictionary<string, object> Selected()
+        {
+            PcSelection sel = _host.Selection();
+            StatusSnapshot st = Status();
+            return new Dictionary<string, object>
+            {
+                { "students", sel.Students.Select(s => Summary(s, st)).ToList() },
+                { "side", sel.Front ? "front" : "back" },
+                { "busy", sel.Busy }
+            };
+        }
+
+        private Dictionary<string, object> PrintSelection(Request req)
+        {
+            bool front = Side(req);
+            string side = front ? "FRONT" : "BACK";
+            List<string> ids = req.Q("ids").Split(',').Select(x => x.Trim()).Where(x => x.Length > 0).ToList();
+            if (ids.Count == 0) throw new HttpError(400, "Send ids= with the students shown on the phone.");
+
+            string what = string.Join(", ", ids);
+            string problem = _host.RequestPrintSelection(ids, front, req.Device);
+            if (problem != null)
+            {
+                Log(req.Device, "Print refused for " + what + " (" + side + "): " + problem, true);
+                throw new HttpError(409, problem);
+            }
+            Log(req.Device, "Print requested for " + what + " (" + side + ")", false);
+            return new Dictionary<string, object>
+            {
+                { "started", true },
+                { "studentIds", ids },
+                { "side", side }
+            };
+        }
+
+        /// <summary>side=front (default) or side=back.</summary>
+        private static bool Side(Request req)
         {
             string sideText = req.Q("side");
             if (sideText.Length > 0 && !sideText.Equals("front", StringComparison.OrdinalIgnoreCase) &&
                 !sideText.Equals("back", StringComparison.OrdinalIgnoreCase))
                 throw new HttpError(400, "Choose side=front or side=back.");
-            bool front = !sideText.Equals("back", StringComparison.OrdinalIgnoreCase);
+            return !sideText.Equals("back", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private Dictionary<string, object> Print(Request req, Student s)
+        {
+            bool front = Side(req);
             string side = front ? "FRONT" : "BACK";
 
             string problem = _host.RequestPrint(s, front, req.Device);

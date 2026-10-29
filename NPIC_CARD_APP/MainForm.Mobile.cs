@@ -131,15 +131,61 @@ namespace NPIC_CARD_APP
             }));
         }
 
+        PcSelection IMobileLinkHost.Selection()
+        {
+            return OnUi(() => new PcSelection { Students = SelectedStudents(), Front = PrintFront, Busy = MobilePrintProblem() });
+        }
+
+        string IMobileLinkHost.RequestPrintSelection(IList<string> expectedIds, bool front, string device)
+        {
+            return OnUi(() =>
+            {
+                string problem = MobilePrintProblem();
+                if (problem != null) return problem;
+                List<Student> list = SelectedStudents();
+                if (list.Count == 0) return "No student is selected in Card Studio. Select one on the PC, then try again.";
+                bool same = list.Select(x => (x.StudentId ?? "").Trim())
+                                .SequenceEqual(expectedIds.Select(x => x.Trim()), StringComparer.OrdinalIgnoreCase);
+                if (!same) return "The selection in Card Studio changed. Check the students shown on the phone, then try again.";
+
+                _mobilePrintRunning = true;
+                BeginInvoke((Action)(() =>   // after the phone has its answer: Print Selected waits on questions at the PC
+                {
+                    try
+                    {
+                        if (IsDisposed) return;
+                        _sideTabs.SelectedIndex = front ? 0 : 1;
+                        if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
+                        Activate();
+                        SetStatus("Print asked from the phone" + (string.IsNullOrEmpty(device) ? "" : " " + device) + ": " +
+                                  string.Join(", ", list.Select(Describe)));
+                        PrintSelected(string.IsNullOrEmpty(device) ? "the phone" : device);
+                    }
+                    finally
+                    {
+                        _mobilePrintRunning = false;
+                    }
+                }));
+                return null;
+            });
+        }
+
+        /// <summary>Why a print asked from the phone cannot start now, or null (UI thread).</summary>
+        private string MobilePrintProblem()
+        {
+            if (_mobilePrintRunning) return "A card is already printing on the PC. Wait until it is finished, then try again.";
+            // Changing the selection under an open window (designer, settings, a print question…) would be confusing:
+            // only the Mobile App page may stay open, as it is often left showing its QR code.
+            bool busy = Application.OpenForms.Cast<Form>().Any(f => f != this && f.Visible && f.Modal && !(f is MobileLinkForm));
+            return busy ? "Card Studio is busy: a window is open on the PC. Close it there, then try again." : null;
+        }
+
         string IMobileLinkHost.RequestPrint(Student s, bool front, string device)
         {
             return OnUi(() =>
             {
-                if (_mobilePrintRunning) return "A card is already printing on the PC. Wait until it is finished, then try again.";
-                // Changing the selection under an open window (designer, settings, a print question…) would be confusing:
-                // only the Mobile App page may stay open, as it is often left showing its QR code.
-                bool busy = Application.OpenForms.Cast<Form>().Any(f => f != this && f.Visible && f.Modal && !(f is MobileLinkForm));
-                if (busy) return "Card Studio is busy: a window is open on the PC. Close it there, then try again.";
+                string problem = MobilePrintProblem();
+                if (problem != null) return problem;
                 Student found = _students.FirstOrDefault(x => string.Equals((x.StudentId ?? "").Trim(), (s.StudentId ?? "").Trim(),
                                                                              StringComparison.OrdinalIgnoreCase));
                 if (found == null) return "Student " + s.StudentId + " is no longer in the list loaded in Card Studio.";

@@ -10,8 +10,9 @@ import { useTheme } from '@/lib/theme';
 const ICONS: Record<string, [IconName, IconName]> = {
   index: ['home-outline', 'home'],
   students: ['people-outline', 'people'],
+  print: ['print-outline', 'print'],
   scan: ['scan-outline', 'scan'],
-  history: ['print-outline', 'print'],
+  history: ['time-outline', 'time'],
   pc: ['desktop-outline', 'desktop'],
 };
 
@@ -55,6 +56,8 @@ export default function TabsLayout() {
       }}>
       <Tabs.Screen name="index" options={{ title: tr.nav.home }} />
       <Tabs.Screen name="students" options={{ title: tr.nav.students }} />
+      {/* Prints the student(s) selected in Card Studio on the PC. */}
+      <Tabs.Screen name="print" options={{ title: tr.nav.print }} />
       <Tabs.Screen name="scan" options={{ title: tr.nav.checkCard }} />
       <Tabs.Screen name="history" options={{ title: tr.nav.printed }} />
       <Tabs.Screen name="pc" options={{ title: tr.nav.pc }} />

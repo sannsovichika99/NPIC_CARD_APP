@@ -55,6 +55,16 @@ export type StudentDetail = StudentSummary & {
 
 export type StudentPage = { total: number; offset: number; items: StudentSummary[] };
 
+/** What is selected in Card Studio on the PC (Print tab). */
+export type PcSelection = {
+  /** Selected for Print Selected, in tray slot order (at most 2). */
+  students: StudentSummary[];
+  /** Side tab shown on the PC. */
+  side: 'front' | 'back';
+  /** Why the PC cannot print now (a window is open, a card is printing…), else null. */
+  busy: string | null;
+};
+
 export type StudentFilter = '' | 'nophoto' | 'notprinted' | 'nocard';
 
 export type LookupResult = {
@@ -218,6 +228,20 @@ export const api = {
     request<{ started: boolean; studentId: string; side: string }>(
       p,
       `/api/students/${encodeURIComponent(id)}/print?side=${side}`,
+      { method: 'POST' },
+    ),
+
+  /** The students selected in Card Studio right now. */
+  selected: (p: Pairing) => request<PcSelection>(p, '/api/selected'),
+
+  /**
+   * Prints the PC's selection on one side. `ids` are the students shown on the phone: the PC refuses (409) when
+   * its selection changed meanwhile, so a card never prints for a student the person did not see.
+   */
+  printSelected: (p: Pairing, ids: string[], side: 'front' | 'back') =>
+    request<{ started: boolean; studentIds: string[]; side: string }>(
+      p,
+      `/api/selected/print?side=${side}&ids=${ids.map(encodeURIComponent).join(',')}`,
       { method: 'POST' },
     ),
 
