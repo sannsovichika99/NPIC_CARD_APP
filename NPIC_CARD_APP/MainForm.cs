@@ -2785,7 +2785,8 @@ namespace NPIC_CARD_APP
             }
         }
 
-        private void PrintSelected()
+        /// <param name="requestedBy">Phone name when the Print button of the mobile app started it, shown in the first question.</param>
+        private void PrintSelected(string requestedBy = null)
         {
             List<Student> list = SelectedStudents();
             if (list.Count == 0)
@@ -2813,6 +2814,7 @@ namespace NPIC_CARD_APP
                 Student b = (perLoad == 2 && i + 1 < list.Count) ? list[i + 1] : null;
 
                 string message =
+                    (load == 1 && requestedBy != null ? "Print asked from the mobile app (" + requestedBy + ").\n\n" : "") +
                     (load > 1 ? "Wait until the previous card is finished and the tray is ejected.\n\n" : "") +
                     (load == 1 && slotReason != null ? "Auto slots: printing 1 card per tray load.\n" + slotReason + "\n\n" : "") +
                     "Side: " + side + "\n\n" +

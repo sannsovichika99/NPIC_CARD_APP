@@ -207,6 +207,17 @@ export const api = {
 
   lookup: (p: Pairing, code: string) => request<LookupResult>(p, `/api/lookup?code=${encodeURIComponent(code)}`),
 
+  /**
+   * Starts Print Selected on the PC for one side of the student's card. Only says the print started: the tray load is
+   * confirmed at the PC, and the print history shows when the card was really printed.
+   */
+  print: (p: Pairing, id: string, side: 'front' | 'back') =>
+    request<{ started: boolean; studentId: string; side: string }>(
+      p,
+      `/api/students/${encodeURIComponent(id)}/print?side=${side}`,
+      { method: 'POST' },
+    ),
+
   history: (p: Pairing, limit = 100) => request<HistoryPage>(p, `/api/history?limit=${limit}`),
 
   /** Sends a JPEG to the PC; it becomes {StudentId}.jpg in the photo folder (the old photo is kept in _replaced). */

@@ -30,6 +30,7 @@ export default function StudentScreen() {
   const [side, setSide] = useState<'front' | 'back'>('front');
   const [upload, setUpload] = useState<{ progress: number } | null>(null);
   const [cardStamp, setCardStamp] = useState(() => String(Date.now()));
+  const [printing, setPrinting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -82,6 +83,31 @@ export default function StudentScreen() {
       { text: tr.common.cancel, style: 'cancel' },
       { text: tr.student.replace, onPress: () => void newPhoto(source) },
     ]);
+  }
+
+  /** Print button: Card Studio selects this student and side and starts Print Selected on the PC. */
+  function confirmPrint() {
+    if (!student) return;
+    const sideName = side === 'front' ? tr.common.front : tr.common.back_side;
+    Alert.alert(tr.student.printTitle, tr.student.printText(sideName, student.nameEn || student.studentId), [
+      { text: tr.common.cancel, style: 'cancel' },
+      { text: tr.student.printConfirm, onPress: () => void sendPrint() },
+    ]);
+  }
+
+  async function sendPrint() {
+    if (!student) return;
+    setPrinting(true);
+    try {
+      await api.print(pairing, student.studentId, side);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(tr.student.printSent, tr.student.printSentText);
+    } catch (e) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(tr.student.notPrintedTitle, (e as ApiError).message);
+    } finally {
+      setPrinting(false);
+    }
   }
 
   if (error && !student) {
@@ -182,6 +208,13 @@ export default function StudentScreen() {
             contentFit="contain"
             transition={150}
             accessibilityLabel={tr.student.sideOfCard(side === 'front' ? tr.common.front : tr.common.back_side)}
+          />
+          <Button
+            title={tr.student.print(side === 'front' ? tr.common.front : tr.common.back_side)}
+            icon="print-outline"
+            onPress={confirmPrint}
+            busy={printing}
+            disabled={!!upload}
           />
         </Card>
 

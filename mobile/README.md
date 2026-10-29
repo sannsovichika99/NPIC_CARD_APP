@@ -5,6 +5,7 @@ The phone connects to Card Studio on the PC over the local Wi-Fi. Nothing goes t
 
 | Tab | What it does |
 | --- | --- |
+| **Home** | The paired PC and its student list, card progress (photos taken, cards printed, RFID cards saved), a *To do* list that opens the student list already filtered, shortcuts to the other tabs and the latest prints. |
 | **Students** | The student list loaded in Card Studio: search (ID, Khmer or Latin name, faculty), filter *No photo / Not printed / No RFID card*. |
 | **Student** | Photo, details, the card front/back drawn by Card Studio with the design in use, print and RFID status. **Take photo** crops to the card's photo shape and saves it on the PC as `{StudentId}.jpg`. The card on the PC updates straight away. |
 | **Check Card** | Scan the QR code on a printed card (or type an ID) to see whose card it is, whether it was printed, its RFID number and whether it is still valid. |
@@ -80,6 +81,7 @@ The pairing QR code contains `npiccard://pair?h=<ip1,ip2>&p=<port>&t=<code>&n=<p
 | GET | `/api/students/{id}` | One student, with every imported column |
 | GET / PUT | `/api/students/{id}/photo` | Read / replace the photo (JPEG or PNG body, max 15 MB) |
 | GET | `/api/students/{id}/card?side=front\|back&w=` | The card as JPEG, drawn with the current design |
+| POST | `/api/students/{id}/print?side=front\|back` | Selects the student and side in Card Studio and starts **Print Selected** (the tray load is confirmed on the PC). `409` when a print is already running or another window is open on the PC |
 | GET | `/api/lookup?code=` | Student for a scanned card QR / ID (also searches the print history) |
 | GET | `/api/history?limit=` | Latest printed card sides |
 

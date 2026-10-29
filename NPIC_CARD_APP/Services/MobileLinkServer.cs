@@ -35,6 +35,12 @@ namespace NPIC_CARD_APP.Services
         byte[] RenderCard(Student s, bool front, int maxWidth);
         /// <summary>A photo for <paramref name="s"/> was saved to <paramref name="path"/> from the phone.</summary>
         void PhotoReceived(Student s, string path, string device);
+        /// <summary>
+        /// The phone asked to print one side of <paramref name="s"/>'s card: Card Studio selects the student and side and
+        /// starts Print Selected, so the person at the PC confirms the tray load and inserts the tray as usual.
+        /// Returns null when the print was started, or why it cannot start now (another window is open on the PC…).
+        /// </summary>
+        string RequestPrint(Student s, bool front, string device);
     }
 
     /// <summary>One line of the Mobile App page's activity list.</summary>
@@ -60,6 +66,7 @@ namespace NPIC_CARD_APP.Services
     /// <item><term>GET /api/students/{id}</term><description>One student with every column</description></item>
     /// <item><term>GET|PUT /api/students/{id}/photo</term><description>Read or replace the photo (JPEG / PNG body)</description></item>
     /// <item><term>GET /api/students/{id}/card?side=front|back</term><description>The card as a JPEG</description></item>
+    /// <item><term>POST /api/students/{id}/print?side=front|back</term><description>Starts Print Selected for that card side on the PC</description></item>
     /// <item><term>GET /api/lookup?code=</term><description>Student from a scanned card QR / ID</description></item>
     /// <item><term>GET /api/history?limit=</term><description>Latest printed card sides</description></item>
     /// </list>
@@ -466,6 +473,7 @@ namespace NPIC_CARD_APP.Services
                     if (parts.Length == 3 && parts[2] == "photo" && (req.Method == "PUT" || req.Method == "POST"))
                         return Json(SavePhoto(req, Find(parts[1])));
                     if (parts.Length == 3 && parts[2] == "card" && get) return Card(req, Find(parts[1]));
+                    if (parts.Length == 3 && parts[2] == "print" && req.Method == "POST") return Json(Print(req, Find(parts[1])));
                     break;
                 case "lookup":
                     if (get && parts.Length == 1) return Json(Lookup(req));
@@ -688,6 +696,34 @@ namespace NPIC_CARD_APP.Services
             bool front = !string.Equals(req.Q("side"), "back", StringComparison.OrdinalIgnoreCase);
             int width = req.QInt("w", 1100, 300, 2000);
             return new Response { ContentType = "image/jpeg", Body = _host.RenderCard(s, front, width) };
+        }
+
+        /// <summary>
+        /// Print button on the phone: hands the card side to Print Selected on the PC. The answer only says the print was
+        /// started; the tray load is confirmed on the PC and the print history shows when the card was really printed.
+        /// </summary>
+        private Dictionary<string, object> Print(Request req, Student s)
+        {
+            string sideText = req.Q("side");
+            if (sideText.Length > 0 && !sideText.Equals("front", StringComparison.OrdinalIgnoreCase) &&
+                !sideText.Equals("back", StringComparison.OrdinalIgnoreCase))
+                throw new HttpError(400, "Choose side=front or side=back.");
+            bool front = !sideText.Equals("back", StringComparison.OrdinalIgnoreCase);
+            string side = front ? "FRONT" : "BACK";
+
+            string problem = _host.RequestPrint(s, front, req.Device);
+            if (problem != null)
+            {
+                Log(req.Device, "Print refused for " + s.StudentId + " (" + side + "): " + problem, true);
+                throw new HttpError(409, problem);
+            }
+            Log(req.Device, "Print requested for " + s.StudentId + " " + (s.NameEn ?? "") + " (" + side + ")", false);
+            return new Dictionary<string, object>
+            {
+                { "started", true },
+                { "studentId", s.StudentId },
+                { "side", side }
+            };
         }
 
         /// <summary>

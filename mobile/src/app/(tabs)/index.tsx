@@ -1,206 +1,272 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Badge, ConnectionBanner, EmptyState, StudentPhoto } from '@/components/ui';
-import { api, ApiError, StudentFilter, StudentSummary } from '@/lib/api';
+import { Href, router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Badge, Card, ConnectionBanner, EmptyState, IconName } from '@/components/ui';
+import { api, HistoryPage, StudentFilter } from '@/lib/api';
 import { useConnection, usePairing } from '@/lib/connection';
 import { useT } from '@/lib/i18n';
-import { khmerText, useTheme } from '@/lib/theme';
+import { formatDateTime, khmerText, Theme, useTheme } from '@/lib/theme';
 
-const PAGE = 50;
+const RECENT = 4;
 
-
-/** The student list loaded in Card Studio on the PC: search, filter, open a student. */
-export default function StudentsScreen() {
+/**
+ * Home: which PC the phone works with, how far the cards are (photos, printed, RFID), what is left to do
+ * (each line opens the student list already filtered), shortcuts to the other tabs and the latest prints.
+ */
+export default function HomeScreen() {
   const t = useTheme();
   const tr = useT();
   const pairing = usePairing();
-  const { info, refresh: refreshInfo } = useConnection();
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<StudentFilter>('');
-  const [items, setItems] = useState<StudentSummary[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const { info, error, refresh } = useConnection();
+  const [history, setHistory] = useState<HistoryPage | null>(null);
+  const [hour, setHour] = useState(() => new Date().getHours());
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const requestNo = useRef(0); // drops answers to older searches that arrive late
 
-  const load = useCallback(
-    async (offset: number) => {
-      const no = ++requestNo.current;
-      try {
-        const page = await api.students(pairing, query.trim(), filter, offset, PAGE);
-        if (no !== requestNo.current) return;
-        setItems((old) => (offset === 0 ? page.items : [...old, ...page.items]));
-        setTotal(page.total);
-        setError(null);
-      } catch (e) {
-        if (no === requestNo.current) setError((e as ApiError).message);
-      } finally {
-        if (no === requestNo.current) {
-          setLoading(false);
-          setRefreshing(false);
-        }
-      }
-    },
-    [pairing, query, filter],
-  );
+  const loadHistory = useCallback(async () => {
+    try {
+      setHistory(await api.history(pairing, RECENT));
+    } catch {
+      // the connection banner already says what is wrong; keep the last list shown
+    }
+  }, [pairing]);
 
-  // New search / filter → first page (typing waits 250 ms).
-  useEffect(() => {
-    setLoading(true);
-    const timer = setTimeout(() => load(0), query ? 250 : 0);
-    return () => clearTimeout(timer);
-  }, [load, query]);
-
-  // Back on this tab (e.g. after taking a photo) → fresh photos and badges. Only on focus, not per keystroke.
-  const loadRef = useRef(load);
-  loadRef.current = load;
-  const firstFocus = useRef(true);
+  // Back on Home (after a photo, a print…) → fresh counts and prints.
   useFocusEffect(
     useCallback(() => {
-      if (firstFocus.current) firstFocus.current = false; // the effect above loads the first page
-      else void loadRef.current(0);
-    }, []),
+      setHour(new Date().getHours());
+      void refresh();
+      void loadHistory();
+    }, [refresh, loadHistory]),
   );
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    void refreshInfo();
-    void load(0);
+    await Promise.all([refresh(), loadHistory()]);
+    setRefreshing(false);
   };
 
-  const filters: { key: StudentFilter; label: string }[] = [
-    { key: '', label: tr.students.all },
-    { key: 'nophoto', label: tr.common.noPhoto },
-    { key: 'notprinted', label: tr.common.notPrinted },
-    { key: 'nocard', label: tr.common.noRfidCard },
-  ];
+  const openStudents = (filter: StudentFilter) =>
+    router.navigate({ pathname: '/students', params: { filter, at: stamp() } });
 
-  const header = (
-    <View style={{ gap: 12, paddingBottom: 8 }}>
-      <ConnectionBanner />
-      <View style={[styles.search, { backgroundColor: t.surface, borderColor: t.border }]}>
-        <Ionicons name="search-outline" size={18} color={t.textMuted} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder={tr.students.search}
-          placeholderTextColor={t.textMuted}
-          style={[styles.searchInput, { color: t.text }]}
-          autoCorrect={false}
-          clearButtonMode="while-editing"
-          returnKeyType="search"
-        />
-      </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
-        {filters.map((f) => {
-          const on = f.key === filter;
-          return (
-            <Pressable
-              key={f.key}
-              onPress={() => setFilter(f.key)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: on }}
-              style={[styles.chip, { backgroundColor: on ? t.accent : t.surface, borderColor: on ? t.accent : t.border }]}>
-              <Text style={{ color: on ? t.onAccent : t.text, fontWeight: '600' }}>{f.label}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-      {info && (
-        <Text style={[styles.summary, { color: t.textSoft }]}>
-          {loading ? tr.common.loading : tr.students.count(total, info.students)} · {tr.students.withPhoto(info.withPhoto)} ·{' '}
-          {tr.students.printedCount(info.printed)}
-        </Text>
-      )}
-    </View>
-  );
+  const total = info?.students ?? 0;
+  const todo = info
+    ? ([
+        { filter: 'nophoto', left: total - info.withPhoto, icon: 'camera-outline', text: tr.home.noPhoto(total - info.withPhoto) },
+        { filter: 'notprinted', left: total - info.printed, icon: 'print-outline', text: tr.home.notPrinted(total - info.printed) },
+        { filter: 'nocard', left: total - info.withCard, icon: 'radio-outline', text: tr.home.noCard(total - info.withCard) },
+      ] as { filter: StudentFilter; left: number; icon: IconName; text: string }[]).filter((x) => x.left > 0)
+    : [];
 
   return (
-    <FlatList
-      data={items}
-      keyExtractor={(s) => s.studentId}
-      ListHeaderComponent={header}
-      contentContainerStyle={{ paddingBottom: 24 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={t.accent} />}
-      onEndReachedThreshold={0.5}
-      onEndReached={() => {
-        if (!loading && items.length < total) void load(items.length);
-      }}
-      keyboardShouldPersistTaps="handled"
-      renderItem={({ item }) => <StudentRow s={item} />}
-      ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-      ListEmptyComponent={
-        loading ? (
-          <ActivityIndicator color={t.accent} style={{ marginTop: 40 }} />
-        ) : error ? (
-          <EmptyState icon="cloud-offline-outline" title={tr.students.cannotLoad} text={error} />
-        ) : info?.students === 0 ? (
-          <EmptyState
-            icon="document-outline"
-            title={tr.students.noneLoaded}
-            text={tr.students.noneLoadedText}
-          />
-        ) : (
-          <EmptyState icon="search-outline" title={tr.students.noMatch} text={tr.students.noMatchText} />
-        )
-      }
-      ListFooterComponent={items.length > 0 && items.length < total ? <ActivityIndicator color={t.accent} style={{ margin: 16 }} /> : undefined}
-    />
+    <ScrollView
+      contentContainerStyle={styles.page}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={t.accent} />}>
+      <ConnectionBanner />
+
+      {/* Who and where */}
+      <View style={styles.hero}>
+        <Text style={[styles.greeting, { color: t.textSoft }]}>{tr.home.greeting(hour)}</Text>
+        <Text style={[styles.title, { color: t.text }]} numberOfLines={2}>
+          {tr.home.onPc(info?.computer || pairing.pcName)}
+        </Text>
+        <View style={styles.heroLine}>
+          <View style={[styles.dot, { backgroundColor: error ? t.warning : t.success }]} />
+          <Text style={{ color: t.textSoft, flex: 1 }} numberOfLines={1}>
+            {error ? tr.pc.notAnswering : info?.source ? tr.home.list(info.source) : tr.pc.noList}
+          </Text>
+        </View>
+      </View>
+
+      {info && !info.photoFolderOk && (
+        <View style={[styles.notice, { backgroundColor: t.warningSoft }]}>
+          <Ionicons name="folder-open-outline" size={18} color={t.warning} />
+          <Text style={{ color: t.warning, flex: 1 }}>{tr.pc.photoFolderMissing}</Text>
+        </View>
+      )}
+
+      {info && total === 0 && (
+        <Card>
+          <EmptyState icon="document-outline" title={tr.students.noneLoaded} text={tr.students.noneLoadedText} />
+        </Card>
+      )}
+
+      {/* Progress */}
+      {info && total > 0 && (
+        <Card style={{ gap: 14 }}>
+          <View style={styles.sectionHead}>
+            <Text style={[styles.section, { color: t.text }]}>{tr.home.progress}</Text>
+            <Text style={{ color: t.textSoft }}>{tr.home.ofStudents(total)}</Text>
+          </View>
+          <Progress t={t} label={tr.home.photos} icon="camera-outline" value={info.withPhoto} total={total} />
+          <Progress t={t} label={tr.home.printed} icon="print-outline" value={info.printed} total={total} />
+          <Progress t={t} label={tr.home.rfid} icon="radio-outline" value={info.withCard} total={total} />
+        </Card>
+      )}
+
+      {/* To do: each line opens the filtered list */}
+      {info && total > 0 && (
+        <Card style={{ paddingVertical: 6 }}>
+          <Text style={[styles.section, { color: t.text, paddingTop: 10, paddingBottom: 4 }]}>{tr.home.todo}</Text>
+          {todo.length === 0 ? (
+            <View style={styles.todoRow}>
+              <View style={[styles.todoIcon, { backgroundColor: t.successSoft }]}>
+                <Ionicons name="checkmark-done" size={18} color={t.success} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: t.text, fontWeight: '600' }}>{tr.home.allDone}</Text>
+                <Text style={{ color: t.textSoft }}>{tr.home.allDoneText}</Text>
+              </View>
+            </View>
+          ) : (
+            todo.map((item, i) => (
+              <Pressable
+                key={item.filter}
+                accessibilityRole="button"
+                onPress={() => openStudents(item.filter)}
+                style={({ pressed }) => [
+                  styles.todoRow,
+                  i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.border },
+                  { opacity: pressed ? 0.6 : 1 },
+                ]}>
+                <View style={[styles.todoIcon, { backgroundColor: t.warningSoft }]}>
+                  <Ionicons name={item.icon} size={18} color={t.warning} />
+                </View>
+                <Text style={{ color: t.text, flex: 1, fontSize: 15 }}>{item.text}</Text>
+                <Ionicons name="chevron-forward" size={18} color={t.textMuted} />
+              </Pressable>
+            ))
+          )}
+        </Card>
+      )}
+
+      {/* Shortcuts */}
+      <Text style={[styles.section, styles.outside, { color: t.text }]}>{tr.home.actions}</Text>
+      <View style={styles.grid}>
+        <Action t={t} icon="search-outline" title={tr.home.findStudent} text={tr.home.findStudentText} href="/students" />
+        <Action t={t} icon="scan-outline" title={tr.home.checkCard} text={tr.home.checkCardText} href="/scan" />
+        <Action t={t} icon="time-outline" title={tr.home.history} text={tr.home.historyText} href="/history" />
+        <Action t={t} icon="desktop-outline" title={tr.home.pc} text={tr.home.pcText} href="/pc" />
+      </View>
+
+      {/* Latest prints */}
+      {history && (
+        <Card style={{ paddingVertical: 6 }}>
+          <View style={[styles.sectionHead, { paddingTop: 10, paddingBottom: 4 }]}>
+            <Text style={[styles.section, { color: t.text }]}>{tr.home.recent}</Text>
+            {history.printedToday > 0 && <Badge label={tr.home.today(history.printedToday)} tone="success" />}
+            <View style={{ flex: 1 }} />
+            {history.total > 0 && (
+              <Pressable onPress={() => router.navigate('/history')} hitSlop={10} accessibilityRole="link">
+                <Text style={{ color: t.accent, fontWeight: '600' }}>{tr.home.seeAll}</Text>
+              </Pressable>
+            )}
+          </View>
+          {history.items.length === 0 ? (
+            <Text style={{ color: t.textSoft, paddingVertical: 10 }}>{tr.home.nothingPrinted}</Text>
+          ) : (
+            history.items.map((item, i) => (
+              <Pressable
+                key={`${item.printedAt}-${item.studentId}-${item.side}-${i}`}
+                onPress={() => router.push({ pathname: '/student/[id]', params: { id: item.studentId } })}
+                style={({ pressed }) => [
+                  styles.recentRow,
+                  i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.border },
+                  { opacity: pressed ? 0.6 : 1 },
+                ]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[{ color: t.text, fontSize: 15, fontWeight: '600' }, khmerText]} numberOfLines={1}>
+                    {item.nameKh || item.nameEn}
+                  </Text>
+                  <Text style={{ color: t.textMuted, fontSize: 13 }} numberOfLines={1}>
+                    {item.studentId} · {formatDateTime(item.printedAt, tr.months)}
+                  </Text>
+                </View>
+                <Badge
+                  label={item.side === 'BACK' ? tr.common.back_side : tr.common.front}
+                  tone={item.side === 'BACK' ? 'neutral' : 'accent'}
+                />
+              </Pressable>
+            ))
+          )}
+        </Card>
+      )}
+    </ScrollView>
   );
 }
 
-function StudentRow({ s }: { s: StudentSummary }) {
-  const t = useTheme();
-  const tr = useT();
+/** Makes each tap on a To do line a new route, so the list applies the filter again after it was changed there. */
+function stamp() {
+  return String(Date.now());
+}
+
+function Progress({ t, label, icon, value, total }: { t: Theme; label: string; icon: IconName; value: number; total: number }) {
+  const share = total > 0 ? Math.min(1, value / total) : 0;
+  const done = value >= total;
+  return (
+    <View style={{ gap: 6 }} accessible accessibilityLabel={`${label}: ${value} / ${total}`}>
+      <View style={styles.progressHead}>
+        <Ionicons name={done ? 'checkmark-circle' : icon} size={17} color={done ? t.success : t.accent} />
+        <Text style={{ color: t.text, flex: 1, fontSize: 15 }}>{label}</Text>
+        <Text style={{ color: t.text, fontWeight: '700', fontVariant: ['tabular-nums'] }}>
+          {value.toLocaleString()}
+          <Text style={{ color: t.textMuted, fontWeight: '400' }}> / {total.toLocaleString()}</Text>
+        </Text>
+      </View>
+      <View style={[styles.track, { backgroundColor: t.surfaceAlt, borderColor: t.border }]}>
+        <View style={[styles.fill, { width: `${share * 100}%`, backgroundColor: done ? t.success : t.accent }]} />
+      </View>
+    </View>
+  );
+}
+
+function Action({ t, icon, title, text, href }: { t: Theme; icon: IconName; title: string; text: string; href: Href }) {
   return (
     <Pressable
-      onPress={() => router.push({ pathname: '/student/[id]', params: { id: s.studentId } })}
-      style={({ pressed }) => [styles.row, { backgroundColor: pressed ? t.surfaceAlt : t.surface, borderColor: t.border }]}>
-      <StudentPhoto student={s} width={52} radius={8} />
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={[styles.name, khmerText, { color: t.text }]} numberOfLines={1}>
-          {s.nameKh || s.nameEn}
-        </Text>
-        <Text style={{ color: t.textSoft }} numberOfLines={1}>
-          {s.nameEn} · {s.studentId}
-        </Text>
-        <View style={styles.badges}>
-          {!s.hasPhoto && <Badge label={tr.common.noPhoto} tone="warning" icon="camera-outline" />}
-          {s.printedAt ? <Badge label={tr.common.printed} tone="success" icon="checkmark" /> : <Badge label={tr.common.notPrinted} />}
-          {s.rfidUid && <Badge label={tr.common.rfid} tone="accent" icon="radio-outline" />}
-        </View>
+      accessibilityRole="button"
+      onPress={() => router.navigate(href)}
+      style={({ pressed }) => [
+        styles.action,
+        { backgroundColor: pressed ? t.surfaceAlt : t.surface, borderColor: t.border },
+      ]}>
+      <View style={[styles.actionIcon, { backgroundColor: t.accentSoft }]}>
+        <Ionicons name={icon} size={22} color={t.accent} />
       </View>
-      <Ionicons name="chevron-forward" size={18} color={t.textMuted} />
+      <Text style={{ color: t.text, fontSize: 15, fontWeight: '600' }} numberOfLines={1}>
+        {title}
+      </Text>
+      <Text style={{ color: t.textSoft, fontSize: 13 }} numberOfLines={2}>
+        {text}
+      </Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  search: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginHorizontal: 16,
-    marginTop: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  searchInput: { flex: 1, paddingVertical: 12, fontSize: 16 },
-  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, borderWidth: 1 },
-  summary: { marginHorizontal: 16, fontSize: 13 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginHorizontal: 16,
-    padding: 10,
-    borderRadius: 14,
+  page: { padding: 16, gap: 12, paddingBottom: 32 },
+  hero: { gap: 4, paddingHorizontal: 4, paddingTop: 4 },
+  greeting: { fontSize: 15 },
+  title: { fontSize: 24, fontWeight: '700' },
+  heroLine: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  notice: { flexDirection: 'row', gap: 10, padding: 12, borderRadius: 12, alignItems: 'center' },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  section: { fontSize: 17, fontWeight: '700' },
+  outside: { marginTop: 4, paddingHorizontal: 4 },
+  progressHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  track: { height: 8, borderRadius: 4, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth },
+  fill: { height: '100%', borderRadius: 4 },
+  todoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, minHeight: 48 },
+  todoIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  action: {
+    flexGrow: 1,
+    flexBasis: '45%',
+    padding: 14,
+    gap: 6,
+    borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  name: { fontSize: 17, fontWeight: '600' },
-  badges: { flexDirection: 'row', gap: 6, marginTop: 4, flexWrap: 'wrap' },
+  actionIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  recentRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, minHeight: 48 },
 });

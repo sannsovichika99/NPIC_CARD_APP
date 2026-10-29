@@ -4,6 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
+using System.Windows.Forms;
 using NPIC_CARD_APP.Models;
 using NPIC_CARD_APP.Rendering;
 using NPIC_CARD_APP.Services;
@@ -18,6 +19,7 @@ namespace NPIC_CARD_APP
     public partial class MainForm : IMobileLinkHost
     {
         private MobileLinkServer _mobile;
+        private bool _mobilePrintRunning;   // a print asked from the phone is waiting or running (UI thread only)
 
         private MobileLinkServer Mobile
         {
@@ -92,6 +94,40 @@ namespace NPIC_CARD_APP
                 SetStatus("Photo from phone saved for " + Describe(s) + " (" + Path.GetFileName(path) + ")");
                 UpdatePreview();   // the card on screen shows the new photo straight away
             }));
+        }
+
+        string IMobileLinkHost.RequestPrint(Student s, bool front, string device)
+        {
+            return OnUi(() =>
+            {
+                if (_mobilePrintRunning) return "A card is already printing on the PC. Wait until it is finished, then try again.";
+                // Changing the selection under an open window (designer, settings, a print question…) would be confusing:
+                // only the Mobile App page may stay open, as it is often left showing its QR code.
+                bool busy = Application.OpenForms.Cast<Form>().Any(f => f != this && f.Visible && f.Modal && !(f is MobileLinkForm));
+                if (busy) return "Card Studio is busy: a window is open on the PC. Close it there, then try again.";
+                Student found = _students.FirstOrDefault(x => string.Equals((x.StudentId ?? "").Trim(), (s.StudentId ?? "").Trim(),
+                                                                             StringComparison.OrdinalIgnoreCase));
+                if (found == null) return "Student " + s.StudentId + " is no longer in the list loaded in Card Studio.";
+
+                _mobilePrintRunning = true;
+                BeginInvoke((Action)(() =>   // after the phone has its answer: Print Selected waits on questions at the PC
+                {
+                    try
+                    {
+                        if (IsDisposed || !SelectStudentById(found.StudentId)) return;
+                        _sideTabs.SelectedIndex = front ? 0 : 1;
+                        if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
+                        Activate();
+                        SetStatus("Print asked from the phone" + (string.IsNullOrEmpty(device) ? "" : " " + device) + ": " + Describe(found));
+                        PrintSelected(string.IsNullOrEmpty(device) ? "the phone" : device);
+                    }
+                    finally
+                    {
+                        _mobilePrintRunning = false;
+                    }
+                }));
+                return null;
+            });
         }
 
         /// <summary>Runs <paramref name="work"/> on the UI thread and returns its result (throws while the window is closing).</summary>

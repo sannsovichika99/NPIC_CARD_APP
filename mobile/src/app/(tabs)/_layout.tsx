@@ -21,6 +21,13 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          title: tr.nav.home,
+          tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" color={color as string} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="students"
+        options={{
           title: tr.nav.students,
           tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" color={color as string} size={size} />,
         }}
