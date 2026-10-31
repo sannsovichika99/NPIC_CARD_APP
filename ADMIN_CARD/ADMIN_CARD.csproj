@@ -88,6 +88,10 @@
     <Compile Include="AdminForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="ReleaseNotes.cs" />
+    <Compile Include="VersionsForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <!-- Same logical names as in Card Studio, read by Branding. -->
@@ -98,6 +102,11 @@
     <EmbeddedResource Include="..\NPIC_CARD_APP\Assets\app_logo.png">
       <Link>Assets\app_logo.png</Link>
       <LogicalName>NPIC_CARD_APP.app_logo.png</LogicalName>
+    </EmbeddedResource>
+    <!-- Card Studio's changelog: every version with its notes, shown on the Versions page (ReleaseNotes.cs). -->
+    <EmbeddedResource Include="..\Document.md">
+      <Link>Assets\Document.md</Link>
+      <LogicalName>CardStudio.Admin.ReleaseNotes.md</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>

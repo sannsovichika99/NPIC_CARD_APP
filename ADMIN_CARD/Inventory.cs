@@ -65,8 +65,9 @@ namespace CardStudio.Admin
         {
             get
             {
+                // Always 4 parts: a PC reports "1.0.1" for 1.0.1.0, and Version says 1.0.1 < 1.0.1.0.
                 Version v;
-                return System.Version.TryParse(Version ?? "", out v) ? v : new Version(0, 0);
+                return System.Version.TryParse(Version ?? "", out v) ? ReleaseNotes.Normalize(v) : new Version(0, 0, 0, 0);
             }
         }
 

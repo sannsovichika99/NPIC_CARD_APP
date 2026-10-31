@@ -28,6 +28,7 @@ ADMIN_CARD is built from **Card Studio's own UI kit**: it compiles `UiKit.cs`, `
   | Ctrl+U | Check for Updates |
   | Ctrl+E | Export CSV |
   | Ctrl+Shift+N | Notifications |
+  | Ctrl+Shift+V | Versions page |
   | Ctrl+C | Copy Machine ID |
   | Delete | Remove from the list |
 
@@ -47,6 +48,23 @@ ADMIN_CARD is built from **Card Studio's own UI kit**: it compiles `UiKit.cs`, `
 
 The **Details** card shows everything about the selected PC: last seen, Machine ID, user, Windows version, students loaded, printer, the phones' names, print totals, the PC's clock and the result of the last command.
 **Export CSV…** saves the list for Excel.
+
+## Versions page
+
+To open it, choose **Versions…** in the sidebar, or press Ctrl+Shift+V. The sidebar badge counts the PCs on an older version.
+
+- **Every release:** the page lists every Card Studio release from `Document.md`, the changelog at the root of the repo, newest first.
+  - It also lists any other version a PC runs. A version newer than the notes is marked *Newer than notes*; that happens when ADMIN_CARD was built before the release.
+  - Each row shows its release date and first sentence, and how many PCs run it (a green dot means one of them is online).
+  - Chips mark the *Latest* release, and the older versions still in use (*Update*).
+- **Summary strip:** the latest release, how many PCs are up to date, and **Update All Older PCs**. That button opens Check for Updates on every online PC that runs an older version.
+- **Selected version:**
+  - Its release date, and how many releases it is behind the latest.
+  - The PCs that run it; click one to show it in the main list.
+  - **Update These PCs**.
+  - Its full release notes: summary, then Feature / Change / Fix / Known issue.
+- **Notes come from the build:** `Document.md` is embedded in ADMIN_CARD.exe when it is built (`ReleaseNotes.cs` reads it). After a release, update `Document.md` and rebuild ADMIN_CARD.
+- **"Old" marker:** the latest release is also what the main list's "old" marker compares against. A network where every PC runs 1.0.1 is still shown as out of date once 1.0.1.1 is in the notes.
 
 ## Commands (on the selected PCs)
 

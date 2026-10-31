@@ -71,7 +71,7 @@ namespace CardStudio.Admin
         // Sidebar
         private Panel _sidebar;
         private BrandBlock _brand;
-        private NavItem _navToggle, _navAll, _navOnline, _navAttention;
+        private NavItem _navToggle, _navAll, _navOnline, _navAttention, _navVersions;
         private readonly List<Label> _sections = new List<Label>();
         private readonly List<KeyValuePair<NavItem, string>> _navTips = new List<KeyValuePair<NavItem, string>>();
         private bool _sidebarCompact;
@@ -166,6 +166,7 @@ namespace CardStudio.Admin
                 case Keys.Control | Keys.M: SendMessage(); return true;
                 case Keys.Control | Keys.U: CheckUpdates(); return true;
                 case Keys.Control | Keys.E: ExportCsv(); return true;
+                case Keys.Control | Keys.Shift | Keys.V: ShowVersions(); return true;
                 case Keys.Control | Keys.Shift | Keys.N: ShowNotifications(); return true;
                 case Keys.Control | Keys.C:
                     if (_grid.Focused) { CopyMachineIds(); return true; }
@@ -206,6 +207,9 @@ namespace CardStudio.Admin
             _navAttention = Nav("Needs Attention", Theme.IcoWarning, () => SetFilter(Filter.Attention),
                 "License expiring, expired or not valid, or an older Card Studio version");
             _navAttention.BadgeColor = Warning;
+            _navVersions = Nav("Versions…", Theme.IcoHistory, ShowVersions,
+                "Every Card Studio release with its notes, and which PCs run each version (Ctrl+Shift+V)");
+            _navVersions.BadgeColor = Warning;
             _navAll.Active = true;
 
             var items = new List<Control>
@@ -215,6 +219,7 @@ namespace CardStudio.Admin
                 _navAll,
                 _navOnline,
                 _navAttention,
+                _navVersions,
 
                 Section("ACTIONS"),
                 Nav("Send Message…", IcoMessage, SendMessage, "Show a message on the selected PCs (Ctrl+M)"),
@@ -789,7 +794,7 @@ namespace CardStudio.Admin
             Fact("Machine ID", x.MachineId);
             Fact("User", x.User);
             Fact("Address", x.Address + (x.Addresses.Count > 1 ? "  (" + string.Join(", ", x.Addresses.Where(a => a != x.Address)) + ")" : ""));
-            Fact("Card Studio", x.Version + (x.ParsedVersion < newest ? "  · older than " + newest.ToString(3) : ""),
+            Fact("Card Studio", x.Version + (x.ParsedVersion < newest ? "  · older than " + VersionText(newest) : ""),
                  x.ParsedVersion < newest ? Warning : TextMain);
             Fact("Windows", x.Os);
             Fact("License", license, level == 2 ? Danger : level == 1 ? Warning : TextMain);
@@ -986,9 +991,20 @@ namespace CardStudio.Admin
             RefreshList();
         }
 
+        /// <summary>The latest release (Document.md, embedded at build time), or a newer version a PC runs: "old" is below it.</summary>
         private Version Newest()
         {
-            return _inv.Devices.Select(d => d.ParsedVersion).DefaultIfEmpty(new Version(0, 0)).Max();
+            Release latest = ReleaseNotes.Latest;
+            Version seen = _inv.Devices.Select(d => d.ParsedVersion).DefaultIfEmpty(new Version(0, 0, 0, 0)).Max();
+            if (latest == null) return seen;
+            Version released = ReleaseNotes.Normalize(latest.Version);
+            return released > seen ? released : seen;
+        }
+
+        /// <summary>"1.0.1.1", or "1.0.1" when the 4th part is 0 (as the PCs report it).</summary>
+        private static string VersionText(Version v)
+        {
+            return v.ToString(v.Revision > 0 ? 4 : 3);
         }
 
         private static bool NeedsAttention(Device d, Version newest)
@@ -1064,7 +1080,7 @@ namespace CardStudio.Admin
             set("Address", d.Address, main);
             bool old = d.ParsedVersion < newest;
             set("Version", d.Version + (old ? "  old" : ""), old ? Warning : main);
-            if (old) r.Cells["Version"].ToolTipText = "Older than " + newest.ToString(3) + ", the newest version in the list";
+            if (old) r.Cells["Version"].ToolTipText = "Older than " + VersionText(newest) + ", the latest release";
             int level;
             string license = d.LicenseText(out level);
             set("License", LicenseShort(d), level == 2 ? Danger : level == 1 ? Warning : main);
@@ -1114,6 +1130,11 @@ namespace CardStudio.Admin
             _navAll.Badge = all.Count > 0 ? all.Count.ToString() : null;
             _navOnline.Badge = online.Count > 0 ? online.Count.ToString() : null;
             _navAttention.Badge = attention > 0 ? attention.ToString() : null;
+            int older = all.Count(d => !string.IsNullOrEmpty(d.Version) && d.ParsedVersion < newest);
+            _navVersions.Badge = older > 0 ? older.ToString() : null;
+            _tip.SetToolTip(_navVersions, (_sidebarCompact ? "Versions…\n" : "") +
+                (older > 0 ? older + (older == 1 ? " PC runs" : " PCs run") + " an older version than " + VersionText(newest) + ". " : "") +
+                "Every Card Studio release with its notes, and which PCs run each version (Ctrl+Shift+V)");
             _lblCount.Text = _grid.Rows.Count + (_grid.Rows.Count == 1 ? " PC" : " PCs");
         }
 
@@ -1411,6 +1432,35 @@ namespace CardStudio.Admin
             value = value ?? "";
             if (value.Length > 0 && "=+-@".IndexOf(value[0]) >= 0) value = "'" + value;   // never a formula in Excel
             return value.IndexOfAny(new[] { ',', '"', '\n', '\r' }) >= 0 ? "\"" + value.Replace("\"", "\"\"") + "\"" : value;
+        }
+
+        // ===================== Versions =====================
+
+        /// <summary>The Versions page; it only chooses, then the update or the PC to show happens here.</summary>
+        private async void ShowVersions()
+        {
+            List<Device> update;
+            string show;
+            using (var page = new VersionsForm(_inv.Devices))
+            {
+                page.ShowDialog(this);
+                update = page.PcsToUpdate;
+                show = page.PcToShow;
+            }
+            if (show != null) SelectDevice(show);
+            if (update == null || update.Count == 0) return;
+            if (_key == null)
+            {
+                Warn("No administrator key", "Open the administrator's key first (Admin Key…).");
+                return;
+            }
+            List<Device> online = update.Where(d => d.Online && ParseAddress(d.Address) != null).ToList();
+            if (online.Count == 0)
+            {
+                Warn("PCs offline", "These PCs went offline: update them when Card Studio is open there.");
+                return;
+            }
+            await Run(online, AdminProtocol.CheckUpdates, "", "Check for Updates");
         }
 
         // ===================== Key =====================
