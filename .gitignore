@@ -370,3 +370,6 @@ dist/
 # Card Studio serial numbers: private signing key and the list of serials made (Installer\serial.ps1). Never commit.
 Installer/serial-private.key
 Installer/serials.csv
+
+# Card Studio Admin (ADMIN_CARD): private key that signs the admin's commands to the PCs. Never commit.
+Installer/admin-private.key

@@ -50,6 +50,13 @@ namespace CardStudio.Setup
         /// <summary>{0} = <see cref="UserDataFolder"/>.</summary>
         public const string PurgeKeptText = "Your settings and print history in {0} were kept.";
 
+        /// <summary>
+        /// Inbound Windows Firewall rule for <see cref="ExeName"/> (private and domain networks only), so Card Studio Admin
+        /// (ADMIN_CARD) can list this PC: UDP 8766 = NPIC_CARD_APP.Services.AdminProtocol.Port. Null = no rule.
+        /// </summary>
+        public static readonly string FirewallRuleName = "Card Studio Admin";
+        public static readonly string FirewallRule = "protocol=UDP localport=8766";
+
         /// <summary>Main executable inside the payload.</summary>
         public const string ExeName = "NPIC_CARD_APP.exe";
         public const string ProcessName = "NPIC_CARD_APP";

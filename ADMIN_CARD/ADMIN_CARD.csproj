@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ADMIN_CARD (Card Studio Admin): the administrator's tool that lists every PC running Card Studio on the network and sends
+  them commands (message, check for updates, install a serial, disconnect phones). NOT part of the Card Studio setup.
+  It only works with Installer\admin-private.key, whose public half is compiled into Card Studio (AdminProtocol.PublicKey).
+-->
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{B6F3A2D9-4E71-4C08-9D5A-3E8C2F1B7A60}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>CardStudio.Admin</RootNamespace>
+    <AssemblyName>ADMIN_CARD</AssemblyName>
+    <TargetFrameworkVersion>v4.8.1</TargetFrameworkVersion>
+    <LangVersion>7.3</LangVersion>
+    <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+    <ApplicationIcon>..\NPIC_CARD_APP\Assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Same protocol and public key as Card Studio, so a command signed here is accepted there. -->
+    <Compile Include="..\NPIC_CARD_APP\Services\AdminProtocol.cs">
+      <Link>Shared\AdminProtocol.cs</Link>
+    </Compile>
+    <!-- Checks that a serial is really for the selected PC (same public key as Card Studio) before it is sent. -->
+    <Compile Include="..\NPIC_CARD_APP\Services\SerialFormat.cs">
+      <Link>Shared\SerialFormat.cs</Link>
+    </Compile>
+    <Compile Include="..\NPIC_CARD_APP\Services\LicenseService.cs">
+      <Link>Shared\LicenseService.cs</Link>
+    </Compile>
+    <Compile Include="Program.cs" />
+    <Compile Include="AdminVersion.cs" />
+    <Compile Include="AdminKey.cs" />
+    <Compile Include="AdminClient.cs" />
+    <Compile Include="Inventory.cs" />
+    <Compile Include="Prompt.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="AdminForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="README.md" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

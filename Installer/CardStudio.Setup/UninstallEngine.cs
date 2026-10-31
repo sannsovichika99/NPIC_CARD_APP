@@ -45,6 +45,7 @@ namespace CardStudio.Setup
 
             Report(progress, 85, "Removing the Settings > Apps entry");
             RemoveUninstallEntry();
+            InstallEngine.RemoveFirewallRule();
 
             if (purgeUserData)
             {

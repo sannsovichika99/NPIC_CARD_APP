@@ -59,6 +59,10 @@ namespace CardStudio.Setup
         public const string PurgeKeptText =
             "The remembered key location in {0} was kept. Your key file and serials.csv were not touched.";
 
+        /// <summary>The generator listens on no port: no firewall rule.</summary>
+        public static readonly string FirewallRuleName = null;
+        public static readonly string FirewallRule = null;
+
         /// <summary>Main executable inside the payload.</summary>
         public const string ExeName = "CardStudio.SerialGenerator.exe";
         public const string ProcessName = "CardStudio.SerialGenerator";

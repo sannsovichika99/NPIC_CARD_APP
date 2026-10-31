@@ -193,10 +193,12 @@ namespace NPIC_CARD_APP
             CheckForUpdatesQuietly();
             AutoBackupQuietly();
             StartMobileLinkQuietly();
+            StartAdminAgent();
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            StopAdminAgent();
             StopMobileLink();
             SaveSettings(false);
             ReplaceImage(_picFront, null);
@@ -3662,6 +3664,10 @@ namespace NPIC_CARD_APP
 
             // ---- finished jobs and news ----
             if (text.StartsWith("Update available")) { title = "Update available"; action = () => ShowUpdates(); return NoticeKind.Info; }
+            if (text.StartsWith("Message from the administrator")) { title = "Message from the administrator"; return NoticeKind.Info; }
+            if (text.StartsWith("Update requested by the administrator")) { title = "Update requested"; action = () => ShowUpdates(); return NoticeKind.Info; }
+            if (text.StartsWith("License renewed")) { title = "License renewed"; action = ShowLicense; return NoticeKind.Success; }
+            if (text.StartsWith("Phones disconnected by the administrator")) { title = "Phones must pair again"; action = ShowMobileLink; return NoticeKind.Warning; }
             if (text.StartsWith("Done: ")) { title = "Printing finished"; action = ShowPrintHistory; return NoticeKind.Success; }
             if (text.StartsWith("Loaded ")) { title = "Students loaded"; action = ShowGallery; return NoticeKind.Success; }
             if (text.StartsWith("Downloaded ")) { title = "Photos downloaded"; action = ShowPhotoFolderPage; return NoticeKind.Success; }

@@ -13,6 +13,16 @@ namespace NPIC_CARD_APP
                 "ដំឡើងវាដោយដៃ (ចុចកណ្ដុរស្ដាំលើ .ttf → Install for all users) រួចបើកកម្មវិធីឡើងវិញ។");
             A("Missing fonts", "ខ្វះពុម្ពអក្សរ");
 
+            // ---- Card Studio Admin (MainForm.Admin.cs) ----
+            A("Message from the administrator", "សារពីអ្នកគ្រប់គ្រង");
+            A("Update requested", "អ្នកគ្រប់គ្រងស្នើឱ្យធ្វើបច្ចុប្បន្នភាព");
+            A("Update requested by the administrator: press Ctrl+U to check for updates.",
+                "អ្នកគ្រប់គ្រងស្នើឱ្យធ្វើបច្ចុប្បន្នភាព៖ ចុច Ctrl+U ដើម្បីពិនិត្យកំណែថ្មី។");
+            A("License renewed", "អាជ្ញាប័ណ្ណត្រូវបានបន្ត");
+            A("Phones must pair again", "ទូរស័ព្ទត្រូវភ្ជាប់ម្ដងទៀត");
+            A("Phones disconnected by the administrator: pair them again on the Mobile App page.",
+                "អ្នកគ្រប់គ្រងបានផ្ដាច់ទូរស័ព្ទ៖ សូមភ្ជាប់វាម្ដងទៀតនៅទំព័រ Mobile App។");
+
             // ---- Student lists (CSV, Excel, Google Sheets, API, SQL Server) ----
             A("{0} must contain a 'StudentId' column.", "{0} ត្រូវតែមានជួរឈរ 'StudentId'។");
             A("The first row of the Excel sheet", "ជួរទីមួយនៃសន្លឹក Excel");

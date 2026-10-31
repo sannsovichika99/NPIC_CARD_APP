@@ -182,6 +182,12 @@ namespace CardStudio.Setup
                                     uninstaller, dir, "Remove " + ProductInfo.Name, "/uninstall");
                 }
 
+                if (ProductInfo.FirewallRuleName != null)
+                {
+                    Report(progress, 94, "Allowing " + ProductInfo.FirewallRuleName + " in Windows Firewall");
+                    AddFirewallRule(exe);   // never throws: without the rule, only the admin tool cannot see this PC
+                }
+
                 Report(progress, 96, "Registering with Windows");
                 WriteUninstallEntry(dir, exe, uninstaller, totalBytes);
                 Shortcut.NotifyShell();
@@ -325,11 +331,51 @@ namespace CardStudio.Setup
             }
         }
 
+        /// <summary>Replaces the product's inbound rule (<see cref="ProductInfo.FirewallRule"/>) for <paramref name="exe"/>.</summary>
+        private static void AddFirewallRule(string exe)
+        {
+            RemoveFirewallRule();
+            Netsh(string.Format("advfirewall firewall add rule name=\"{0}\" dir=in action=allow {1} profile=private,domain program=\"{2}\"",
+                                ProductInfo.FirewallRuleName, ProductInfo.FirewallRule, exe));
+        }
+
+        public static void RemoveFirewallRule()
+        {
+            if (ProductInfo.FirewallRuleName == null) return;
+            Netsh(string.Format("advfirewall firewall delete rule name=\"{0}\"", ProductInfo.FirewallRuleName));
+        }
+
+        private static void Netsh(string args)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "netsh.exe"), args)
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+                using (Process p = Process.Start(psi))
+                {
+                    string output = (p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd()).Trim();
+                    p.WaitForExit(15000);
+                    Log.Write("netsh " + args + " → " + (p.HasExited ? p.ExitCode.ToString() : "timeout") +
+                              (output.Length > 0 ? ": " + output.Replace(Environment.NewLine, " ") : ""));
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Write("netsh failed: " + ex.Message);
+            }
+        }
+
         private static void Rollback(string dir, List<string> created)
         {
             Log.Write("Rolling back " + created.Count + " files");
             UninstallEngine.RemoveShortcuts();
             UninstallEngine.RemoveUninstallEntry();
+            RemoveFirewallRule();
             foreach (string f in created) TryDeleteFile(f);
             DeleteEmptyFolders(dir, true);
         }
