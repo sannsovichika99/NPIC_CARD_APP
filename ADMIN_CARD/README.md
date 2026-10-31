@@ -66,6 +66,82 @@ To open it, choose **Versions…** in the sidebar, or press Ctrl+Shift+V. The si
 - **Notes come from the build:** `Document.md` is embedded in ADMIN_CARD.exe when it is built (`ReleaseNotes.cs` reads it). After a release, update `Document.md` and rebuild ADMIN_CARD.
 - **"Old" marker:** the latest release is also what the main list's "old" marker compares against. A network where every PC runs 1.0.1 is still shown as out of date once 1.0.1.1 is in the notes.
 
+## Network Devices page: find PCs and install Card Studio
+
+To open it, choose **Network Devices…** in the sidebar, or press Ctrl+Shift+D.
+
+### What it shows
+
+It scans the networks of this PC when it opens. **Scan Again** scans again, and **Stop** stops a scan.
+
+- **Networks scanned:**
+  - Every physical adapter of this PC. Networks larger than /22 are limited to the /24 around this PC.
+  - The extra addresses from **Addresses…**.
+  - A /24 takes about 15 seconds.
+- **How devices are found:**
+  - ARP, which answers even when a device's firewall blocks ping.
+  - Ping.
+  - The Windows file-sharing port, TCP 445.
+  - The name from DNS, else NetBIOS.
+- **Type column:**
+  - *Card Studio*: the address is a PC in the main list.
+  - *Windows PC*: file sharing answers, so Card Studio can be installed from here.
+  - *Device*: anything else, such as a phone, printer, router, or a PC that blocks file sharing.
+  - *This PC*: the PC ADMIN_CARD runs on.
+- **Filters:** All, Windows PCs, Without Card Studio.
+- **Double-click:**
+  - On a Card Studio PC, it selects that PC in the main list.
+  - On a Windows PC, it opens the install dialog.
+- **Copy List** copies the table for Excel.
+
+### Install Card Studio…
+
+Select one or more Windows PCs, then click **Install Card Studio…**. The install works the way IT deployment tools do (`RemoteInstaller.cs`).
+
+1. **Setup file.** The page finds `dist\CardStudio-Setup.exe`, or you choose the file with **Browse…**. The page remembers it and shows its version.
+2. **Administrator.** An administrator account of the target PCs, such as `DOMAIN\admin` or `PC-NAME\Administrator`. Leave it empty to use your own Windows account, which works for a domain administrator.
+   - The user name is remembered.
+   - The password is only kept while the window is open, and is never saved.
+3. **Check Access.** For each PC, it connects with WMI and shows its Windows version and its **Machine ID**. The Machine ID is read from the PC's MachineGuid, with the same formula as Card Studio (`LicenseService.MachineIdFrom`).
+   - **Copy Machine IDs** copies them for the Serial Generator.
+   - Paste each serial in the **Serial** column. Each serial is checked against its PC before anything is installed.
+4. **Install.** On each PC, four PCs at a time:
+   1. Copies the setup to `ADMIN$\Temp`.
+   2. Runs it silently through WMI (`CardStudio-Setup.exe /S`, plus `/NoDesktop` if the desktop shortcut box is cleared).
+   3. Reads its exit code back and translates it into a message: Card Studio open, .NET 4.8.1 missing, and so on. On failure it also shows the end of the setup log.
+   4. Deletes the copied files.
+   5. Saves the serial to `C:\ProgramData\NPIC_CARD_APP\license.txt`, so Card Studio opens straight away. That is also what makes the PC show up in the main list.
+
+**What the target PCs need:**
+- **File and Printer Sharing** and **Windows Management Instrumentation (WMI)** allowed in Windows Firewall, on a Private or domain network. A domain usually allows both by Group Policy.
+- An **administrator account** of the PC.
+- **.NET Framework 4.8.1**, built into Windows 11.
+
+**Account names:** type `PC-NAME\user`, `DOMAIN\user`, or a Microsoft account e-mail address with its password (not the PIN). A bare `user` is sent as `TARGET-PC\user` for each PC; otherwise Windows would check it against this PC's accounts.
+
+**Networks without a domain (home, small office, most school labs):** "Access denied" means Windows blocks remote administration for local and Microsoft accounts until the PC is prepared, and its firewall blocks file sharing and WMI on Public networks.
+
+1. Click **Save Preparation Script…** (on the install dialog or the Network Devices page). It saves `Prepare-CardStudio-Install.cmd`.
+2. Run it once on each PC: right-click it → **Run as administrator**. It makes three changes:
+   - It sets `LocalAccountTokenFilterPolicy = 1`.
+   - It enables Windows' File and Printer Sharing rules for **Private and Domain** networks only.
+   - It adds its own WMI rules (`CardStudioAdmin-DCOM`, `CardStudioAdmin-WMI`), also for Private and Domain only. Windows' built-in WMI rule for private networks would also open public ones.
+3. It then offers to set the PC's networks to Private. Answer **Y** only on a trusted network.
+
+To undo it:
+
+```
+reg delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v LocalAccountTokenFilterPolicy /f
+```
+
+and, in PowerShell:
+
+```
+Remove-NetFirewallRule -Name 'CardStudioAdmin-*'
+```
+
+Card Studio cannot be updated this way while it is open on the PC. Use **Check for Updates** for PCs that already run it.
+
 ## Commands (on the selected PCs)
 
 - **Message…** shows the text on the PC in a box and keeps it under Card Studio's bell. If a window is open on that PC, the message goes only to the bell.

@@ -167,6 +167,7 @@ namespace CardStudio.Admin
                 case Keys.Control | Keys.U: CheckUpdates(); return true;
                 case Keys.Control | Keys.E: ExportCsv(); return true;
                 case Keys.Control | Keys.Shift | Keys.V: ShowVersions(); return true;
+                case Keys.Control | Keys.Shift | Keys.D: ShowNetwork(); return true;
                 case Keys.Control | Keys.Shift | Keys.N: ShowNotifications(); return true;
                 case Keys.Control | Keys.C:
                     if (_grid.Focused) { CopyMachineIds(); return true; }
@@ -229,6 +230,8 @@ namespace CardStudio.Admin
                     "New mobile pairing code on the selected PCs: their phones must scan the QR code again"),
 
                 Section("NETWORK"),
+                Nav("Network Devices…", Theme.IcoGlobe, ShowNetwork,
+                    "Every device on the network, which ones are Windows PCs, and Install Card Studio on them (Ctrl+Shift+D)"),
                 Nav("Refresh", IcoRefresh, () => Discover(true), "Ask every PC again now (F5)"),
                 Nav("Addresses…", IcoNetwork, EditTargets, "PCs on other networks (behind a router): addresses to ask directly"),
                 Nav("Export CSV…", IcoExport, ExportCsv, "Save the list as a CSV file for Excel (Ctrl+E)"),
@@ -1174,7 +1177,7 @@ namespace CardStudio.Admin
         private List<Device> SelectedDevices()
         {
             if (_grid == null) return new List<Device>();
-            return _grid.SelectedRows.Cast<DataGridViewRow>().OrderBy(r => r.Index).Select(r => (Device)r.Tag).ToList();
+            return _grid.SelectedRows.Cast<DataGridViewRow>().OrderBy(r => r.Index).Select(r => r.Tag).OfType<Device>().ToList();
         }
 
         /// <summary>Shows <paramref name="machineId"/> selected (from a bell notice), switching to All PCs when it is filtered out.</summary>
@@ -1300,7 +1303,8 @@ namespace CardStudio.Admin
             await Run(targets, AdminProtocol.InstallSerial, serial.Trim(), "Install Serial");
         }
 
-        private static string CheckSerial(string serial, string machineId)
+        /// <summary>Why <paramref name="serial"/> cannot be used on the PC <paramref name="machineId"/>, or null (also used by InstallForm).</summary>
+        internal static string CheckSerial(string serial, string machineId)
         {
             SerialData data;
             switch (SerialFormat.Decode(serial, out data))
@@ -1432,6 +1436,29 @@ namespace CardStudio.Admin
             value = value ?? "";
             if (value.Length > 0 && "=+-@".IndexOf(value[0]) >= 0) value = "'" + value;   // never a formula in Excel
             return value.IndexOfAny(new[] { ',', '"', '\n', '\r' }) >= 0 ? "\"" + value.Replace("\"", "\"\"") + "\"" : value;
+        }
+
+        // ===================== Network devices =====================
+
+        /// <summary>The Network Devices page (scan + Install Card Studio…); a PC double-clicked there is selected here.</summary>
+        private void ShowNetwork()
+        {
+            string show;
+            bool installed;
+            using (var page = new NetworkForm(_inv))
+            {
+                page.ShowDialog(this);
+                show = page.PcToShow;
+                installed = page.InstalledAny;
+            }
+            if (show != null) SelectDevice(show);
+            if (installed)
+            {
+                SetStatus("Card Studio installed: the new PCs appear here once Card Studio is opened on them.");
+                _notices.Add(NoticeKind.Success, "Card Studio installed",
+                    "The new PCs show up in the list once Card Studio is opened (and activated) on them.");
+                Discover(true);
+            }
         }
 
         // ===================== Versions =====================

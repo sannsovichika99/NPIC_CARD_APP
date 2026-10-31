@@ -121,17 +121,23 @@ namespace NPIC_CARD_APP.Services
         {
             get
             {
-                if (_machineId == null)
-                {
-                    byte[] hash;
-                    using (var sha = SHA256.Create())
-                        hash = sha.ComputeHash(Encoding.UTF8.GetBytes("CardStudio.MachineId|" + MachineSource()));
-                    var raw = new byte[10];   // 80 bits = 16 Base32 characters
-                    Array.Copy(hash, raw, raw.Length);
-                    _machineId = SerialFormat.Group(SerialFormat.ToBase32(raw), 4);
-                }
+                if (_machineId == null) _machineId = MachineIdFrom(MachineSource());
                 return _machineId;
             }
+        }
+
+        /// <summary>
+        /// The Machine ID of a PC whose <see cref="MachineSource"/> is <paramref name="source"/> (its MachineGuid in lower case).
+        /// Card Studio Admin uses it to show the ID of a PC it installs Card Studio on, read over the network.
+        /// </summary>
+        internal static string MachineIdFrom(string source)
+        {
+            byte[] hash;
+            using (var sha = SHA256.Create())
+                hash = sha.ComputeHash(Encoding.UTF8.GetBytes("CardStudio.MachineId|" + source));
+            var raw = new byte[10];   // 80 bits = 16 Base32 characters
+            Array.Copy(hash, raw, raw.Length);
+            return SerialFormat.Group(SerialFormat.ToBase32(raw), 4);
         }
 
         /// <summary>

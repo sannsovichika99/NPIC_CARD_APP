@@ -13,6 +13,12 @@ namespace CardStudio.Admin
         /// <summary>Sidebar shows only icons.</summary>
         public bool SidebarCollapsed { get; set; }
 
+        /// <summary>CardStudio-Setup.exe chosen last time on the install page (only the path).</summary>
+        public string SetupPath { get; set; }
+
+        /// <summary>Administrator account typed last time on the install page (the password is never saved).</summary>
+        public string InstallUser { get; set; }
+
         private static AdminSettings _current;
 
         /// <summary>The settings, read once.</summary>
