@@ -5,20 +5,47 @@ It finds the PCs by itself and shows their status. It can also send commands to 
 
 > **Admin only.** Never give ADMIN_CARD or `admin-private.key` to users. Whoever has the key can send commands to every PC.
 
+## Look and feel
+
+ADMIN_CARD is built from **Card Studio's own UI kit**: it compiles `UiKit.cs`, `ModalKit.cs`, `AccentPalette.cs`, `SlimScroll.cs` and `Notifications.cs` straight from `NPIC_CARD_APP`. A design change in Card Studio therefore shows up in ADMIN_CARD at the next build.
+`Kit\CardStudioKit.cs` provides small, English-only versions of the few app classes the kit needs (`Lang`, `CardFonts`, `AppSettings`, `Branding`).
+
+- **Layout:** same as Card Studio's main window.
+  - Collapsible sidebar with the logo. Its sections are *PCs* (All / Online / Needs Attention, with counts), *Actions*, *Network* and *App*.
+  - Greeting header with the notification bell.
+  - Four gradient tiles: PCs online, phones connected, printed today, needs attention.
+  - Two shadow cards: **Computers** (search and grid) and **Details** (facts and command buttons for the selection).
+- **Popups:** every popup is a Card Studio `ModalForm` (accent strip, icon badge, pill buttons, dimmed backdrop). Messages use `AppDialog`.
+- **Theme:** follows Card Studio on this PC. Dark mode and the primary colour are read from `%AppData%\NPIC_CARD_APP\settings.xml`. The *Dark Mode / Light Mode* item in the sidebar overrides the theme for ADMIN_CARD only, saved in `%AppData%\CardStudio.Admin\settings.xml` (ADMIN_CARD restarts to apply it).
+- **Bell:** it lists new PCs found, PCs that went offline, licenses that need attention, a missing or wrong admin key, and the result of every command. Clicking a notice selects that PC.
+- **Shortcuts:**
+
+  | Keys | Action |
+  |---|---|
+  | F5 | Refresh |
+  | Ctrl+F | Search |
+  | Ctrl+M | Send Message |
+  | Ctrl+U | Check for Updates |
+  | Ctrl+E | Export CSV |
+  | Ctrl+Shift+N | Notifications |
+  | Ctrl+C | Copy Machine ID |
+  | Delete | Remove from the list |
+
+  Double-click a PC to send it a message. Right-click a PC for the menu.
+
 ## What it shows
 
 | Column | Meaning |
 |---|---|
-| Status | **Online** = Card Studio answered within the last 45 s. PCs that are off stay listed as **Offline**. |
-| Computer / Label | Windows computer name, plus your own label (Label…), e.g. "Room 204". |
+| Status | Chip: **Online** = Card Studio answered within the last 45 s, **Busy** = a window is open or a card is printing there (the reason is in the tooltip), **Offline** = PC off or Card Studio closed. Offline PCs stay listed. |
+| Computer | Windows computer name, with your own label (Label…, e.g. "Room 204") underneath. |
 | Address | IPv4 address used for commands. |
-| Version | Card Studio version. Older than the newest version in the list = **(old)**, in orange. |
-| License | Expiry date and days left. Orange = 30 days or less, red = 7 days or less, expired, or not valid. |
+| Version | Card Studio version. Older than the newest version in the list = **old**, in orange. |
+| License | "Until 2027-10-01", or "12 days left" in orange from 30 days. Red = 7 days or less, expired, or not valid. The full text is in the tooltip. |
 | Phones | Phones paired through Mobile App that are connected now (`off` = Mobile App is stopped). |
-| Students / Today | Students loaded, and card sides printed today. |
-| Busy | Why the PC cannot take a command now (a window is open, a card is printing). |
+| Today | Card sides printed today. |
 
-The panel on the right shows everything about the selected PC: Machine ID, user, Windows version, printer, the phones' names, print totals, the PC's clock and the result of the last command.
+The **Details** card shows everything about the selected PC: last seen, Machine ID, user, Windows version, students loaded, printer, the phones' names, print totals, the PC's clock and the result of the last command.
 **Export CSV…** saves the list for Excel.
 
 ## Commands (on the selected PCs)

@@ -59,6 +59,24 @@
     <Compile Include="..\NPIC_CARD_APP\Services\LicenseService.cs">
       <Link>Shared\LicenseService.cs</Link>
     </Compile>
+    <!-- Card Studio's UI kit, so the admin tool looks like the app (Kit\CardStudioKit.cs supplies what the kit needs). -->
+    <Compile Include="..\NPIC_CARD_APP\UiKit.cs">
+      <Link>Kit\UiKit.cs</Link>
+    </Compile>
+    <Compile Include="..\NPIC_CARD_APP\ModalKit.cs">
+      <Link>Kit\ModalKit.cs</Link>
+    </Compile>
+    <Compile Include="..\NPIC_CARD_APP\AccentPalette.cs">
+      <Link>Kit\AccentPalette.cs</Link>
+    </Compile>
+    <Compile Include="..\NPIC_CARD_APP\SlimScroll.cs">
+      <Link>Kit\SlimScroll.cs</Link>
+    </Compile>
+    <Compile Include="..\NPIC_CARD_APP\Notifications.cs">
+      <Link>Kit\Notifications.cs</Link>
+    </Compile>
+    <Compile Include="Kit\CardStudioKit.cs" />
+    <Compile Include="AdminSettings.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="AdminVersion.cs" />
     <Compile Include="AdminKey.cs" />
@@ -70,6 +88,17 @@
     <Compile Include="AdminForm.cs">
       <SubType>Form</SubType>
     </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Same logical names as in Card Studio, read by Branding. -->
+    <EmbeddedResource Include="..\NPIC_CARD_APP\Assets\app.ico">
+      <Link>Assets\app.ico</Link>
+      <LogicalName>NPIC_CARD_APP.app.ico</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\NPIC_CARD_APP\Assets\app_logo.png">
+      <Link>Assets\app_logo.png</Link>
+      <LogicalName>NPIC_CARD_APP.app_logo.png</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
     <None Include="README.md" />
