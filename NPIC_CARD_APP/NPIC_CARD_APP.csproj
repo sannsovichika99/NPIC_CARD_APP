@@ -192,6 +192,7 @@
     </Compile>
     <Compile Include="Models\Student.cs" />
     <Compile Include="Services\ApiStudentLoader.cs" />
+    <Compile Include="Services\StudentColumns.cs" />
     <Compile Include="Services\AppSettings.cs" />
     <Compile Include="Services\BackupService.cs" />
     <Compile Include="Services\CardText.cs" />

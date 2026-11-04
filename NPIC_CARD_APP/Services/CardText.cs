@@ -39,7 +39,7 @@ namespace NPIC_CARD_APP.Services
         }
 
         [Category("1. Front"), DisplayName("QR template"),
-         Description("Text in each student's QR code. Tokens: {StudentId} {NameEn} {NameKh}. The CSV column QrData overrides this.")]
+         Description("Text in each student's QR code. Tokens: {StudentId} {NameEn} {NameKh}.")]
         public string QrTemplate { get; set; }
 
         [Category("2. Back"), DisplayName("Address")]

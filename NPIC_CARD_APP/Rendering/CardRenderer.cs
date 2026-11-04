@@ -244,7 +244,7 @@ namespace NPIC_CARD_APP.Rendering
         // =====================================================================
         private static string BuildQrText(Student s, string template)
         {
-            string text = !string.IsNullOrWhiteSpace(s.QrData) ? s.QrData : (template ?? "{StudentId}");
+            string text = template ?? "{StudentId}";
             text = text.Replace("{StudentId}", s.StudentId ?? "")
                        .Replace("{NameEn}", s.NameEn ?? "")
                        .Replace("{NameKh}", s.NameKh ?? "");

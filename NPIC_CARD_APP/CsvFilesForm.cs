@@ -16,7 +16,7 @@ using NPIC_CARD_APP.Services;
 namespace NPIC_CARD_APP
 {
     /// <summary>
-    /// "CSV Files" page: every student CSV in one folder, checked the way Import CSV… reads them (StudentId column,
+    /// "CSV Files" page: every student CSV in one folder, checked the way Import CSV… reads them (student_id column,
     /// students, empty / duplicate IDs), with a preview of the selected file.
     ///   Load Students (Enter / double-click) = load the file into the main window
     ///   New… (Ctrl+N)   Add Files… (or drop .csv files on the list)   Edit (Ctrl+E) = open in Excel
@@ -451,7 +451,7 @@ namespace NPIC_CARD_APP
                 }
                 if (rows.Count == 0) { _lblPreview.Text = Lang.F("Preview — {0} is empty", x.Name); return; }   // emptied since the scan
                 List<string> header = rows[0];
-                int idIndex = IndexOf(header, "StudentId");
+                int idIndex = IndexOf(header, StudentColumns.StudentId);
                 int width = Math.Max(header.Count, rows.Take(PreviewRows + 1).Max(r => r.Count));
 
                 var number = new DataGridViewTextBoxColumn { HeaderText = "#", Width = 48, SortMode = DataGridViewColumnSortMode.NotSortable };
@@ -464,7 +464,8 @@ namespace NPIC_CARD_APP
                     var col = new DataGridViewTextBoxColumn
                     {
                         HeaderText = name.Length > 0 ? name : Lang.T("(no name)"), SortMode = DataGridViewColumnSortMode.NotSortable,
-                        Width = name == "NameKh" || name == "Faculty" || name == "Level" || name == "QrData" ? 170 : 110
+                        Width = StudentColumns.Canonical(name) == StudentColumns.NameKh || StudentColumns.Canonical(name) == StudentColumns.Faculty ||
+                                StudentColumns.Canonical(name) == StudentColumns.Degree ? 170 : 110
                     };
                     if (c == idIndex) col.HeaderCell.Style.ForeColor = Accent;
                     _preview.Columns.Add(col);
@@ -494,7 +495,7 @@ namespace NPIC_CARD_APP
                 int total = rows.Count - 1;
                 _lblPreview.Text = Lang.F("Preview — {0}", x.Name) + "  ·  " +
                     (total > shown ? Lang.F("first {0} of {1} rows", shown, total.ToString("N0")) : Plural(total, "row")) +
-                    (idIndex < 0 ? Lang.T("  ·  no StudentId column") : "");
+                    (idIndex < 0 ? Lang.T("  ·  no student_id column") : "");
             }
             finally
             {
@@ -871,12 +872,12 @@ namespace NPIC_CARD_APP
             List<string> header = rows[0];
             x.HasHeader = true;
             x.Columns = header.Count(h => Clean(h).Length > 0);
-            int idIndex = IndexOf(header, "StudentId");
+            int idIndex = IndexOf(header, StudentColumns.StudentId);
             x.HasId = idIndex >= 0;
-            foreach (string column in CsvStudentLoader.Header.Split(','))
+            foreach (string column in StudentColumns.All)
             {
                 if (IndexOf(header, column) >= 0) continue;
-                if (column == "Faculty" && IndexOf(header, "Department") >= 0) continue;   // the loader accepts either
+                if (column == StudentColumns.Faculty && IndexOf(header, "Department") >= 0) continue;   // the loader accepts either
                 x.MissingColumns.Add(column);
             }
 
@@ -918,7 +919,7 @@ namespace NPIC_CARD_APP
         {
             if (x.Error != null) return Lang.T("✖ Cannot read");
             if (!x.HasHeader) return Lang.T("Empty file");
-            if (!x.HasId) return Lang.T("✖ No StudentId column");
+            if (!x.HasId) return Lang.T("✖ No student_id column");
             if (x.Students == 0) return Lang.T("No students yet");
             var issues = new List<string>();
             if (x.MissingIds > 0) issues.Add(Lang.F("{0} without ID", x.MissingIds));
@@ -940,7 +941,7 @@ namespace NPIC_CARD_APP
         {
             if (x.Error != null) return Lang.F("Cannot read the file: {0}", Lang.T(x.Error));
             if (!x.HasHeader) return Lang.F("The file is empty. Click Edit to add the header row: {0}", CsvStudentLoader.Header);
-            if (!x.HasId) return Lang.T("The first row has no 'StudentId' column, so the students cannot be loaded. Click Edit to fix the header.");
+            if (!x.HasId) return Lang.T("The first row has no 'student_id' column, so the students cannot be loaded. Click Edit to fix the header.");
             if (x.Students == 0) return Lang.T("Only the header row is there. Click Edit to add students (one per row).");
 
             var notes = new List<string>();
@@ -1006,7 +1007,7 @@ namespace NPIC_CARD_APP
         private static int IndexOf(List<string> header, string column)
         {
             for (int i = 0; i < header.Count; i++)
-                if (string.Equals(Clean(header[i]), column, StringComparison.OrdinalIgnoreCase)) return i;
+                if (string.Equals(StudentColumns.Canonical(header[i]), column, StringComparison.OrdinalIgnoreCase)) return i;   // old names count
             return -1;
         }
 

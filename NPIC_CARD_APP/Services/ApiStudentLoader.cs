@@ -18,31 +18,23 @@ namespace NPIC_CARD_APP.Services
     /// Downloads the student list from a web API with an HTTP GET.
     /// <para>Accepted responses:</para>
     /// <list type="bullet">
-    /// <item>A JSON array of students: <c>[ { "StudentId": "NPIC24001", "NameKh": "…", … }, … ]</c></item>
+    /// <item>A JSON array of students: <c>[ { "student_id": "NPIC24001", "name_kh": "…", … }, … ]</c></item>
     /// <item>A JSON object holding that array in <c>data</c>, <c>students</c>, <c>items</c>, <c>results</c> or
     /// <c>records</c> (Laravel / Django REST style). Further pages are followed through <c>next</c>,
     /// <c>next_page_url</c> or <c>links.next</c>.</item>
     /// <item>CSV text with the same header as the CSV import.</item>
     /// </list>
-    /// Field names are the CSV column names. Case, '_' and '-' are ignored, so <c>student_id</c> and
-    /// <c>studentId</c> both mean StudentId. ISO dates (2007-03-15 or 2007-03-15T00:00:00Z) become dd/MM/yyyy.
+    /// Field names are the CSV column names (<see cref="StudentColumns"/>). Case, '_' and '-' are ignored, so
+    /// <c>student_id</c> and <c>studentId</c> both mean student_id; the old names (ValidUntil, …) still work. ISO dates (2007-03-15 or 2007-03-15T00:00:00Z) become dd/MM/yyyy.
     /// </summary>
     public static class ApiStudentLoader
     {
         public const int TimeoutSeconds = 60;
         private const int MaxPages = 500;
 
-        private static readonly string[] Columns =
-        {
-            "StudentId", "NameKh", "NameEn", "Gender", "DateOfBirth", "Faculty", "Department",
-            "Level", "Generation", "ValidUntil", "QrData"
-        };
-        private static readonly string[] DateColumns = { "DateOfBirth", "ValidUntil" };
+        private static readonly string[] DateColumns = StudentColumns.Dates;
         private static readonly string[] ListKeys = { "data", "students", "items", "results", "records" };
         private static readonly string[] NextKeys = { "next", "next_page_url", "nextPageUrl" };
-
-        /// <summary>"studentid" → "StudentId", "nameen" → "NameEn", …</summary>
-        private static readonly Dictionary<string, string> CanonicalByKey = BuildCanonicalMap();
 
         // One shared client for the app's lifetime (creating one per request leaks sockets).
         private static readonly HttpClient Http = CreateClient();
@@ -300,8 +292,8 @@ namespace NPIC_CARD_APP.Services
                 var cells = new Dictionary<string, string>(StringComparer.Ordinal);
                 foreach (KeyValuePair<string, object> field in record)
                 {
-                    string column;
-                    if (!CanonicalByKey.TryGetValue(Squash(field.Key), out column)) continue;   // unknown field: ignore
+                    string column = ColumnOf(field.Key);
+                    if (column == null) continue;   // unknown field: ignore
 
                     string text = CellText(field.Value);
                     if (Array.IndexOf(DateColumns, column) >= 0) text = NormalizeDate(text);
@@ -319,10 +311,10 @@ namespace NPIC_CARD_APP.Services
                 cellsByRecord.Add(cells);
             }
 
-            if (!columnIndex.ContainsKey("StudentId"))
+            if (!columnIndex.ContainsKey(StudentColumns.StudentId))
             {
                 var found = new List<string>(records[0].Keys);
-                throw new InvalidDataException("The API's students have no StudentId field (student_id and studentId work too).\n\n" +
+                throw new InvalidDataException("The API's students have no student_id field (studentId and StudentId work too).\n\n" +
                     "Fields found: " + (found.Count == 0 ? "(none)" : string.Join(", ", found)));
             }
 
@@ -367,20 +359,10 @@ namespace NPIC_CARD_APP.Services
             return text;
         }
 
-        private static Dictionary<string, string> BuildCanonicalMap()
+        /// <summary>"studentId" → "student_id", "ValidUntil" → "end_date", "department" → "Department"; null = not a student field.</summary>
+        private static string ColumnOf(string key)
         {
-            var map = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (string column in Columns) map[Squash(column)] = column;
-            return map;
-        }
-
-        /// <summary>Lower-case letters and digits only: "Student_ID" → "studentid".</summary>
-        private static string Squash(string key)
-        {
-            var sb = new StringBuilder(key == null ? 0 : key.Length);
-            foreach (char ch in key ?? "")
-                if (char.IsLetterOrDigit(ch)) sb.Append(char.ToLowerInvariant(ch));
-            return sb.ToString();
+            return StudentColumns.Find(key) ?? (StudentColumns.Squash(key) == "department" ? "Department" : null);
         }
     }
 }

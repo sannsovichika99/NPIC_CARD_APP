@@ -847,7 +847,7 @@ namespace NPIC_CARD_APP.Services
 
         /// <summary>
         /// The student behind a scanned code. The card QR holds the StudentId inside a URL or text (Card Text… → QR template),
-        /// so the code may be the ID itself, a link that contains it, or the student's own QrData.
+        /// so the code may be the ID itself or a link that contains it.
         /// </summary>
         private Dictionary<string, object> Lookup(Request req)
         {
@@ -857,7 +857,6 @@ namespace NPIC_CARD_APP.Services
             StatusSnapshot st = Status();
 
             Student hit = students.FirstOrDefault(s => string.Equals((s.StudentId ?? "").Trim(), code, StringComparison.OrdinalIgnoreCase))
-                       ?? students.FirstOrDefault(s => !string.IsNullOrEmpty(s.QrData) && s.QrData.Trim() == code)
                        ?? students.Where(s => !string.IsNullOrWhiteSpace(s.StudentId) && s.StudentId.Trim().Length >= 4 &&
                                               ContainsToken(code, s.StudentId.Trim()))
                                   .OrderByDescending(s => s.StudentId.Trim().Length)
@@ -1002,8 +1001,8 @@ namespace NPIC_CARD_APP.Services
             Dictionary<string, object> d = Summary(s, st);
             d["dateOfBirth"] = s.DateOfBirth ?? "";
             d["dateOfBirthKh"] = SafeKhmerDate(s.DateOfBirth);
+            d["startDate"] = s.StartDate ?? "";
             d["validUntil"] = s.ValidUntil ?? "";
-            d["qrData"] = s.QrData ?? "";
             d["columns"] = s.Columns.ToDictionary(c => c.Key, c => (object)(c.Value ?? ""));
             return d;
         }

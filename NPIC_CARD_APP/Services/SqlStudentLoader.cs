@@ -15,19 +15,13 @@ namespace NPIC_CARD_APP.Services
     /// <summary>
     /// Reads the student list from a Microsoft SQL Server database.
     /// <para>The source is either a table / view name (<c>dbo.Students</c>) or a SELECT query. Column names are the
-    /// CSV column names; case, '_' and '-' are ignored, so <c>student_id</c> and <c>StudentID</c> both mean StudentId.
-    /// Date columns become dd/MM/yyyy. Only SELECT (or WITH … SELECT) is run, so the database is never changed.</para>
+    /// CSV column names (<see cref="StudentColumns"/>); case, '_' and '-' are ignored, so <c>student_id</c> and <c>StudentID</c>
+    /// both mean student_id, and the old names (ValidUntil, …) still work. Date columns become dd/MM/yyyy. Only SELECT (or WITH … SELECT) is run, so the database is never changed.</para>
     /// </summary>
     public static class SqlStudentLoader
     {
         public const int ConnectTimeoutSeconds = 15;
         public const int QueryTimeoutSeconds = 120;
-
-        private static readonly string[] Columns =
-        {
-            "StudentId", "NameKh", "NameEn", "Gender", "DateOfBirth", "Faculty", "Department",
-            "Level", "Generation", "ValidUntil", "QrData"
-        };
 
         /// <summary>dbo.Students, [dbo].[Students], Students, NPIC.dbo.Students …</summary>
         private static readonly Regex TableName = new Regex(
@@ -89,19 +83,19 @@ namespace NPIC_CARD_APP.Services
                 using (var command = new SqlCommand(sql, connection) { CommandTimeout = QueryTimeoutSeconds })
                 using (SqlDataReader reader = await ExecuteAsync(command, cancel).ConfigureAwait(false))
                 {
-                    // Header row: the CSV column a SQL column stands for (student_id → StudentId); others are kept
+                    // Header row: the CSV column a SQL column stands for (StudentID → student_id); others are kept
                     // under their own name and ignored by the CSV loader.
                     var header = new List<string>(reader.FieldCount);
                     var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     for (int i = 0; i < reader.FieldCount; i++)
                     {
-                        string name = Canonical(reader.GetName(i));
-                        header.Add(seen.Add(name) ? name : "");   // two columns for StudentId: the first wins
+                        string name = StudentColumns.Canonical(reader.GetName(i));
+                        header.Add(seen.Add(name) ? name : "");   // two columns for student_id: the first wins
                     }
-                    if (!seen.Contains("StudentId"))
-                        throw new InvalidDataException("The SQL result has no StudentId column (student_id and StudentID work too).\n\n" +
+                    if (!seen.Contains(StudentColumns.StudentId))
+                        throw new InvalidDataException("The SQL result has no student_id column (StudentId and StudentID work too).\n\n" +
                             "Columns found: " + string.Join(", ", ColumnNames(reader)) + "\n\n" +
-                            "Rename it in the query, e.g.  SELECT code AS StudentId, …");
+                            "Rename it in the query, e.g.  SELECT code AS student_id, …");
 
                     var rows = new List<List<string>> { header };
                     while (await reader.ReadAsync(cancel).ConfigureAwait(false))
@@ -125,7 +119,7 @@ namespace NPIC_CARD_APP.Services
 
             if (!ReadOnlyStart.IsMatch(text) || text.IndexOf(';') >= 0 || Forbidden.IsMatch(StripLiterals(text)))
                 throw new ArgumentException("Only one SELECT query is allowed — the app never changes the database.\n\n" +
-                    "Example:  SELECT StudentId, NameKh, NameEn, Gender, DateOfBirth, Faculty, Level, Generation, ValidUntil FROM dbo.Students");
+                    "Example:  SELECT " + StudentColumns.List + " FROM dbo.Students");
             return text;
         }
 
@@ -218,23 +212,6 @@ namespace NPIC_CARD_APP.Services
             if (value is byte[]) return "";   // photo / binary columns are not card text
             var formattable = value as IFormattable;   // int, decimal, Guid …
             return formattable != null ? formattable.ToString(null, CultureInfo.InvariantCulture) : value.ToString();
-        }
-
-        private static string Canonical(string columnName)
-        {
-            string key = Squash(columnName);
-            foreach (string column in Columns)
-                if (Squash(column) == key) return column;
-            return columnName ?? "";
-        }
-
-        /// <summary>Lower-case letters and digits only: "Student_ID" → "studentid".</summary>
-        private static string Squash(string key)
-        {
-            var sb = new StringBuilder(key == null ? 0 : key.Length);
-            foreach (char ch in key ?? "")
-                if (char.IsLetterOrDigit(ch)) sb.Append(char.ToLowerInvariant(ch));
-            return sb.ToString();
         }
     }
 }

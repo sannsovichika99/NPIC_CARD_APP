@@ -677,17 +677,19 @@ namespace NPIC_CARD_APP
             w.Heading(T("Columns", "ជួរឈរ"));
             w.Para(T("Every source uses the same column names (row 1 of a sheet or CSV):",
                      "ប្រភពទាំងអស់ប្រើឈ្មោះជួរឈរដូចគ្នា (ជួរទី 1 នៃ sheet ឬ CSV)៖"));
-            w.Key("StudentId", T("Required. Printed on the card and used as the photo file name.",
-                                 "ចាំបាច់។ បោះពុម្ពលើកាត ហើយប្រើជាឈ្មោះឯកសាររូបថត។"));
-            w.Key("NameKh", T("Name in Khmer.", "ឈ្មោះជាអក្សរខ្មែរ។"));
-            w.Key("NameEn", T("Name in Latin letters (printed in capitals).", "ឈ្មោះជាអក្សរឡាតាំង (បោះពុម្ពជាអក្សរធំ)។"));
-            w.Key("Gender", T("M / F (or the Khmer words).", "M / F (ឬ ប្រុស / ស្រី)។"));
-            w.Key("DateOfBirth", T("dd/MM/yyyy, e.g. 17/11/2002.", "dd/MM/yyyy ឧ. 17/11/2002។"));
-            w.Key("Faculty", T("Faculty / department.", "មហាវិទ្យាល័យ / ដេប៉ាតឺម៉ង់។"));
-            w.Key("Level", T("Study level.", "កម្រិតសិក្សា។"));
-            w.Key("Generation", T("Generation number.", "ជំនាន់ទី។"));
-            w.Key("ValidUntil", T("Expiry date, dd/MM/yyyy.", "ថ្ងៃផុតកំណត់ dd/MM/yyyy។"));
-            w.Key("QrData", T("Optional text or link for the student's QR code.", "អត្ថបទ ឬតំណភ្ជាប់សម្រាប់ QR code របស់និស្សិត (ស្រេចចិត្ត)។"));
+            w.Key("student_id", T("Required. Printed on the card and used as the photo file name.",
+                                  "ចាំបាច់។ បោះពុម្ពលើកាត ហើយប្រើជាឈ្មោះឯកសាររូបថត។"));
+            w.Key("name_kh", T("Name in Khmer.", "ឈ្មោះជាអក្សរខ្មែរ។"));
+            w.Key("name_en", T("Name in Latin letters (printed in capitals).", "ឈ្មោះជាអក្សរឡាតាំង (បោះពុម្ពជាអក្សរធំ)។"));
+            w.Key("gender", T("M / F (or the Khmer words).", "M / F (ឬ ប្រុស / ស្រី)។"));
+            w.Key("dob", T("Date of birth, dd/MM/yyyy, e.g. 17/11/2002.", "ថ្ងៃខែឆ្នាំកំណើត dd/MM/yyyy ឧ. 17/11/2002។"));
+            w.Key("faculty", T("Faculty / department.", "មហាវិទ្យាល័យ / ដេប៉ាតឺម៉ង់។"));
+            w.Key("degree", T("Degree / study level.", "សញ្ញាបត្រ / កម្រិតសិក្សា។"));
+            w.Key("gen_no", T("Generation number.", "ជំនាន់ទី។"));
+            w.Key("start_date", T("Card start date, dd/MM/yyyy.", "ថ្ងៃចាប់ផ្ដើមកាត dd/MM/yyyy។"));
+            w.Key("end_date", T("Expiry date, dd/MM/yyyy.", "ថ្ងៃផុតកំណត់ dd/MM/yyyy។"));
+            w.Para(T("Lists made with the old names (StudentId, NameKh, … ValidUntil) still load.",
+                     "បញ្ជីដែលប្រើឈ្មោះចាស់ (StudentId, NameKh, … ValidUntil) នៅតែផ្ទុកបាន។"));
 
             w.Heading(T("Good to know", "គួរដឹង"));
             w.Bullet(T("A list opened **from a file** comes back by itself the next time the app starts. Lists from the API, " +

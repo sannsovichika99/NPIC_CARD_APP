@@ -13,13 +13,13 @@ namespace NPIC_CARD_APP.Services
     /// <summary>
     /// Reads students from an Excel workbook (.xlsx / .xlsm) without needing Excel or any extra library:
     /// an .xlsx file is a zip of XML parts, read here with System.IO.Compression + XmlReader.
-    /// Uses the first visible worksheet whose header row has a 'StudentId' column. The columns are the
-    /// same as for CSV import. Real Excel date cells in DateOfBirth / ValidUntil become dd/MM/yyyy.
+    /// Uses the first visible worksheet whose header row has a 'student_id' column. The columns are the
+    /// same as for CSV import. Real Excel date cells in dob / start_date / end_date become dd/MM/yyyy.
     /// </summary>
     public static class ExcelStudentLoader
     {
         private const string RelNs = "/relationships";
-        private static readonly string[] DateColumns = { "DateOfBirth", "ValidUntil" };
+        private static readonly string[] DateColumns = StudentColumns.Dates;
 
         public static bool IsExcelFile(string path)
         {
@@ -55,7 +55,7 @@ namespace NPIC_CARD_APP.Services
                 {
                     List<List<string>> rows = ReadSheet(zip, sheetPath, shared);
                     if (chosen == null) chosen = rows;               // fallback: first sheet (gives a clear header error)
-                    if (HeaderIndex(rows, "StudentId") >= 0) { chosen = rows; break; }
+                    if (HeaderIndex(rows, StudentColumns.StudentId) >= 0) { chosen = rows; break; }
                 }
 
                 ConvertDateSerials(chosen, date1904);
@@ -330,14 +330,14 @@ namespace NPIC_CARD_APP.Services
             }
         }
 
-        /// <summary>Column index of <paramref name="name"/> in the first non-blank row, or -1.</summary>
+        /// <summary>Column index of student column <paramref name="name"/> (old names count) in the first non-blank row, or -1.</summary>
         private static int HeaderIndex(List<List<string>> rows, string name)
         {
             foreach (List<string> row in rows)
             {
                 if (row.All(string.IsNullOrWhiteSpace)) continue;
                 for (int i = 0; i < row.Count; i++)
-                    if (string.Equals((row[i] ?? "").Trim().TrimStart('﻿'), name, StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(StudentColumns.Canonical(row[i]), name, StringComparison.OrdinalIgnoreCase))
                         return i;
                 return -1;
             }

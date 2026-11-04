@@ -42,8 +42,8 @@ namespace NPIC_CARD_APP
             "1.  In Google Sheets click Share → General access → “Anyone with the link” (Viewer).\n" +
             "2.  Open the tab with the students and copy the browser's address bar.\n" +
             "3.  Paste it above and click Connect.\n\n" +
-            "Row 1 holds the column names: StudentId, NameKh, NameEn, Gender, DateOfBirth, Faculty,\n" +
-            "Level, Generation, ValidUntil, QrData — the same as the Excel template. The app only reads the sheet.";
+            "Row 1 holds the column names: student_id, name_kh, name_en, gender, dob, faculty,\n" +
+            "degree, gen_no, start_date, end_date — the same as the Excel template. The app only reads the sheet.";
 
         private readonly AppSettings _settings;
         private readonly TextBox _txtLink;
@@ -261,7 +261,7 @@ namespace NPIC_CARD_APP
             _grid.Visible = students.Count > 0;
             _lblEmpty.Visible = students.Count == 0;
             _lblEmpty.Text = students.Count == 0
-                ? "The sheet has a StudentId column but no students yet.\n\nAdd them in Google Sheets, then click Connect again."
+                ? "The sheet has a student_id column but no students yet.\n\nAdd them in Google Sheets, then click Connect again."
                 : SetupSteps;
 
             int missing = 0, duplicates = 0;

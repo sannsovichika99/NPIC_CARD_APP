@@ -88,8 +88,8 @@ namespace NPIC_CARD_APP
             {
                 AutoSize = true, MaximumSize = new Size(470, 0), ForeColor = TextMuted, Font = new Font(CardFonts.UI, 8.25f),
                 Margin = new Padding(0, 2, 0, 0),
-                Text = "Type a table name (dbo.Students) or one SELECT query. Columns use the CSV names: StudentId, NameKh, NameEn, " +
-                       "Gender, DateOfBirth, Faculty, Level, Generation, ValidUntil, QrData — rename others with AS. " +
+                Text = "Type a table name (dbo.Students) or one SELECT query. Columns use the CSV names: student_id, name_kh, name_en, " +
+                       "gender, dob, faculty, degree, gen_no, start_date, end_date — rename others with AS. " +
                        "The app only reads; it never changes the database."
             };
 

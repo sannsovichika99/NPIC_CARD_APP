@@ -243,10 +243,9 @@ namespace NPIC_CARD_APP
 
             // Column names offered for custom fields: the preview student's columns, extra (unknown) ones first.
             StudentColumnConverter.Known.Clear();
-            var standard = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                { "StudentId", "NameKh", "NameEn", "Gender", "DateOfBirth", "Faculty", "Department", "Level", "Generation", "ValidUntil", "QrData" };
-            foreach (string col in _student.Columns.Keys) if (!standard.Contains(col)) StudentColumnConverter.Known.Add(col);
-            foreach (string col in _student.Columns.Keys) if (standard.Contains(col)) StudentColumnConverter.Known.Add(col);
+            Func<string, bool> standard = col => StudentColumns.IsStandard(col) || string.Equals(col, "Department", StringComparison.OrdinalIgnoreCase);
+            foreach (string col in _student.Columns.Keys) if (!standard(col)) StudentColumnConverter.Known.Add(col);
+            foreach (string col in _student.Columns.Keys) if (standard(col)) StudentColumnConverter.Known.Add(col);
 
             CustomCardDesign open = createNew ? null
                 : CustomCardStore.Find(designId) ?? CustomCardStore.Find(settings.CustomDesignId) ??
@@ -1892,7 +1891,7 @@ namespace NPIC_CARD_APP
                 _sample.Text = StudentColumnConverter.Known.Count == 0
                     ? "No student list loaded: type the column header exactly as it is in your list."
                     : "";
-            else if (_student.Columns.ContainsKey(col))
+            else if (_student.Columns.ContainsKey(col) || _student.Columns.ContainsKey(StudentColumns.Canonical(col)))
             {
                 string v = _student.Column(col);
                 _sample.Text = "Example (" + (_student.StudentId ?? "") + "):  " + (v.Length == 0 ? "(empty)" : v);

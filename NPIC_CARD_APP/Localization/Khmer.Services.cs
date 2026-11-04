@@ -24,7 +24,7 @@ namespace NPIC_CARD_APP
                 "អ្នកគ្រប់គ្រងបានផ្ដាច់ទូរស័ព្ទ៖ សូមភ្ជាប់វាម្ដងទៀតនៅទំព័រ Mobile App។");
 
             // ---- Student lists (CSV, Excel, Google Sheets, API, SQL Server) ----
-            A("{0} must contain a 'StudentId' column.", "{0} ត្រូវតែមានជួរឈរ 'StudentId'។");
+            A("{0} must contain a 'student_id' column.", "{0} ត្រូវតែមានជួរឈរ 'student_id'។");
             A("The first row of the Excel sheet", "ជួរទីមួយនៃសន្លឹក Excel");
             A("The Google Sheet's first row", "ជួរទីមួយនៃ Google Sheet");
             A("Old Excel 97-2003 (.xls) files are not supported.", "មិនគាំទ្រឯកសារ Excel 97-2003 (.xls) ចាស់ទេ។");
@@ -71,16 +71,16 @@ namespace NPIC_CARD_APP
             A("The API's next-page link is not a valid address: {0}", "តំណទំព័របន្ទាប់របស់ API មិនមែនជាអាសយដ្ឋានត្រឹមត្រូវទេ៖ {0}");
             A("The API's next-page link points to another server ({0}).", "តំណទំព័របន្ទាប់របស់ API ចង្អុលទៅម៉ាស៊ីនមេផ្សេង ({0})។");
             A("It was not followed, so the access token is not sent there.", "វាមិនត្រូវបានធ្វើតាមទេ ដូច្នេះ token ចូលប្រើមិនត្រូវបានផ្ញើទៅទីនោះ។");
-            A("The API's students have no StudentId field (student_id and studentId work too).",
-                "និស្សិតរបស់ API គ្មានវាល StudentId ទេ (student_id និង studentId ក៏ប្រើបានដែរ)។");
+            A("The API's students have no student_id field (studentId and StudentId work too).",
+                "និស្សិតរបស់ API គ្មានវាល student_id ទេ (studentId និង StudentId ក៏ប្រើបានដែរ)។");
             A("Fields found: {0}", "វាលដែលរកឃើញ៖ {0}");
             A("Enter the SQL Server name, e.g. localhost\\SQLEXPRESS or 192.168.1.10,1433",
                 "បញ្ចូលឈ្មោះ SQL Server ឧ. localhost\\SQLEXPRESS ឬ 192.168.1.10,1433");
             A("Enter the SQL Server login name.", "បញ្ចូលឈ្មោះ login របស់ SQL Server។");
-            A("The SQL result has no StudentId column (student_id and StudentID work too).",
-                "លទ្ធផល SQL គ្មានជួរឈរ StudentId ទេ (student_id និង StudentID ក៏ប្រើបានដែរ)។");
+            A("The SQL result has no student_id column (StudentId and StudentID work too).",
+                "លទ្ធផល SQL គ្មានជួរឈរ student_id ទេ (StudentId និង StudentID ក៏ប្រើបានដែរ)។");
             A("Columns found: {0}", "ជួរឈរដែលរកឃើញ៖ {0}");
-            A("Rename it in the query, e.g.  SELECT code AS StudentId, …", "ប្ដូរឈ្មោះវាក្នុងសំណួរ ឧ.  SELECT code AS StudentId, …");
+            A("Rename it in the query, e.g.  SELECT code AS student_id, …", "ប្ដូរឈ្មោះវាក្នុងសំណួរ ឧ.  SELECT code AS student_id, …");
             A("Enter a table name (e.g. dbo.Students) or a SELECT query.", "បញ្ចូលឈ្មោះតារាង (ឧ. dbo.Students) ឬសំណួរ SELECT។");
             A("Only one SELECT query is allowed — the app never changes the database.",
                 "អនុញ្ញាតតែសំណួរ SELECT មួយប៉ុណ្ណោះ — កម្មវិធីមិនដែលផ្លាស់ប្ដូរមូលដ្ឋានទិន្នន័យទេ។");

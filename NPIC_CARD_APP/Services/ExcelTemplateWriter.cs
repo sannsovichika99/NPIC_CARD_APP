@@ -16,19 +16,19 @@ namespace NPIC_CARD_APP.Services
         // Column, what to enter, example. Order = column order of the Students sheet.
         private static readonly string[][] Columns =
         {
-            new[] { "StudentId",   "Student ID. Photos must be named {StudentId}.jpg or .png", "NPIC24001" },
-            new[] { "NameKh",      "Full name in Khmer",                                     "សុខ ចាន់ធីតា" },
-            new[] { "NameEn",      "Full name in Latin letters",                             "Sok Chanthida" },
-            new[] { "Gender",      "M / F / ប្រុស / ស្រី (pick from the list)",                "F" },
-            new[] { "DateOfBirth", "Date of birth as dd/MM/yyyy",                            "15/03/2007" },
-            new[] { "Faculty",     "Faculty / department",                                   "បច្ចេកវិទ្យាព័ត៌មាន" },
-            new[] { "Level",       "Study level",                                            "ជាន់ខ្ពស់បច្ចេកទេស" },
-            new[] { "Generation",  "Generation number",                                      "14" },
-            new[] { "ValidUntil",  "Card expiry date as dd/MM/yyyy",                         "30/12/2027" },
-            new[] { "QrData",      "Optional: text or link for this student's QR code",      "https://www.npic.edu.kh" }
+            new[] { StudentColumns.StudentId,   "Student ID. Photos must be named {student_id}.jpg or .png", "NPIC24001" },
+            new[] { StudentColumns.NameKh,      "Full name in Khmer",                                       "សុខ ចាន់ធីតា" },
+            new[] { StudentColumns.NameEn,      "Full name in Latin letters",                               "Sok Chanthida" },
+            new[] { StudentColumns.Gender,      "M / F / ប្រុស / ស្រី (pick from the list)",                  "F" },
+            new[] { StudentColumns.DateOfBirth, "Date of birth as dd/MM/yyyy",                              "15/03/2007" },
+            new[] { StudentColumns.Faculty,     "Faculty / department",                                     "បច្ចេកវិទ្យាព័ត៌មាន" },
+            new[] { StudentColumns.Degree,      "Degree / study level",                                     "ជាន់ខ្ពស់បច្ចេកទេស" },
+            new[] { StudentColumns.Generation,  "Generation number",                                        "14" },
+            new[] { StudentColumns.StartDate,   "Card start date as dd/MM/yyyy",                            "01/01/2025" },
+            new[] { StudentColumns.EndDate,     "Card expiry date as dd/MM/yyyy",                           "30/12/2027" }
         };
 
-        private static readonly double[] ColumnWidths = { 14, 26, 24, 10, 14, 30, 26, 12, 14, 30 };
+        private static readonly double[] ColumnWidths = { 14, 26, 24, 10, 14, 30, 26, 12, 14, 14 };
         private const int ValidationRows = 5000;
 
         // Cell style indexes in styles.xml (cellXfs)
@@ -131,7 +131,7 @@ namespace NPIC_CARD_APP.Services
             sb.Append("</row></sheetData>");
 
             // Gender drop-down (typing something else is still allowed: no error message).
-            int genderCol = IndexOf("Gender");
+            int genderCol = IndexOf(StudentColumns.Gender);
             string range = ColumnLetter(genderCol) + "2:" + ColumnLetter(genderCol) + ValidationRows;
             sb.Append("<dataValidations count=\"1\">")
               .Append("<dataValidation type=\"list\" allowBlank=\"1\" showInputMessage=\"1\" sqref=\"").Append(range).Append("\">")

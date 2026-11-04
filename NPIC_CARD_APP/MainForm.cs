@@ -2016,8 +2016,8 @@ namespace NPIC_CARD_APP
                 {
                     AutoSize = true, MaximumSize = new Size(410, 0), ForeColor = TextMuted, Font = CaptionFont,
                     Margin = new Padding(0, 8, 0, 0),
-                    Text = "The API must return a JSON list of students (or CSV) using the CSV column names: StudentId, " +
-                           "NameKh, NameEn, Gender, DateOfBirth, Faculty, Level, Generation, ValidUntil, QrData.\n" +
+                    Text = "The API must return a JSON list of students (or CSV) using the CSV column names: student_id, " +
+                           "name_kh, name_en, gender, dob, faculty, degree, gen_no, start_date, end_date.\n" +
                            "The token is sent as “Authorization: Bearer …”. Type “Header-Name: value” to use another header."
                 };
                 var lblBusy = new Label { AutoSize = true, ForeColor = TextMuted, Margin = new Padding(0, 10, 0, 0) };

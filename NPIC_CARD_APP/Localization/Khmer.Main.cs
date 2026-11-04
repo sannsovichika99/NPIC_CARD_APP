@@ -280,7 +280,7 @@ namespace NPIC_CARD_APP
             A("Level", "កម្រិត");
             A("Gen.", "ជំនាន់");
             A("Valid until", "សុពលភាពដល់");
-            A("QR data", "ទិន្នន័យ QR");
+            A("Start date", "ថ្ងៃចាប់ផ្ដើម");
 
             // ---- Card preview ----
             A("Card preview", "មើលកាតជាមុន");
@@ -407,10 +407,10 @@ namespace NPIC_CARD_APP
             A("Show token", "បង្ហាញ token");
             A("Remember token on this PC (encrypted for this Windows user)",
                 "ចងចាំ token លើកុំព្យូទ័រនេះ (អ៊ិនគ្រីបសម្រាប់អ្នកប្រើ Windows នេះ)");
-            A("The API must return a JSON list of students (or CSV) using the CSV column names: StudentId, NameKh, NameEn, Gender, " +
-              "DateOfBirth, Faculty, Level, Generation, ValidUntil, QrData.",
-                "API ត្រូវផ្ដល់បញ្ជីនិស្សិតជា JSON (ឬ CSV) ដោយប្រើឈ្មោះជួរឈរ CSV៖ StudentId, NameKh, NameEn, Gender, " +
-                "DateOfBirth, Faculty, Level, Generation, ValidUntil, QrData។");
+            A("The API must return a JSON list of students (or CSV) using the CSV column names: student_id, name_kh, name_en, gender, " +
+              "dob, faculty, degree, gen_no, start_date, end_date.",
+                "API ត្រូវផ្ដល់បញ្ជីនិស្សិតជា JSON (ឬ CSV) ដោយប្រើឈ្មោះជួរឈរ CSV៖ student_id, name_kh, name_en, gender, " +
+                "dob, faculty, degree, gen_no, start_date, end_date។");
             A("The token is sent as “Authorization: Bearer …”. Type “Header-Name: value” to use another header.",
                 "Token ត្រូវបានផ្ញើជា “Authorization: Bearer …”។ វាយ “Header-Name: value” ដើម្បីប្រើ header ផ្សេង។");
             A("API address", "អាសយដ្ឋាន API");

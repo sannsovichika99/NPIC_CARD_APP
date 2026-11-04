@@ -676,8 +676,8 @@ namespace NPIC_CARD_APP
             AddField("Faculty", s.Faculty);
             AddField("Level", s.Level);
             AddField("Generation", s.Generation);
+            AddField("Start date", s.StartDate);
             AddField("Valid until", s.ValidUntil);
-            if (!string.IsNullOrEmpty(s.QrData)) AddField("QR data", s.QrData);
             AddField("Photo", photo == null ? Lang.F("Missing — expected {0}.jpg / .png", s.StudentId) : Path.GetFileName(photo),
                 photo == null ? Danger : TextMain);
 

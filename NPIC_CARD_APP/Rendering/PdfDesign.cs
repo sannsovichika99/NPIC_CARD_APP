@@ -602,7 +602,8 @@ namespace NPIC_CARD_APP.Rendering
 
     /// <summary>
     /// Data fields in PDF Designer text and table cells, filled from one record of the imported list:
-    ///   {StudentId} {NameKh} {NameEn} {Gender} {DateOfBirth} {Faculty} {Level} {Generation} {ValidUntil}, any column
+    ///   {student_id} {name_kh} {name_en} {gender} {dob} {faculty} {degree} {gen_no} {start_date} {end_date} (the old names
+    ///   {StudentId} {NameKh} … {ValidUntil} work too), any column
     ///   header of the list ({Phone}), and {No} (record / row number), {Count} (records), {Date} (today), {Page} {Pages}.
     /// A format after a colon: {DateOfBirth:KhmerDate}, {StudentId:KhmerDigits}, {NameEn:Upper}, {Gender:KhmerGender}.
     /// A field that cannot be filled (no data chosen, a name the list does not have) stays as it was typed, so it shows.
@@ -613,8 +614,7 @@ namespace NPIC_CARD_APP.Rendering
             RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
         /// <summary>Fields every student list has (also the ones loaded from the API or SQL Server, which keep no columns).</summary>
-        public static readonly string[] StudentFields =
-            { "StudentId", "NameKh", "NameEn", "Gender", "DateOfBirth", "Faculty", "Level", "Generation", "ValidUntil" };
+        public static readonly string[] StudentFields = StudentColumns.All;
 
         /// <summary>Fields that do not come from the list.</summary>
         public static readonly string[] SpecialFields = { "No", "Count", "Date", "Page", "Pages" };
@@ -681,21 +681,21 @@ namespace NPIC_CARD_APP.Rendering
             return Record == null ? null : FieldOf(Record, name);
         }
 
-        /// <summary>A field of a record: a student field, else a column of the list; null when it has neither.</summary>
+        /// <summary>A field of a record: a student field (new or old name), else a column of the list; null when it has neither.</summary>
         public static string FieldOf(Student s, string name)
         {
-            switch ((name ?? "").Trim().ToLowerInvariant())
+            switch (StudentColumns.Find(name))
             {
-                case "studentid": return s.StudentId ?? "";
-                case "namekh": return s.NameKh ?? "";
-                case "nameen": return s.NameEn ?? "";
-                case "gender": return s.Gender ?? "";
-                case "dateofbirth": return s.DateOfBirth ?? "";
-                case "faculty": return s.Faculty ?? "";
-                case "level": return s.Level ?? "";
-                case "generation": return s.Generation ?? "";
-                case "validuntil": return s.ValidUntil ?? "";
-                case "qrdata": return s.QrData ?? "";
+                case StudentColumns.StudentId: return s.StudentId ?? "";
+                case StudentColumns.NameKh: return s.NameKh ?? "";
+                case StudentColumns.NameEn: return s.NameEn ?? "";
+                case StudentColumns.Gender: return s.Gender ?? "";
+                case StudentColumns.DateOfBirth: return s.DateOfBirth ?? "";
+                case StudentColumns.Faculty: return s.Faculty ?? "";
+                case StudentColumns.Degree: return s.Level ?? "";
+                case StudentColumns.Generation: return s.Generation ?? "";
+                case StudentColumns.StartDate: return s.StartDate ?? "";
+                case StudentColumns.EndDate: return s.ValidUntil ?? "";
             }
             string value;
             return s.Columns.TryGetValue((name ?? "").Trim(), out value) ? value ?? "" : null;

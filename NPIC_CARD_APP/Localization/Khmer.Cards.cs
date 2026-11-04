@@ -90,8 +90,8 @@ namespace NPIC_CARD_APP
                 "រូបហត្ថលេខាដែលបោះពុម្ពលើត្រា ផ្ទៃខាងក្រោយពណ៌សត្រូវបានលុបដោយស្វ័យប្រវត្តិ។ លំនាំដើម៖ Assets\\director_signature.png។ " +
                 "ចុច … ដើម្បីជ្រើស PNG/JPG ផ្សេង — វាត្រូវបានចម្លងចូលថតការកំណត់របស់កម្មវិធី។ លុបអត្ថបទចេញ ដើម្បីមិនបោះពុម្ពហត្ថលេខា។");
             A("QR template", "គំរូ QR");
-            A("Text in each student's QR code. Tokens: {StudentId} {NameEn} {NameKh}. The CSV column QrData overrides this.",
-                "អត្ថបទក្នុងកូដ QR របស់និស្សិតម្នាក់ៗ។ សញ្ញាសម្គាល់៖ {StudentId} {NameEn} {NameKh}។ ជួរឈរ CSV QrData មានអាទិភាពជាងនេះ។");
+            A("Text in each student's QR code. Tokens: {StudentId} {NameEn} {NameKh}.",
+                "អត្ថបទក្នុងកូដ QR របស់និស្សិតម្នាក់ៗ។ សញ្ញាសម្គាល់៖ {StudentId} {NameEn} {NameKh}។");
             A("Address", "អាសយដ្ឋាន");
             A("Email", "អ៊ីមែល");
             A("Website", "គេហទំព័រ");

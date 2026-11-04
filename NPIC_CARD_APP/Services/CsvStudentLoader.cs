@@ -8,12 +8,13 @@ namespace NPIC_CARD_APP.Services
 {
     /// <summary>
     /// Reads students from a UTF-8 CSV file (Excel: Save As > "CSV UTF-8").
-    /// Header: StudentId,NameKh,NameEn,Gender,DateOfBirth,Faculty,Level,Generation,ValidUntil,QrData
+    /// Header: student_id,name_kh,name_en,gender,dob,faculty,degree,gen_no,start_date,end_date
+    /// (the old names StudentId, NameKh, … ValidUntil are still accepted, see <see cref="StudentColumns"/>).
     /// </summary>
     public static class CsvStudentLoader
     {
         /// <summary>Header row of a new, empty student CSV (same columns and order as the Excel template).</summary>
-        public const string Header = "StudentId,NameKh,NameEn,Gender,DateOfBirth,Faculty,Level,Generation,ValidUntil,QrData";
+        public static readonly string Header = StudentColumns.Header;
 
         /// <summary><paramref name="requireStudentId"/> false: any table is read (PDF Designer data), every column kept.</summary>
         public static List<Student> Load(string path, bool requireStudentId = true)
@@ -49,30 +50,31 @@ namespace NPIC_CARD_APP.Services
             var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < header.Count; i++)
             {
-                string name = (header[i] ?? "").Trim().TrimStart('﻿');
+                // A student column is keyed by its current name (old "StudentId" → "student_id"); others as typed.
+                string name = StudentColumns.Canonical(header[i]);
                 if (name.Length > 0 && !map.ContainsKey(name)) map[name] = i;
             }
 
-            if (requireStudentId && !map.ContainsKey("StudentId"))
-                throw new InvalidDataException(headerName + " must contain a 'StudentId' column.");
+            if (requireStudentId && !map.ContainsKey(StudentColumns.StudentId))
+                throw new InvalidDataException(headerName + " must contain a 'student_id' column.");
 
             for (int r = headerRow + 1; r < rows.Count; r++)
             {
                 List<string> cells = rows[r];
                 if (IsBlank(cells)) continue;
-                string faculty = Get(cells, map, "Faculty");
+                string faculty = Get(cells, map, StudentColumns.Faculty);
                 var student = new Student
                 {
-                    StudentId = Get(cells, map, "StudentId"),
-                    NameKh = Get(cells, map, "NameKh"),
-                    NameEn = Get(cells, map, "NameEn"),
-                    Gender = Get(cells, map, "Gender"),
-                    DateOfBirth = Get(cells, map, "DateOfBirth"),
+                    StudentId = Get(cells, map, StudentColumns.StudentId),
+                    NameKh = Get(cells, map, StudentColumns.NameKh),
+                    NameEn = Get(cells, map, StudentColumns.NameEn),
+                    Gender = Get(cells, map, StudentColumns.Gender),
+                    DateOfBirth = Get(cells, map, StudentColumns.DateOfBirth),
                     Faculty = faculty != "" ? faculty : Get(cells, map, "Department"),
-                    Level = Get(cells, map, "Level"),
-                    Generation = Get(cells, map, "Generation"),
-                    ValidUntil = Get(cells, map, "ValidUntil"),
-                    QrData = Get(cells, map, "QrData")
+                    Level = Get(cells, map, StudentColumns.Degree),
+                    Generation = Get(cells, map, StudentColumns.Generation),
+                    StartDate = Get(cells, map, StudentColumns.StartDate),
+                    ValidUntil = Get(cells, map, StudentColumns.EndDate)
                 };
                 // Keep every column, so Card Designer custom fields can print columns the app does not know.
                 foreach (KeyValuePair<string, int> col in map)

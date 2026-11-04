@@ -81,7 +81,7 @@ namespace NPIC_CARD_APP.Rendering
 
     public enum CardQrContent
     {
-        /// <summary>The student's QR (QR template in Card Text, or the QrData column).</summary>
+        /// <summary>The student's QR (QR template in Card Text).</summary>
         StudentQr,
         /// <summary>The back QR from Card Text (generated link with logo, or the fixed picture).</summary>
         BackQr,

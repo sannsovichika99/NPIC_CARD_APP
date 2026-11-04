@@ -59,7 +59,7 @@ namespace NPIC_CARD_APP
                 "Load students from an Excel workbook (.xlsx, .xlsm or .xls). Use the Excel Template to get the right columns.");
             grid.Controls.Add(_first, 0, 0);
             grid.Controls.Add(Card(ImportSource.Csv, "From CSV…", Theme.IcoDocument, "Ctrl+O",
-                "Load students from a UTF-8 CSV file with the columns StudentId, NameKh, NameEn, Gender, DateOfBirth…"), 1, 0);
+                "Load students from a UTF-8 CSV file with the columns student_id, name_kh, name_en, gender, dob…"), 1, 0);
             grid.Controls.Add(Card(ImportSource.Api, "From API…", Theme.IcoGlobe, "Ctrl+I",
                 "Download the students from the school's web API (JSON or CSV), with an optional access token."), 0, 1);
             grid.Controls.Add(Card(ImportSource.SqlServer, "SQL Server…", Theme.IcoDatabase, "Ctrl+D",

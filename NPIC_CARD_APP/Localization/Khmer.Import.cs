@@ -16,8 +16,8 @@ namespace NPIC_CARD_APP
             A("Load students from an Excel workbook (.xlsx, .xlsm or .xls). Use the Excel Template to get the right columns.",
                 "ផ្ទុកនិស្សិតពីឯកសារ Excel (.xlsx, .xlsm ឬ .xls)។ ប្រើគំរូ Excel ដើម្បីមានជួរឈរត្រឹមត្រូវ។");
             A("From CSV…", "ពី CSV…");
-            A("Load students from a UTF-8 CSV file with the columns StudentId, NameKh, NameEn, Gender, DateOfBirth…",
-                "ផ្ទុកនិស្សិតពីឯកសារ CSV UTF-8 ដែលមានជួរឈរ StudentId, NameKh, NameEn, Gender, DateOfBirth…");
+            A("Load students from a UTF-8 CSV file with the columns student_id, name_kh, name_en, gender, dob…",
+                "ផ្ទុកនិស្សិតពីឯកសារ CSV UTF-8 ដែលមានជួរឈរ student_id, name_kh, name_en, gender, dob…");
             A("From API…", "ពី API…");
             A("Download the students from the school's web API (JSON or CSV), with an optional access token.",
                 "ទាញយកនិស្សិតពី web API របស់សាលា (JSON ឬ CSV) ជាមួយ token ចូលប្រើ (ស្រេចចិត្ត)។");
@@ -40,10 +40,10 @@ namespace NPIC_CARD_APP
             A("2.  Open the tab with the students and copy the browser's address bar.",
                 "2.  បើកផ្ទាំងដែលមាននិស្សិត ហើយចម្លងរបារអាសយដ្ឋានរបស់កម្មវិធីរុករក។");
             A("3.  Paste it above and click Connect.", "3.  បិទភ្ជាប់វានៅខាងលើ ហើយចុច ភ្ជាប់។");
-            A("Row 1 holds the column names: StudentId, NameKh, NameEn, Gender, DateOfBirth, Faculty,",
-                "ជួរទី 1 មានឈ្មោះជួរឈរ៖ StudentId, NameKh, NameEn, Gender, DateOfBirth, Faculty,");
-            A("Level, Generation, ValidUntil, QrData — the same as the Excel template. The app only reads the sheet.",
-                "Level, Generation, ValidUntil, QrData — ដូចគំរូ Excel។ កម្មវិធីគ្រាន់តែអានសន្លឹកប៉ុណ្ណោះ។");
+            A("Row 1 holds the column names: student_id, name_kh, name_en, gender, dob, faculty,",
+                "ជួរទី 1 មានឈ្មោះជួរឈរ៖ student_id, name_kh, name_en, gender, dob, faculty,");
+            A("degree, gen_no, start_date, end_date — the same as the Excel template. The app only reads the sheet.",
+                "degree, gen_no, start_date, end_date — ដូចគំរូ Excel។ កម្មវិធីគ្រាន់តែអានសន្លឹកប៉ុណ្ណោះ។");
             A("Paste the sheet link: https://docs.google.com/spreadsheets/d/…/edit#gid=0",
                 "បិទភ្ជាប់តំណសន្លឹក៖ https://docs.google.com/spreadsheets/d/…/edit#gid=0");
             A("Connect (F5)", "ភ្ជាប់ (F5)");
@@ -57,7 +57,7 @@ namespace NPIC_CARD_APP
                 "ជំនួសបញ្ជីនិស្សិតនៃផ្ទាំងមេ ដោយនិស្សិតដែលបង្ហាញនៅទីនេះ");
             A("Not connected.", "មិនទាន់ភ្ជាប់។");
             A("Cancelled.", "បានបោះបង់។");
-            A("The sheet has a StudentId column but no students yet.", "សន្លឹកមានជួរឈរ StudentId ប៉ុន្តែមិនទាន់មាននិស្សិតទេ។");
+            A("The sheet has a student_id column but no students yet.", "សន្លឹកមានជួរឈរ student_id ប៉ុន្តែមិនទាន់មាននិស្សិតទេ។");
             A("Add them in Google Sheets, then click Connect again.", "បន្ថែមពួកគេក្នុង Google Sheets រួចចុច ភ្ជាប់ ម្ដងទៀត។");
             A("{0} without StudentId (red)", "{0} គ្មាន StudentId (ក្រហម)");
             A("{0} duplicate StudentId", "{0} StudentId ស្ទួន");
@@ -83,11 +83,11 @@ namespace NPIC_CARD_APP
             A("Remember password (encrypted for this Windows user)", "ចងចាំពាក្យសម្ងាត់ (អ៊ិនគ្រីបសម្រាប់អ្នកប្រើ Windows នេះ)");
             A("Encrypt connection", "អ៊ិនគ្រីបការតភ្ជាប់");
             A("Trust server certificate", "ទុកចិត្តវិញ្ញាបនបត្រម៉ាស៊ីនមេ");
-            A("Type a table name (dbo.Students) or one SELECT query. Columns use the CSV names: StudentId, NameKh, NameEn, " +
-              "Gender, DateOfBirth, Faculty, Level, Generation, ValidUntil, QrData — rename others with AS. " +
+            A("Type a table name (dbo.Students) or one SELECT query. Columns use the CSV names: student_id, name_kh, name_en, " +
+              "gender, dob, faculty, degree, gen_no, start_date, end_date — rename others with AS. " +
               "The app only reads; it never changes the database.",
-                "វាយឈ្មោះតារាង (dbo.Students) ឬសំណួរ SELECT មួយ។ ជួរឈរប្រើឈ្មោះ CSV៖ StudentId, NameKh, NameEn, " +
-                "Gender, DateOfBirth, Faculty, Level, Generation, ValidUntil, QrData — ប្ដូរឈ្មោះផ្សេងទៀតដោយ AS។ " +
+                "វាយឈ្មោះតារាង (dbo.Students) ឬសំណួរ SELECT មួយ។ ជួរឈរប្រើឈ្មោះ CSV៖ student_id, name_kh, name_en, " +
+                "gender, dob, faculty, degree, gen_no, start_date, end_date — ប្ដូរឈ្មោះផ្សេងទៀតដោយ AS។ " +
                 "កម្មវិធីគ្រាន់តែអាន វាមិនដែលផ្លាស់ប្ដូរមូលដ្ឋានទិន្នន័យទេ។");
             A("Server", "ម៉ាស៊ីនមេ");
             A("Database", "មូលដ្ឋានទិន្នន័យ");
@@ -158,7 +158,7 @@ namespace NPIC_CARD_APP
             A("Preview — {0} is empty", "មើលជាមុន — {0} ទទេ");
             A("Preview — {0}", "មើលជាមុន — {0}");
             A("first {0} of {1} rows", "{0} ជួរដំបូង ក្នុងចំណោម {1}");
-            A("  ·  no StudentId column", "  ·  គ្មានជួរឈរ StudentId");
+            A("  ·  no student_id column", "  ·  គ្មានជួរឈរ student_id");
             A("(no name)", "(គ្មានឈ្មោះ)");
             A("No StudentId: this card has no photo or ID", "គ្មាន StudentId៖ កាតនេះគ្មានរូបថត ឬអត្តលេខទេ");
             A("This StudentId appears more than once", "StudentId នេះលេចឡើងច្រើនជាងម្ដង");
@@ -196,7 +196,7 @@ namespace NPIC_CARD_APP
             A("In use by another program, or unreadable ({0})", "កំពុងប្រើដោយកម្មវិធីផ្សេង ឬមិនអាចអានបាន ({0})");
             A("✖ Cannot read", "✖ មិនអាចអាន");
             A("Empty file", "ឯកសារទទេ");
-            A("✖ No StudentId column", "✖ គ្មានជួរឈរ StudentId");
+            A("✖ No student_id column", "✖ គ្មានជួរឈរ student_id");
             A("No students yet", "មិនទាន់មាននិស្សិត");
             A("{0} without ID", "{0} គ្មានអត្តលេខ");
             A("{0} duplicate ID", "{0} អត្តលេខស្ទួន");
@@ -204,8 +204,8 @@ namespace NPIC_CARD_APP
             A("✔ Ready", "✔ រួចរាល់");
             A("Cannot read the file: {0}", "មិនអាចអានឯកសារបានទេ៖ {0}");
             A("The file is empty. Click Edit to add the header row: {0}", "ឯកសារទទេ។ ចុច កែ ដើម្បីបន្ថែមជួរក្បាល៖ {0}");
-            A("The first row has no 'StudentId' column, so the students cannot be loaded. Click Edit to fix the header.",
-                "ជួរទីមួយគ្មានជួរឈរ 'StudentId' ដូច្នេះមិនអាចផ្ទុកនិស្សិតបានទេ។ ចុច កែ ដើម្បីកែជួរក្បាល។");
+            A("The first row has no 'student_id' column, so the students cannot be loaded. Click Edit to fix the header.",
+                "ជួរទីមួយគ្មានជួរឈរ 'student_id' ដូច្នេះមិនអាចផ្ទុកនិស្សិតបានទេ។ ចុច កែ ដើម្បីកែជួរក្បាល។");
             A("Only the header row is there. Click Edit to add students (one per row).",
                 "មានតែជួរក្បាលប៉ុណ្ណោះ។ ចុច កែ ដើម្បីបន្ថែមនិស្សិត (ម្នាក់ក្នុងមួយជួរ)។");
             A("{0} without a StudentId (highlighted in the preview)", "{0} គ្មាន StudentId (បានរំលេចក្នុងការមើលជាមុន)");
