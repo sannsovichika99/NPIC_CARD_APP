@@ -1,3 +1,67 @@
+### v1.0.1.2
+
+Release date: 2026-11-04
+
+This version lets the administrator see and manage every Card Studio PC on the network with Card Studio Admin, and gives the student list new column names: student_id, name_kh, name_en, gender, dob, faculty, degree, gen_no, start_date, end_date.
+
+## Feature
+* Card Studio Admin link: while Card Studio is open, the administrator's tool (ADMIN_CARD) can find this PC on the local network and show its status
+* The status holds the computer name, user, Windows version, Card Studio version, license, Machine ID, students loaded, printer, connected phones, cards printed today and in total, the last print and the PC's clock
+* The status never holds the pairing code, the serial or any student data, only counts
+* Busy: when a window is open on the PC or a card is printing, the administrator sees the PC as Busy, with the reason
+* Message from the administrator: shown in a box and kept under the bell. If a window is open on the PC, it goes only to the bell
+* Check for Updates from the administrator: opens Check for Updates on the PC. If the PC is busy, the status bar asks the user to press Ctrl+U
+* Install Serial from the administrator: a new serial (license) is saved on the PC, and the title and status bar show the new expiry at once ("License renewed")
+* Disconnect Phones from the administrator: makes a new mobile pairing code, so every phone must scan the QR code again. Refused while the Mobile App page is open on the PC
+* Each of these shows a notice under the bell. Clicking it opens Check for Updates, License… or the Mobile App page
+* Only commands signed with the administrator's key are answered. Anything else gets no reply, so nobody else on the network can see that Card Studio runs there
+* A command is refused if its time is more than 10 minutes away from the PC's clock, and each command runs only once
+* The setup adds the Windows Firewall rule "Card Studio Admin" (UDP 8766, private and domain networks only), and uninstall removes it
+* Student list: new column start_date (the first day the card is valid). It is in the Excel template, the sample CSV, the Student Gallery details, the phone app and the PDF Designer ({start_date})
+* Khmer translations for all of the above
+
+## Change
+* Student list columns are renamed: StudentId → student_id, NameKh → name_kh, NameEn → name_en, Gender → gender, DateOfBirth → dob, Faculty → faculty, Level → degree, Generation → gen_no, ValidUntil → end_date
+* Lists with the old names still load, from Excel, CSV, Google Sheets, web API and SQL Server. Case, "_", "-" and spaces are ignored, so "Student ID" and "studentId" both mean student_id
+* Save Excel Template…, New CSV, the CSV Files checks, the import pages, the SQL example query and the user guide (F1) use the new names
+* PDF Designer data fields use the new names ({student_id}, {name_kh}, {dob}, {end_date}…). Designs made with {StudentId}, {NameKh}, … {ValidUntil} keep working
+* The QrData column is removed. The student QR code now always comes from the QR text in Card Text
+* The phone app no longer finds a student by their QrData text. A scan of the student ID, or of a link that contains it, still works
+* Machine IDs are worked out by shared code, so Card Studio Admin shows the same Machine ID for a PC it installs Card Studio on
+
+## Admin tool
+* New Card Studio Admin (ADMIN_CARD): the administrator's tool for every PC that runs Card Studio. It is for the administrator only and is not part of the setup
+* It finds the PCs by itself and lists them as Online, Busy or Offline, with version, license, phones and cards printed today. Offline PCs stay listed
+* Tiles show PCs online, phones connected, cards printed today and PCs that need attention. The bell lists new PCs, PCs gone offline, licenses that need attention and the result of each command
+* Commands on the selected PCs: Message…, Check for Updates, Install Serial… (checked against that PC's Machine ID first) and Disconnect Phones
+* Versions… (Ctrl+Shift+V): every release from this file, how many PCs run each one, and Update All Older PCs
+* Network Devices… (Ctrl+Shift+D): scans the network for Windows PCs, and Install Card Studio… installs the setup on them silently, reads their Machine IDs and saves their serials
+* Save Preparation Script… makes a script that prepares PCs without a domain for remote install (private and domain networks only)
+* PCs behind a router can be added with Addresses… (an address, a range, a network or a computer name). Export CSV… saves the list for Excel
+* Commands are signed with Installer\admin-private.key (not in Git). Keep a backup: without it, a new key and a new Card Studio build are needed
+
+## Known issue
+* Card Studio Admin only sees PCs that run v1.0.1.2 or later, and only while Card Studio is open there
+* A PC that got Card Studio without the setup has no "Card Studio Admin" firewall rule. Add it by hand (see ADMIN_CARD\README.md)
+* If two Windows users run Card Studio on the same PC at the same time, only the first one can be seen by Card Studio Admin
+* A student list with a QrData column still loads, but that column no longer sets the QR code. It is kept as an extra column, like Phone
+* The ADMIN_CARD Versions page shows the release notes it was built with. Rebuild ADMIN_CARD after each change to this file
+* Print Selected sends only 1 or 2 students at a time. For a large batch, pick the next two after each tray load
+* Print Back does not add anything to the print history, because the cards belong to no student yet
+* The Mobile App link uses plain HTTP (not encrypted). Use it only on a trusted private Wi-Fi, and show the QR code only to staff
+* After an RFID card is saved, that student is gone from the list until the next start. To reprint a card first, reload the list with Import Students… (Ctrl+L). Print both sides before saving RFID numbers
+* PCs that never chose a CSV folder now see the new, empty default CSV folder in CSV Files…, not the folder of their student file. Click Change Folder… to pick it again
+* Cards printed in Classic before and after v1.0.0.8 look slightly different
+* Export video needs Windows Media Foundation. Windows N / KN editions need the Media Feature Pack first
+* Notifications are kept only until Card Studio is closed
+* The user guide (F1) does not explain Card Template…, Card Designer…, Backup & Restore…, Preview & PDF…, PDF Designer…, Mobile App… or the administrator's commands yet, and notifications only appear in the shortcut list
+* The user guide (F1 → Printing) still says to select students in the list with Ctrl+click or Shift+click, which no longer works
+* The user guide (F1) does not mention that a student leaves the list after the RFID card is saved
+* The user guide (F1 → Overview) still lists driver setup as a sidebar command
+* Help still lists .xls files, but import only accepts .xlsx / .xlsm
+
+---
+
 ### v1.0.1.1
 
 Release date: 2026-10-29
