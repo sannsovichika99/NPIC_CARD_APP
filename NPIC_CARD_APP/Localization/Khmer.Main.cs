@@ -231,6 +231,10 @@ namespace NPIC_CARD_APP
             A("from {0}", "ពី {0}");
             A("in the list", "ក្នុងបញ្ជី");
             A("{0} tray load(s)  ·  {1} side", "ដាក់ថាស {0} ដង  ·  ផ្នែក{1}");
+            // Summary line under the greeting (replaces the stat tiles)
+            A("{0} selected  ·  {1} tray load(s)  ·  {2} side", "បានជ្រើស {0}  ·  ដាក់ថាស {1} ដង  ·  ផ្នែក{2}");
+            A("Nothing selected", "មិនទាន់ជ្រើស");
+            A("{0} printed today", "បោះពុម្ព {0} ថ្ងៃនេះ");
 
             // ---- Student search (on the card preview) and Student card ----
             A("Search a student by ID, name or faculty…   (Ctrl+F)", "ស្វែងរកនិស្សិតតាមអត្តលេខ ឈ្មោះ ឬមហាវិទ្យាល័យ…   (Ctrl+F)");

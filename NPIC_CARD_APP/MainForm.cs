@@ -89,7 +89,7 @@ namespace NPIC_CARD_APP
         private PillTabs _sideTabs;
         private Label _lblPage, _lblStatus, _lblStatusDot;
         private Label _lblPhone;                              // "● Phone connected: …" at the right of the status bar
-        private StatCard _statStudents, _statSelected, _statPrinted;
+        private Label _sumStudents, _sumSelected, _sumPrinted;   // summary line under the greeting
         private TableLayoutPanel _dashboard;
         private bool _refreshOnActivate;   // photo folder opened in Explorer: re-read photos when the user comes back
 
@@ -163,18 +163,13 @@ namespace NPIC_CARD_APP
             UpdateSideHighlight();
         }
 
-        /// <summary>Short windows (laptops at 125 % scaling) get a lower header and slimmer stat tiles.</summary>
+        /// <summary>Short windows (laptops at 125 % scaling) get a lower header.</summary>
         protected override void OnResize(EventArgs e)
         {
             base.OnResize(e);
             if (_dashboard == null || WindowState == FormWindowState.Minimized) return;
-            bool compact = ClientSize.Height < 760;
-            float header = compact ? 58f : 66f, stats = compact ? 100f : 126f;
-            if (_dashboard.RowStyles[1].Height != stats)
-            {
-                _dashboard.RowStyles[0].Height = header;
-                _dashboard.RowStyles[1].Height = stats;
-            }
+            float header = ClientSize.Height < 760 ? 58f : 66f;
+            if (_dashboard.RowStyles[0].Height != header) _dashboard.RowStyles[0].Height = header;
         }
 
         protected override void OnActivated(EventArgs e)
@@ -211,7 +206,7 @@ namespace NPIC_CARD_APP
         // ===================== UI =====================
         //  ┌──────────┬───────────────────────────────────────────────────────────┐
         //  │ brand    │ Good afternoon, …   bell [EN ▾]  [Front|Back]  Print      │
-        //  │ nav      │ [ Students ]   [ Selected ]   [ Printed today ]           │
+        //  │ nav      │ 120 students · 2 selected · 1 tray load · 5 printed today │
         //  │  …       │ ┌ Card preview ─────────────┐  ┌ Student ──────────────┐  │
         //  │          │ │ search + matches  ◀ ▶     │  │ details of the pick   │  │
         //  │          │ │ front | back              │  ├ Print setup [Printer|…┤  │
@@ -472,26 +467,27 @@ namespace NPIC_CARD_APP
             return new Panel { Height = height, BackColor = Surface };
         }
 
-        /// <summary>Content area: greeting row, stat tiles, students + preview/printer cards, status line.</summary>
+        /// <summary>
+        /// Content area: greeting row (with the one-line summary), preview | student + print setup cards, status line.
+        /// The cards get all the height between the header and the status line.
+        /// </summary>
         private Control BuildDashboard()
         {
             var grid = _dashboard = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, BackColor = Color.Transparent, Margin = new Padding(0)
+                Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, BackColor = Color.Transparent, Margin = new Padding(0)
             };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 66f));    // greeting + print actions
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 126f));   // stat tiles
-            grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));    // students | preview + printer
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 66f));    // greeting + summary | print actions
+            grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));    // preview | student + printer
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 26f));    // status line
             grid.Controls.Add(BuildHeader(), 0, 0);
-            grid.Controls.Add(BuildStats(), 0, 1);
-            grid.Controls.Add(BuildBody(), 0, 2);
-            grid.Controls.Add(BuildStatusBar(), 0, 3);
+            grid.Controls.Add(BuildBody(), 0, 1);
+            grid.Controls.Add(BuildStatusBar(), 0, 2);
             return grid;
         }
 
-        /// <summary>"Good afternoon, …" on the left; print side pills and the print buttons on the right.</summary>
+        /// <summary>"Good afternoon, …" and the summary line on the left; print side pills and the print buttons on the right.</summary>
         private Control BuildHeader()
         {
             var header = new TableLayoutPanel
@@ -513,11 +509,7 @@ namespace NPIC_CARD_APP
                 Text = Greeting(), Font = Theme.Greeting, ForeColor = TextMain, AutoSize = true,
                 BackColor = Color.Transparent, Margin = new Padding(0)
             });
-            titles.Controls.Add(new Label
-            {
-                Text = "Find a student, check the card, then print.", Font = Theme.Small,
-                ForeColor = TextMuted, AutoSize = true, BackColor = Color.Transparent, Margin = new Padding(3, 0, 0, 0)
-            });
+            titles.Controls.Add(BuildSummary());
 
             _sideTabs = new PillTabs("Front", "Back") { Margin = new Padding(0, 6, 4, 0) };
             _tip.SetTip(_sideTabs, "Side of the card that Print Selected sends to the printer");
@@ -568,31 +560,52 @@ namespace NPIC_CARD_APP
             return part + ", " + char.ToUpperInvariant(user[0]) + user.Substring(1);
         }
 
-        /// <summary>Three gradient tiles: students loaded, selected for printing, printed today.</summary>
-        private Control BuildStats()
+        /// <summary>
+        /// One line under the greeting instead of stat tiles: "120 students  ·  2 selected · 1 tray load · front side  ·
+        /// 5 printed today". The students part opens the gallery, the printed part the print history.
+        /// </summary>
+        private Control BuildSummary()
         {
-            var row = new TableLayoutPanel
+            var row = new FlowLayoutPanel
             {
-                Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, BackColor = Color.Transparent, Margin = new Padding(0)
+                AutoSize = true, WrapContents = false, BackColor = Color.Transparent, Margin = new Padding(3, 1, 0, 0)
             };
-            for (int i = 0; i < 3; i++) row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333f));
-            row.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-
-            _statStudents = new StatCard("Total students", Theme.IcoPeople, Theme.VioletA, Theme.VioletB) { Caption = "No list loaded" };
-            _statSelected = new StatCard("Selected to print", Theme.IcoMultiSelect, Theme.CoralA, Theme.CoralB) { Caption = "Search for a student" };
-            _statPrinted = new StatCard("Printed today", Theme.IcoPrint, Theme.PinkA, Theme.PinkB);
-
-            _statStudents.Cursor = Cursors.Hand;
-            _statStudents.Click += (s, e) => ShowGallery();
-            _tip.SetTip(_statStudents, "Open the student gallery (Ctrl+G)");
-            _statPrinted.Cursor = Cursors.Hand;
-            _statPrinted.Click += (s, e) => ShowPrintHistory();
-            _tip.SetTip(_statPrinted, "Open the print history (Ctrl+H)");
-
-            row.Controls.Add(_statStudents, 0, 0);
-            row.Controls.Add(_statSelected, 1, 0);
-            row.Controls.Add(_statPrinted, 2, 0);
+            _sumStudents = SummaryPart(row, "No list loaded", (s, e) => ShowGallery());
+            SummaryDot(row);
+            _sumSelected = SummaryPart(row, "Nothing selected", null);
+            SummaryDot(row);
+            _sumPrinted = SummaryPart(row, "Nothing printed yet", (s, e) => ShowPrintHistory());
+            _tip.SetTip(_sumStudents, "Open the student gallery (Ctrl+G)");
+            _tip.SetTip(_sumPrinted, "Open the print history (Ctrl+H)");
             return row;
+        }
+
+        /// <summary>A part of the summary line; with <paramref name="click"/> it turns violet under the mouse, like a link.</summary>
+        private static Label SummaryPart(FlowLayoutPanel row, string text, EventHandler click)
+        {
+            var part = new Label
+            {
+                Text = text, AutoSize = true, Font = Theme.Small, ForeColor = TextMuted, BackColor = Color.Transparent,
+                UseMnemonic = false, Margin = new Padding(0)
+            };
+            if (click != null)
+            {
+                part.Cursor = Cursors.Hand;
+                part.Click += click;
+                part.MouseEnter += (s, e) => part.ForeColor = Accent;
+                part.MouseLeave += (s, e) => part.ForeColor = TextMuted;
+            }
+            row.Controls.Add(part);
+            return part;
+        }
+
+        private static void SummaryDot(FlowLayoutPanel row)
+        {
+            row.Controls.Add(Lang.Keep(new Label
+            {
+                Text = "·", AutoSize = true, Font = Theme.Small, ForeColor = TextMuted, BackColor = Color.Transparent,
+                Margin = new Padding(6, 0, 6, 0)
+            }));
         }
 
         private Control BuildBody()
@@ -1437,8 +1450,9 @@ namespace NPIC_CARD_APP
             {
                 List<PrintRecord> all = PrintHistory.Load();
                 int today = all.Count(r => r.PrintedAt.Date == DateTime.Today);
-                _statPrinted.Value = today.ToString("N0");
-                _statPrinted.Caption = all.Count == 0 ? "Nothing printed yet" : all.Count.ToString("N0") + " card sides printed in total";
+                _sumPrinted.Text = all.Count == 0 ? "Nothing printed yet" : string.Format("{0} printed today", today.ToString("N0"));
+                _tip.SetTip(_sumPrinted, (all.Count == 0 ? "" : string.Format("{0} card sides printed in total", all.Count.ToString("N0")) + "\n") +
+                                         "Open the print history (Ctrl+H)");
                 _navHistory.Badge = today > 0 ? today.ToString() : null;
 
                 _lastPrinted = all.Where(r => !string.IsNullOrEmpty(r.StudentId))
@@ -1447,8 +1461,7 @@ namespace NPIC_CARD_APP
             }
             catch (Exception)
             {
-                _statPrinted.Value = "–";
-                _statPrinted.Caption = "Print history unavailable";
+                _sumPrinted.Text = "Print history unavailable";
             }
             UpdateRfidPanel();
             UpdateStudentInfo();   // "Printed" of the previewed student
@@ -1825,16 +1838,15 @@ namespace NPIC_CARD_APP
         private void UpdateCount()
         {
             if (_lblCount == null) return;
-            int selected = _selection.Count;
             // Short, so the Student card title keeps its room (matches and the selection show elsewhere)
             _lblCount.Text = string.Format("{0} students", _students.Count);
 
-            _statStudents.Value = _students.Count.ToString("N0");
-            _statStudents.Caption = _students.Count == 0 ? "No list loaded"
+            _sumStudents.Text = _students.Count == 0 ? "No list loaded" : string.Format("{0} students", _students.Count.ToString("N0"));
+            string detail = _students.Count == 0 ? ""
                 : _picked != null ? _view.Count.ToString("N0") + " chosen in the Gallery"
                 : _view.Count != _students.Count ? _view.Count.ToString("N0") + " match the search"
-                : _source.Length > 0 ? "from " + _source : "in the list";
-            _statSelected.Value = selected.ToString("N0");
+                : _source.Length > 0 ? "from " + _source : "";
+            _tip.SetTip(_sumStudents, (detail.Length > 0 ? detail + "\n" : "") + "Open the student gallery (Ctrl+G)");
             _navGallery.Badge = _students.Count > 0 ? _students.Count.ToString("N0") : null;
         }
 
@@ -1979,9 +1991,9 @@ namespace NPIC_CARD_APP
                     : TraySlotUse.Off;
             }
             _trayMap.SetSlots(rects, use);
-            _statSelected.Caption = count == 0
-                ? "Search for a student"
-                : string.Format("{0} tray load(s)  ·  {1} side", loads, PrintFront ? "front" : "back");
+            _sumSelected.Text = count == 0
+                ? "Nothing selected"
+                : string.Format("{0} selected  ·  {1} tray load(s)  ·  {2} side", count, loads, PrintFront ? "front" : "back");
             _tip.SetTip(_lblSlotHint, reason ?? "");
         }
 

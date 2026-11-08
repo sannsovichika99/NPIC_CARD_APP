@@ -590,10 +590,10 @@ namespace NPIC_CARD_APP
                        "ការរៀបចំ driver ថតរូបថត ការលុបផ្ទៃខាងក្រោយ អត្ថបទកាត ថតឯកសារ ការកំណត់ និងការណែនាំនេះ។"));
             w.Bullet(T("**Header** — **Print side** (Front / Back) and **Print Selected**.",
                        "**ផ្នែកខាងលើ** — **Print side** (Front / Back) និង **Print Selected**។"));
-            w.Bullet(T("**Tiles** — Total students (click: gallery), Selected to print (with the number of tray loads), " +
-                       "Printed today (click: print history).",
-                       "**ប្រអប់ស្ថិតិ** — Total students (ចុច៖ វិចិត្រសាល), Selected to print (ព្រមទាំងចំនួនថាស), " +
-                       "Printed today (ចុច៖ ប្រវត្តិបោះពុម្ព)។"));
+            w.Bullet(T("**Summary line** (under the greeting) — students loaded (click: gallery), students selected with the number " +
+                       "of tray loads and the side, and cards printed today (click: print history).",
+                       "**បន្ទាត់សង្ខេប** (ក្រោមពាក្យស្វាគមន៍) — និស្សិតដែលបានផ្ទុក (ចុច៖ វិចិត្រសាល), និស្សិតដែលបានជ្រើស ព្រមទាំងចំនួនថាស " +
+                       "និងផ្នែក ហើយនិងកាតដែលបានបោះពុម្ពថ្ងៃនេះ (ចុច៖ ប្រវត្តិបោះពុម្ព)។"));
             w.Bullet(T("**Students** — the search box and the list. Select one or more rows to preview and print them.",
                        "**Students** — ប្រអប់ស្វែងរក និងបញ្ជីនិស្សិត។ ជ្រើសរើសជួរមួយ ឬច្រើន ដើម្បីមើលជាមុន និងបោះពុម្ព។"));
             w.Bullet(T("**Card preview** — front and back of the selected student. The side that will print has a violet outline.",
@@ -816,9 +816,9 @@ namespace NPIC_CARD_APP
 
             w.Heading(T("Step by step", "មួយជំហានម្តងៗ"));
             w.Step(1, T("**Select the students** in the list. Use Ctrl+click or Shift+click to select several. " +
-                        "The **Selected to print** tile shows how many tray loads it will take.",
+                        "The summary line under the greeting shows how many tray loads it will take.",
                         "**ជ្រើសរើសនិស្សិត** ក្នុងបញ្ជី។ ប្រើ Ctrl+ចុច ឬ Shift+ចុច ដើម្បីជ្រើសរើសច្រើននាក់។ " +
-                        "ប្រអប់ **Selected to print** បង្ហាញថាត្រូវប្រើប៉ុន្មានថាស។"));
+                        "បន្ទាត់សង្ខេបក្រោមពាក្យស្វាគមន៍ បង្ហាញថាត្រូវប្រើប៉ុន្មានថាស។"));
             w.Step(2, T("**Choose the side**: **Front** or **Back** in the header, or click the preview of that side.",
                         "**ជ្រើសរើសផ្នែក**៖ **Front** ឬ **Back** នៅផ្នែកខាងលើ ឬចុចលើរូបមើលជាមុននៃផ្នែកនោះ។"));
             w.Step(3, T("Click **Print Selected** (Ctrl+P). The app checks the printer first and warns you about any problem.",
