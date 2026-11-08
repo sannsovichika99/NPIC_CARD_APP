@@ -34,7 +34,7 @@ namespace NPIC_CARD_APP
             }
         }
 
-        /// <summary>Transparent 512px logo for the sidebar badge, or null if the resource cannot be read.</summary>
+        /// <summary>Transparent 512px logo for the menu bar badge, or null if the resource cannot be read.</summary>
         public static Image Logo
         {
             get

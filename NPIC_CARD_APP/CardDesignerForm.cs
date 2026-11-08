@@ -1774,6 +1774,12 @@ namespace NPIC_CARD_APP
             return item;
         }
 
+        /// <summary>Renderer in the app's colours, for menus and the main window's menu bar.</summary>
+        public static ToolStripRenderer Renderer()
+        {
+            return new ToolStripProfessionalRenderer(new MenuColors()) { RoundedEdges = false };
+        }
+
         public static ToolStripLabel Header(string text)
         {
             return new ToolStripLabel(text) { Font = Theme.SmallCaps, ForeColor = Theme.TextMuted, Margin = new Padding(6, 6, 0, 2) };
@@ -1794,6 +1800,12 @@ namespace NPIC_CARD_APP
         private sealed class MenuColors : ProfessionalColorTable
         {
             public override Color ToolStripDropDownBackground { get { return Theme.Surface; } }
+            // Menu bar of the main window: flat, the menu that is open highlighted like a hovered item.
+            public override Color MenuStripGradientBegin { get { return Theme.Surface; } }
+            public override Color MenuStripGradientEnd { get { return Theme.Surface; } }
+            public override Color MenuItemPressedGradientBegin { get { return Theme.AccentSoft; } }
+            public override Color MenuItemPressedGradientMiddle { get { return Theme.AccentSoft; } }
+            public override Color MenuItemPressedGradientEnd { get { return Theme.AccentSoft; } }
             public override Color MenuBorder { get { return Theme.Border; } }
             public override Color MenuItemBorder { get { return Theme.AccentSoft; } }
             public override Color MenuItemSelected { get { return Theme.AccentSoft; } }

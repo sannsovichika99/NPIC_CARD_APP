@@ -98,16 +98,11 @@ namespace NPIC_CARD_APP
         /// again before the restart (closing the window normally saves the settings).
         /// </summary>
         private bool _settingsReplaced;
-        private NavItem _navGallery, _navHistory;
-
-        // Sidebar: full (icons + names) or compact (icons only); Ctrl+\ or the button at its bottom switches.
-        private const int SidebarFullWidth = 232, SidebarCompactWidth = 68;
-        private Panel _sidebar;
-        private BrandBlock _brand;
-        private NavItem _navToggle;
-        private readonly List<Label> _sections = new List<Label>();
-        private readonly List<KeyValuePair<NavItem, string>> _navTips = new List<KeyValuePair<NavItem, string>>();
-        private bool _sidebarCompact;
+        // Menu bar across the top of the window (Data | Card | App). Gallery and Print History show a count next to
+        // their shortcut: the number of students loaded and the card sides printed today.
+        private MenuStrip _menuBar;
+        private ToolStripMenuItem _miGallery, _miHistory;
+        private readonly List<Image> _menuIcons = new List<Image>();
 
         // Bell in the header: warnings, errors and finished jobs of this session (fed by SetStatus).
         private readonly NotificationCenter _notices = new NotificationCenter();
@@ -142,7 +137,6 @@ namespace NPIC_CARD_APP
             ForeColor = TextMain;
 
             BuildUi();
-            SetSidebarCompact(_settings.SidebarCollapsed, false);
             Lang.Apply(this);           // Khmer only: labels, buttons, columns and status text, also when they change later
             DarkControls.Apply(this);   // dark mode only; before the handles exist, so restyling recreates nothing
             SlimScroll.Apply(this);     // slim scroll bars on every grid, list and scrolling panel
@@ -204,15 +198,17 @@ namespace NPIC_CARD_APP
         }
 
         // ===================== UI =====================
-        //  ┌──────────┬───────────────────────────────────────────────────────────┐
-        //  │ brand    │ Good afternoon, …   bell [EN ▾]  [Front|Back]  Print      │
-        //  │ nav      │ 120 students · 2 selected · 1 tray load · 5 printed today │
-        //  │  …       │ ┌ Card preview ─────────────┐  ┌ Student ──────────────┐  │
-        //  │          │ │ search + matches  ◀ ▶     │  │ details of the pick   │  │
-        //  │          │ │ front | back              │  ├ Print setup [Printer|…┤  │
-        //  │          │ └───────────────────────────┘  └───────────────────────┘  │
-        //  │          │ ● status                                                  │
-        //  └──────────┴───────────────────────────────────────────────────────────┘
+        //  ┌──────────────────────────────────────────────────────────────────────┐
+        //  │ [logo] Card Studio   Data   Card   App                               │
+        //  ├──────────────────────────────────────────────────────────────────────┤
+        //  │ Good afternoon, …              bell [EN ▾]  [Front|Back]  Print      │
+        //  │ 120 students · 2 selected · 1 tray load · 5 printed today            │
+        //  │ ┌ Card preview ──────────────────┐  ┌ Student ───────────────────┐   │
+        //  │ │ search + matches  ◀ ▶          │  │ details of the pick        │   │
+        //  │ │ front | back                   │  ├ Print setup [Printer|…]────┤   │
+        //  │ └────────────────────────────────┘  └────────────────────────────┘   │
+        //  │ ● status                                                             │
+        //  └──────────────────────────────────────────────────────────────────────┘
         private void BuildUi()
         {
             SuspendLayout();
@@ -220,161 +216,174 @@ namespace NPIC_CARD_APP
             var content = new DecorPanel { Dock = DockStyle.Fill, Padding = new Padding(16, 8, 16, 4) };
             content.Controls.Add(BuildDashboard());
 
+            var divider = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = GridLine };
+
             // Docking runs in reverse add order: the fill control first, the edges last.
             Controls.Add(content);
-            Controls.Add(BuildSidebar());
+            Controls.Add(divider);
+            Controls.Add(BuildMenuBar());
 
             ResumeLayout(true);
         }
 
         /// <summary>
-        /// White sidebar: brand pinned at the top, then every command grouped like the sample's navigation (scrolls when
-        /// the window is short), and the icons-only / full switch pinned at the bottom.
+        /// Menu bar: the app logo and name, then every command grouped in three menus. The shortcuts shown next to the
+        /// commands are handled by <see cref="ProcessCmdKey"/>, so they work while the menus are closed too.
         /// </summary>
-        private Control BuildSidebar()
+        private MenuStrip BuildMenuBar()
         {
-            var side = new Panel { Dock = DockStyle.Left, Width = SidebarFullWidth, BackColor = Surface, Padding = new Padding(0, 0, 1, 0) };
-            side.Paint += (s, e) =>
+            var bar = _menuBar = new MenuStrip
             {
-                using (var pen = new Pen(GridLine)) e.Graphics.DrawLine(pen, side.Width - 1, 0, side.Width - 1, side.Height);
+                Dock = DockStyle.Top, BackColor = Surface, ForeColor = TextMain, Font = Theme.Nav,
+                GripStyle = ToolStripGripStyle.Hidden, Padding = new Padding(10, 5, 10, 5),
+                Renderer = ThemedMenu.Renderer(), ShowItemToolTips = true
             };
-            _sidebar = side;
-            var scroll = new Panel { Dock = DockStyle.Fill, BackColor = Surface, AutoScroll = true };
+            MainMenuStrip = bar;
+            bar.Disposed += (s, e) => { foreach (Image icon in _menuIcons) icon.Dispose(); };
 
-            // App logo embedded in the exe; null (unreadable resource) makes the badge fall back to initials.
-            Image logo = Branding.Logo;
+            var brand = new ToolStripLabel("Card Studio")
+            {
+                Font = Theme.Brand, ForeColor = TextMain, Margin = new Padding(0, 0, 14, 0),
+                ToolTipText = Lang.T("Card Studio") + " · " + Lang.T("ID Card Printer")
+            };
+            Image logo = BrandIcon(Branding.Logo);   // null (unreadable resource): the name alone
+            if (logo != null)
+            {
+                brand.Image = logo;
+                brand.ImageScaling = ToolStripItemImageScaling.None;
+                brand.TextImageRelation = TextImageRelation.ImageBeforeText;
+            }
+            bar.Items.Add(brand);
 
-            NavItem dashboard = Nav("Dashboard", Theme.IcoHome, () => { _txtSearch.Focus(); _txtSearch.SelectAll(); },
-                "Find a student, check the card preview and print (Ctrl+F searches)");
-            dashboard.Active = true;
-            _navGallery = Nav("Gallery", Theme.IcoPhoto, ShowGallery,
+            ToolStripMenuItem data = TopMenu("Data");
+            AddCommand(data, "Find Student", Theme.IcoSearch, () => { _txtSearch.Focus(); _txtSearch.SelectAll(); },
+                "Ctrl+F", "Find a student, check the card preview and print (Ctrl+F searches)");
+            AddCommand(data, "Import Students…", Theme.IcoDownload, ShowImportPage, "Ctrl+L",
+                "Load the student list from Excel, CSV, Google Sheets, the web API or SQL Server, or save an Excel template (Ctrl+L)");
+            AddCommand(data, "CSV Files…", Theme.IcoDocument, ShowCsvFiles, "Ctrl+Shift+C",
+                "Student CSV files in one folder: check, preview, create, rename, delete or load them (Ctrl+Shift+C)");
+            data.DropDownItems.Add(new ToolStripSeparator());
+            _miGallery = AddCommand(data, "Gallery", Theme.IcoPhoto, ShowGallery, "Ctrl+G",
                 "Photos and details of every student; shows missing photos and print status (Ctrl+G)");
-            _navHistory = Nav("Print History", Theme.IcoHistory, ShowPrintHistory,
+            _miHistory = AddCommand(data, "Print History", Theme.IcoHistory, ShowPrintHistory, "Ctrl+H",
                 "Cards already printed: who, which side, when (Ctrl+H)");
+            AddCommand(data, "RFID Cards", Theme.IcoList, ShowRfidList, "Ctrl+Shift+R",
+                "Card numbers saved for printed cards, and loaded data who have no card yet (Ctrl+Shift+R)");
+            AddCommand(data, "Print Queue", Theme.IcoPrint, ShowPrintQueue, null, "See or cancel jobs waiting in Windows");
 
-            _brand = new BrandBlock("Card Studio", "ID Card Printer", logo);
+            ToolStripMenuItem card = TopMenu("Card");
+            AddCommand(card, "Photo Folder…", Theme.IcoFolder, ShowPhotoFolderPage, null,
+                "Choose or open the folder with photos named {StudentId}.jpg / .png, " +
+                "or download photos into it from Google Drive (Ctrl+Shift+D) or OneDrive (Ctrl+Shift+O)");
+            AddCommand(card, "Remove Background…", Theme.IcoBrush, RemovePhotoBackground, "Ctrl+B",
+                "Crop the selected student's photo and remove the wall / screen behind it (Ctrl+B)");
+            card.DropDownItems.Add(new ToolStripSeparator());
+            AddCommand(card, "Card Template…", Theme.IcoTemplate, ChooseCardTemplate, null,
+                "Choose the card design (Classic, Modern, Minimal, Ribbon or your Custom design) with a live preview of front and back");
+            AddCommand(card, "Card Designer…", Theme.IcoEdit, ShowCardDesigner, null,
+                "Design your own card: place text, student fields, photo, QR codes, images and shapes on the front and back");
+            AddCommand(card, "Card Text…", Theme.IcoFont, EditCardText, null,
+                "Edit the fixed text printed on the cards and choose the director signature");
+            card.DropDownItems.Add(new ToolStripSeparator());
+            AddCommand(card, "Preview & PDF…", Theme.IcoDocument, ShowDesignPreview, "Ctrl+Shift+V",
+                "Preview the card design on paper at real size and export it as a PDF (Ctrl+Shift+V)");
+            AddCommand(card, "PDF Designer…", Theme.IcoEdit, ShowPdfDesigner, "Ctrl+Shift+T",
+                "Design your own PDF page: write text anywhere, add tables and pictures, move and clone them (Ctrl+Shift+T)");
 
-            var items = new List<Control>
-            {
-                Spacer(14),
-                dashboard,
-                Nav("Import Students…", Theme.IcoDownload, ShowImportPage,
-                    "Load the student list from Excel, CSV, Google Sheets, the web API or SQL Server, or save an Excel template (Ctrl+L)"),
-                Nav("CSV Files…", Theme.IcoDocument, ShowCsvFiles,
-                    "Student CSV files in one folder: check, preview, create, rename, delete or load them (Ctrl+Shift+C)"),
-                _navGallery,
-                _navHistory,
-                Nav("RFID Cards", Theme.IcoList, ShowRfidList,
-                    "Card numbers saved for printed cards, and loaded students who have no card yet (Ctrl+Shift+R)"),
-                Nav("Print Queue", Theme.IcoPrint, ShowPrintQueue, "See or cancel jobs waiting in Windows"),
+            ToolStripMenuItem app = TopMenu("App");
+            AddCommand(app, "Mobile App…", Theme.IcoPhone, ShowMobileLink, "Ctrl+Shift+M",
+                "Connect the Card Studio phone app over Wi-Fi: browse data, take student photos, check printed cards (Ctrl+Shift+M)");
+            AddCommand(app, "Full Screen", Theme.IcoFullScreen, () => ShowFullScreen(PreviewSide.Both), "F11",
+                "Full-screen card preview (F11)");
+            app.DropDownItems.Add(new ToolStripSeparator());
+            AddCommand(app, "Settings & Help…", Theme.IcoSettings, ShowSettingsHub, null,
+                Lang.F("{0}, Theme Color, Language (Ctrl+Shift+L), Folders (Ctrl+Shift+F), All Settings (Ctrl+,), " +
+                "Epson Driver Setup (Ctrl+Shift+E), System Info (Ctrl+Shift+I), Check for Updates (Ctrl+U) and Help & About (F1) " +
+                "in one page", Lang.T(Theme.Dark ? "Light Mode" : "Dark Mode")));
 
-                Section("CARD"),
-                Nav("Photo Folder…", Theme.IcoFolder, ShowPhotoFolderPage,
-                    "Choose or open the folder with photos named {StudentId}.jpg / .png, " +
-                    "or download photos into it from Google Drive (Ctrl+Shift+D) or OneDrive (Ctrl+Shift+O)"),
-                Nav("Remove Background…", Theme.IcoBrush, RemovePhotoBackground,
-                    "Crop the selected student's photo and remove the wall / screen behind it (Ctrl+B)"),
-                Nav("Card Template…", Theme.IcoTemplate, ChooseCardTemplate,
-                    "Choose the card design (Classic, Modern, Minimal, Ribbon or your Custom design) with a live preview of front and back"),
-                Nav("Card Designer…", Theme.IcoEdit, ShowCardDesigner,
-                    "Design your own card: place text, student fields, photo, QR codes, images and shapes on the front and back"),
-                Nav("Card Text…", Theme.IcoFont, EditCardText,
-                    "Edit the fixed text printed on the cards and choose the director signature"),
-                Nav("Preview & PDF…", Theme.IcoDocument, ShowDesignPreview,
-                    "Preview the card design on paper at real size and export it as a PDF (Ctrl+Shift+V)"),
-                Nav("PDF Designer…", Theme.IcoEdit, ShowPdfDesigner,
-                    "Design your own PDF page: write text anywhere, add tables and pictures, move and clone them (Ctrl+Shift+T)"),
-
-                Section("APP"),
-                Nav("Mobile App…", Theme.IcoPhone, ShowMobileLink,
-                    "Connect the Card Studio phone app over Wi-Fi: browse students, take student photos, check printed cards (Ctrl+Shift+M)"),
-                Nav("Full Screen", Theme.IcoFullScreen, () => ShowFullScreen(PreviewSide.Both), "Full-screen card preview (F11)"),
-                Nav("Settings & Help…", Theme.IcoSettings, ShowSettingsHub,
-                    Lang.F("{0}, Theme Color, Language (Ctrl+Shift+L), Folders (Ctrl+Shift+F), All Settings (Ctrl+,), " +
-                    "Epson Driver Setup (Ctrl+Shift+E), System Info (Ctrl+Shift+I), Check for Updates (Ctrl+U) and Help & About (F1) " +
-                    "in one page", Lang.T(Theme.Dark ? "Light Mode" : "Dark Mode"))),
-
-                Spacer(10)
-            };
-
-            // Dock = Top stacks the LAST added control on top, so add bottom-up.
-            for (int i = items.Count - 1; i >= 0; i--)
-            {
-                items[i].Dock = DockStyle.Top;
-                scroll.Controls.Add(items[i]);
-            }
-
-            _navToggle = new NavItem("Collapse sidebar", Theme.IcoPaneClose, (s, e) => ToggleSidebar())
-            {
-                Dock = DockStyle.Bottom, Height = 44
-            };
-            var divider = new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Surface };
-            divider.Paint += (s, e) =>
-            {
-                int inset = _sidebarCompact ? 14 : 20;
-                using (var pen = new Pen(GridLine)) e.Graphics.DrawLine(pen, inset, 0, divider.Width - inset, 0);
-            };
-
-            // Fill first, edges last: the brand stays pinned at the top and the toggle at the bottom,
-            // only the navigation between them scrolls.
-            _brand.Dock = DockStyle.Top;
-            side.Controls.Add(scroll);
-            side.Controls.Add(_brand);
-            side.Controls.Add(divider);
-            side.Controls.Add(_navToggle);
-            return side;
+            bar.Items.Add(data);
+            bar.Items.Add(card);
+            bar.Items.Add(app);
+            return bar;
         }
 
-        private void ToggleSidebar()
+        /// <summary>Top-level menu of the menu bar, its drop-down in the app's colours with room for the icons.</summary>
+        private static ToolStripMenuItem TopMenu(string text)
         {
-            SetSidebarCompact(!_sidebarCompact, true);
+            ToolStripMenuItem menu = ThemedMenu.SubMenu(text);
+            menu.Padding = new Padding(8, 0, 8, 0);
+            var drop = (ToolStripDropDownMenu)menu.DropDown;
+            drop.ShowImageMargin = true;
+            drop.ShowItemToolTips = true;
+            return menu;
         }
 
         /// <summary>
-        /// Icons only (compact) or icons with names (full). In compact mode each icon's tooltip starts with its name,
-        /// and section titles become thin dividers.
+        /// One command of a menu: icon, name, its shortcut on the right (display only, <see cref="ProcessCmdKey"/> runs it)
+        /// and the longer description as tooltip.
         /// </summary>
-        private void SetSidebarCompact(bool compact, bool save)
+        private ToolStripMenuItem AddCommand(ToolStripMenuItem menu, string text, string glyph, Action action, string shortcut,
+                                             string tooltip)
         {
-            _sidebarCompact = compact;
-            SuspendLayout();
-            _sidebar.SuspendLayout();
-
-            _sidebar.Width = compact ? SidebarCompactWidth : SidebarFullWidth;
-            _brand.Compact = compact;
-            _tip.SetToolTip(_brand, compact ? Lang.T("Card Studio") + " · " + Lang.T("ID Card Printer") : null);
-
-            foreach (KeyValuePair<NavItem, string> nav in _navTips)
+            ToolStripMenuItem item = ThemedMenu.Item(text, action);
+            item.Tag = shortcut;
+            item.ShortcutKeyDisplayString = shortcut;
+            item.ToolTipText = tooltip;
+            item.Padding = new Padding(0, 3, 0, 3);
+            Image icon = MenuIcon(glyph);
+            if (icon != null)
             {
-                nav.Key.Compact = compact;
-                string tip = Lang.T(nav.Value);
-                _tip.SetToolTip(nav.Key, compact ? nav.Key.Text + Environment.NewLine + tip : tip);
+                item.Image = icon;
+                item.ImageScaling = ToolStripItemImageScaling.None;
             }
+            menu.DropDownItems.Add(item);
+            return item;
+        }
 
-            foreach (Label section in _sections)
-            {
-                section.Text = compact ? "" : (string)section.Tag;   // English: Lang translates it again
-                section.Height = compact ? 17 : 32;
-            }
-            _navToggle.Compact = compact;
-            _navToggle.Glyph = compact ? Theme.IcoPaneOpen : Theme.IcoPaneClose;
-            _navToggle.Text = compact ? "Expand sidebar" : "Collapse sidebar";
-            _tip.SetTip(_navToggle, compact ? "Show icons and names (Ctrl+\\)" : "Show icons only (Ctrl+\\)");
+        /// <summary>Count shown before the shortcut of a menu command ("120   Ctrl+G"); null = the shortcut alone.</summary>
+        private static void SetMenuBadge(ToolStripMenuItem item, string badge)
+        {
+            var shortcut = item.Tag as string;
+            item.ShortcutKeyDisplayString = string.IsNullOrEmpty(badge) ? shortcut
+                : string.IsNullOrEmpty(shortcut) ? badge : badge + "    " + shortcut;
+        }
 
-            _sidebar.ResumeLayout(true);
-            ResumeLayout(true);
-            _sidebar.Invalidate(true);
+        /// <summary>Line icon of the menus, drawn once at the screen's scale; null when Windows has no icon font.</summary>
+        private Image MenuIcon(string glyph)
+        {
+            if (Theme.IconFamily == null || string.IsNullOrEmpty(glyph)) return null;
+            int size = (int)Math.Round(16 * DeviceDpi / 96f);
+            var bmp = new Bitmap(size, size);
+            using (Graphics g = Graphics.FromImage(bmp))
+                Theme.DrawIcon(g, glyph, size * 0.9f, Theme.TextSoft, new RectangleF(0, 0, size, size));
+            _menuIcons.Add(bmp);
+            return bmp;
+        }
 
-            if (!save) return;
-            _settings.SidebarCollapsed = compact;
-            try
+        /// <summary>The app logo as a small rounded white tile for the menu bar (its navy line art needs a light tile).</summary>
+        private Image BrandIcon(Image logo)
+        {
+            if (logo == null) return null;
+            int size = (int)Math.Round(24 * DeviceDpi / 96f);
+            var bmp = new Bitmap(size, size);
+            using (Graphics g = Graphics.FromImage(bmp))
             {
-                _settings.Save();
+                Theme.HighQuality(g);
+                var tile = new RectangleF(0.5f, 0.5f, size - 1f, size - 1f);
+                using (System.Drawing.Drawing2D.GraphicsPath p = Theme.RoundRect(tile, size / 4f))
+                {
+                    using (var b = new SolidBrush(Color.White)) g.FillPath(b, p);
+                    using (var pen = new Pen(Color.FromArgb(Theme.Dark ? 0 : 60, Theme.BrandBlue))) g.DrawPath(pen, p);
+                }
+                RectangleF inner = tile;
+                inner.Inflate(-2, -2);
+                float scale = Math.Min(inner.Width / logo.Width, inner.Height / logo.Height);
+                float w = logo.Width * scale, h = logo.Height * scale;
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.DrawImage(logo, inner.X + (inner.Width - w) / 2, inner.Y + (inner.Height - h) / 2, w, h);
             }
-            catch (Exception ex)
-            {
-                SetStatus("Could not save settings: " + ex.Message);
-            }
+            _menuIcons.Add(bmp);
+            return bmp;
         }
 
         /// <summary>
@@ -434,37 +443,6 @@ namespace NPIC_CARD_APP
                 item.ShortcutKeyDisplayString = "✓";
             }
             return item;
-        }
-
-        private NavItem Nav(string text, string glyph, Action action, string tooltip)
-        {
-            var item = new NavItem(text, glyph, (s, e) => action());
-            _tip.SetTip(item, tooltip);
-            _navTips.Add(new KeyValuePair<NavItem, string>(item, tooltip));
-            return item;
-        }
-
-        /// <summary>Small-caps group title; a thin divider while the sidebar shows icons only.</summary>
-        private Label Section(string text)
-        {
-            var label = new Label
-            {
-                Text = text, Tag = text, Font = Theme.SmallCaps, ForeColor = TextMuted, BackColor = Surface, AutoSize = false,
-                Height = 32, TextAlign = ContentAlignment.BottomLeft, Padding = new Padding(22, 0, 0, 5)
-            };
-            label.Paint += (s, e) =>
-            {
-                if (!_sidebarCompact) return;
-                int y = label.Height / 2;
-                using (var pen = new Pen(GridLine)) e.Graphics.DrawLine(pen, 14, y, label.Width - 14, y);
-            };
-            _sections.Add(label);
-            return label;
-        }
-
-        private static Control Spacer(int height)
-        {
-            return new Panel { Height = height, BackColor = Surface };
         }
 
         /// <summary>
@@ -1453,7 +1431,7 @@ namespace NPIC_CARD_APP
                 _sumPrinted.Text = all.Count == 0 ? "Nothing printed yet" : string.Format("{0} printed today", today.ToString("N0"));
                 _tip.SetTip(_sumPrinted, (all.Count == 0 ? "" : string.Format("{0} card sides printed in total", all.Count.ToString("N0")) + "\n") +
                                          "Open the print history (Ctrl+H)");
-                _navHistory.Badge = today > 0 ? today.ToString() : null;
+                SetMenuBadge(_miHistory, today > 0 ? today.ToString("N0") : null);
 
                 _lastPrinted = all.Where(r => !string.IsNullOrEmpty(r.StudentId))
                     .GroupBy(r => r.StudentId.Trim(), StringComparer.OrdinalIgnoreCase)
@@ -1847,7 +1825,7 @@ namespace NPIC_CARD_APP
                 : _view.Count != _students.Count ? _view.Count.ToString("N0") + " match the search"
                 : _source.Length > 0 ? "from " + _source : "";
             _tip.SetTip(_sumStudents, (detail.Length > 0 ? detail + "\n" : "") + "Open the student gallery (Ctrl+G)");
-            _navGallery.Badge = _students.Count > 0 ? _students.Count.ToString("N0") : null;
+            SetMenuBadge(_miGallery, _students.Count > 0 ? _students.Count.ToString("N0") : null);
         }
 
         // ===================== Settings =====================
@@ -2678,7 +2656,6 @@ namespace NPIC_CARD_APP
                 case Keys.Control | Keys.Shift | Keys.I: ShowHelp(HelpForm.Page.SystemInfo); return true;
                 case Keys.Control | Keys.U: ShowUpdates(); return true;
                 case Keys.Control | Keys.Shift | Keys.L: SwitchLanguage(!Lang.Khmer); return true;
-                case Keys.Control | Keys.Oem5: ToggleSidebar(); return true;   // Ctrl+\
                 case Keys.Control | Keys.Shift | Keys.N: ShowNotifications(); return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);

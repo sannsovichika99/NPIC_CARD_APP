@@ -295,7 +295,7 @@ namespace NPIC_CARD_APP
         }
     }
 
-    /// <summary>Miniature of the main window drawn with a candidate palette: sidebar, stat tile, tabs, buttons.</summary>
+    /// <summary>Miniature of the main window drawn with a candidate palette: menu bar, stat tile, tabs, buttons.</summary>
     internal sealed class ThemePreview : Control
     {
         private static readonly Font ValueFont = new Font("Segoe UI Semibold", 15f);   // digits only
@@ -328,18 +328,17 @@ namespace NPIC_CARD_APP
                 using (var strip = new LinearGradientBrush(new RectangleF(frame.X, frame.Y, frame.Width, 4), p.GradientA, p.GradientB, 0f))
                     g.FillRectangle(strip, frame.X, frame.Y, frame.Width, 4);
 
-                // Sidebar with an active and two idle items
-                var side = new RectangleF(frame.X, frame.Y + 4, 150, frame.Height - 4);
-                using (var b = new SolidBrush(Theme.Surface)) g.FillRectangle(b, side);
-                using (var pen = new Pen(Theme.GridLine)) g.DrawLine(pen, side.Right, side.Y, side.Right, side.Bottom);
-                float ny = side.Y + 14;
-                NavRow(g, p, side, ny, Theme.IcoHome, Lang.T("Dashboard"), true);
-                NavRow(g, p, side, ny + 34, Theme.IcoPhoto, Lang.T("Gallery"), false);
-                NavRow(g, p, side, ny + 68, Theme.IcoHistory, Lang.T("Print History"), false);
-                NavRow(g, p, side, ny + 102, Theme.IcoPrint, Lang.T("Print Queue"), false);
+                // Menu bar: the first menu open (highlighted), the other two idle
+                var bar = new RectangleF(frame.X, frame.Y + 4, frame.Width, 32);
+                using (var b = new SolidBrush(Theme.Surface)) g.FillRectangle(b, bar);
+                using (var pen = new Pen(Theme.GridLine)) g.DrawLine(pen, bar.X, bar.Bottom, bar.Right, bar.Bottom);
+                float mx = bar.X + 12;
+                mx = MenuTitle(g, p, bar, mx, Lang.T("Data"), true);
+                mx = MenuTitle(g, p, bar, mx, Lang.T("Card"), false);
+                MenuTitle(g, p, bar, mx, Lang.T("App"), false);
 
                 // Content: stat tile on the left, card with tabs and buttons on the right
-                float x0 = side.Right + 14, top = frame.Y + 18;
+                float x0 = frame.X + 14, top = bar.Bottom + 14;
                 var tile = new RectangleF(x0, top, 128, 68);
                 using (GraphicsPath tp = Theme.RoundRect(tile, 10))
                 using (var b = new LinearGradientBrush(tile, p.GradientA, p.GradientB, 20f))
@@ -403,20 +402,18 @@ namespace NPIC_CARD_APP
             }
         }
 
-        private static void NavRow(Graphics g, AccentPalette p, RectangleF side, float y, string glyph, string text, bool active)
+        /// <summary>One title of the miniature menu bar; returns where the next one starts.</summary>
+        private static float MenuTitle(Graphics g, AccentPalette p, RectangleF bar, float x, string text, bool open)
         {
-            if (active)
-            {
-                var band = new RectangleF(side.X, y, side.Width, 30);
-                using (var brush = new LinearGradientBrush(band, p.AccentSoft, Theme.Surface, 0f))
-                    g.FillRectangle(brush, band);
-                using (var bar = new SolidBrush(p.Accent))
-                    g.FillRectangle(bar, side.X, y, 3, 30);
-            }
-            Theme.DrawIcon(g, glyph, 14f, active ? p.Accent : Theme.TextMuted, new RectangleF(side.X + 12, y, 26, 30));
+            float w = g.MeasureString(text, Theme.Nav).Width + 16;
+            var r = new RectangleF(x, bar.Y + 4, w, bar.Height - 8);
+            if (open)
+                using (GraphicsPath rp = Theme.RoundRect(r, 6))
+                using (var b = new SolidBrush(p.AccentSoft))
+                    g.FillPath(b, rp);
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-            Theme.DrawText(g, text, active ? Theme.NavBold : Theme.Nav, active ? p.Accent : Theme.TextSoft,
-                new RectangleF(side.X + 42, y, side.Width - 46, 30));
+            Theme.DrawText(g, text, open ? Theme.NavBold : Theme.Nav, open ? p.Accent : Theme.TextMain, r, StringAlignment.Center);
+            return r.Right + 4;
         }
     }
 }

@@ -84,10 +84,10 @@ namespace NPIC_CARD_APP
                 "នឹងត្រឡប់មកវិញដោយខ្លួនឯង។ និស្សិតដែលបាននាំចូលពី API ឬ SQL Server ត្រូវផ្ទុកម្ដងទៀត។");
         }
 
-        /// <summary>Sidebar, header, stat tiles, student list, card preview and the Print setup card.</summary>
+        /// <summary>Menu bar, header, summary line, student list, card preview and the Print setup card.</summary>
         private static void MainWindow()
         {
-            // ---- Sidebar ----
+            // ---- Menu bar commands ----
             A("ID Card Printer", "បោះពុម្ពកាតសម្គាល់ខ្លួន");
             A("Dashboard", "ផ្ទាំងគ្រប់គ្រង");
             A("Find a student, check the card preview and print (Ctrl+F searches)",
@@ -159,10 +159,11 @@ namespace NPIC_CARD_APP
             A("Settings imported", "បាននាំចូលការកំណត់");
             A("Card design saved", "បានរក្សាទុកការរចនាកាត");
 
-            A("Collapse sidebar", "បង្រួមរបារចំហៀង");
-            A("Expand sidebar", "ពង្រីករបារចំហៀង");
-            A("Show icons only (Ctrl+\\)", "បង្ហាញតែរូបតំណាង (Ctrl+\\)");
-            A("Show icons and names (Ctrl+\\)", "បង្ហាញរូបតំណាង និងឈ្មោះ (Ctrl+\\)");
+            // ---- Menu bar ----
+            A("Data", "ទិន្នន័យ");
+            A("Card", "កាត");
+            A("App", "កម្មវិធី");
+            A("Find Student", "ស្វែងរកនិស្សិត");
             A("Language: switch between English and Khmer (Ctrl+Shift+L)", "ភាសា៖ ប្ដូររវាងអង់គ្លេស និងខ្មែរ (Ctrl+Shift+L)");
             A("Full-screen card preview (F11)", "មើលកាតជាមុនពេញអេក្រង់ (F11)");
             A("Settings & Help…", "ការកំណត់ និងជំនួយ…");

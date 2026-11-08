@@ -584,10 +584,12 @@ namespace NPIC_CARD_APP
                        "**រក្សាទុកលេខកាត RFID** (UID) នៃកាតនីមួយៗដែលបានបោះពុម្ព ទៅក្នុងឯកសារ CSV ដែលកុំព្យូទ័រច្រើនគ្រឿងអាចប្រើរួមគ្នាបាន។"));
 
             w.Heading(T("The main window", "ផ្ទាំងមេ"));
-            w.Bullet(T("**Sidebar (left)** — every command: importing, CSV files, gallery, print history, RFID cards, print queue, " +
-                       "driver setup, photo folder, background removal, card text, folders, settings and this guide.",
-                       "**របារចំហៀង (ខាងឆ្វេង)** — ពាក្យបញ្ជាទាំងអស់៖ នាំចូល ឯកសារ CSV វិចិត្រសាល ប្រវត្តិបោះពុម្ព កាត RFID ជួរបោះពុម្ព " +
-                       "ការរៀបចំ driver ថតរូបថត ការលុបផ្ទៃខាងក្រោយ អត្ថបទកាត ថតឯកសារ ការកំណត់ និងការណែនាំនេះ។"));
+            w.Bullet(T("**Menu bar (top)** — every command in three menus: **Data** (importing, CSV files, gallery, print history, " +
+                       "RFID cards, print queue), **Card** (photo folder, background removal, card template, designer and text, PDF) " +
+                       "and **App** (mobile app, full screen, settings, driver setup, folders and this guide).",
+                       "**របារម៉ឺនុយ (ខាងលើ)** — ពាក្យបញ្ជាទាំងអស់ក្នុងម៉ឺនុយបី៖ **ទិន្នន័យ** (នាំចូល ឯកសារ CSV វិចិត្រសាល ប្រវត្តិបោះពុម្ព " +
+                       "កាត RFID ជួរបោះពុម្ព) **កាត** (ថតរូបថត ការលុបផ្ទៃខាងក្រោយ គំរូកាត ការរចនា និងអត្ថបទកាត PDF) " +
+                       "និង **កម្មវិធី** (កម្មវិធីទូរស័ព្ទ អេក្រង់ពេញ ការកំណត់ ការរៀបចំ driver ថតឯកសារ និងការណែនាំនេះ)។"));
             w.Bullet(T("**Header** — **Print side** (Front / Back) and **Print Selected**.",
                        "**ផ្នែកខាងលើ** — **Print side** (Front / Back) និង **Print Selected**។"));
             w.Bullet(T("**Summary line** (under the greeting) — students loaded (click: gallery), students selected with the number " +
@@ -637,13 +639,13 @@ namespace NPIC_CARD_APP
                         "ធ្វើម្តងទៀតរហូតដល់បន្ទាត់នៅចំកណ្តាល (មើល **ម៉ាស៊ីនបោះពុម្ព និងថាស**)។"));
 
             w.Heading(T("Print a batch of cards", "បោះពុម្ពកាតមួយបាច់"));
-            w.Step(4, T("**Import the students** — sidebar **Import Students…** (Ctrl+L).",
-                        "**នាំចូលនិស្សិត** — របារចំហៀង **Import Students…** (Ctrl+L)។"));
-            w.Step(5, T("**Choose the photo folder** — sidebar **Photo Folder…**. Photos are named after the student ID, " +
+            w.Step(4, T("**Import the students** — menu **Data → Import Students…** (Ctrl+L).",
+                        "**នាំចូលនិស្សិត** — ម៉ឺនុយ **ទិន្នន័យ → Import Students…** (Ctrl+L)។"));
+            w.Step(5, T("**Choose the photo folder** — menu **Card → Photo Folder…**. Photos are named after the student ID, " +
                         "for example NPIC24001.jpg.",
-                        "**ជ្រើសរើសថតរូបថត** — របារចំហៀង **Photo Folder…**។ ឈ្មោះរូបថតគឺជាអត្តលេខនិស្សិត ឧទាហរណ៍ NPIC24001.jpg។"));
-            w.Step(6, T("**Check the card text** — sidebar **Card Text…** (director signature, dates and fixed text).",
-                        "**ពិនិត្យអត្ថបទកាត** — របារចំហៀង **Card Text…** (ហត្ថលេខានាយក កាលបរិច្ឆេទ និងអត្ថបទថេរ)។"));
+                        "**ជ្រើសរើសថតរូបថត** — ម៉ឺនុយ **កាត → Photo Folder…**។ ឈ្មោះរូបថតគឺជាអត្តលេខនិស្សិត ឧទាហរណ៍ NPIC24001.jpg។"));
+            w.Step(6, T("**Check the card text** — menu **Card → Card Text…** (director signature, dates and fixed text).",
+                        "**ពិនិត្យអត្ថបទកាត** — ម៉ឺនុយ **កាត → Card Text…** (ហត្ថលេខានាយក កាលបរិច្ឆេទ និងអត្ថបទថេរ)។"));
             w.Step(7, T("**Print** — select the students, choose **Front**, click **Print Selected** (Ctrl+P) and follow the " +
                         "tray-load messages. Then choose **Back** and print again with the same selection.",
                         "**បោះពុម្ព** — ជ្រើសរើសនិស្សិត ជ្រើស **Front** ចុច **Print Selected** (Ctrl+P) ហើយធ្វើតាមសារសម្រាប់ថាសនីមួយៗ។ " +
@@ -652,15 +654,15 @@ namespace NPIC_CARD_APP
                         "card on the reader; it is saved automatically.",
                         "**រក្សាទុកលេខ RFID** — ផ្ទាំង **RFID** បើកដោយស្វ័យប្រវត្តិក្រោយការបោះពុម្ព។ ជ្រើសរើសនិស្សិតម្នាក់ៗ " +
                         "ហើយប៉ះកាតរបស់គេលើឧបករណ៍អាន។ លេខកាតត្រូវបានរក្សាទុកដោយស្វ័យប្រវត្តិ។"));
-            w.Note(T("Not sure everything is ready? Sidebar **Settings & Help…** → **All Settings…** (Ctrl+,) shows every setting, with problems in orange.",
-                     "មិនច្បាស់ថាអ្វីៗរួចរាល់ឬនៅ? របារចំហៀង **Settings & Help…** → **All Settings…** (Ctrl+,) បង្ហាញការកំណត់ទាំងអស់ ហើយបញ្ហាត្រូវបានបង្ហាញជាពណ៌ទឹកក្រូច។"));
+            w.Note(T("Not sure everything is ready? Menu **App → Settings & Help…** → **All Settings…** (Ctrl+,) shows every setting, with problems in orange.",
+                     "មិនច្បាស់ថាអ្វីៗរួចរាល់ឬនៅ? ម៉ឺនុយ **កម្មវិធី → Settings & Help…** → **All Settings…** (Ctrl+,) បង្ហាញការកំណត់ទាំងអស់ ហើយបញ្ហាត្រូវបានបង្ហាញជាពណ៌ទឹកក្រូច។"));
         }
 
         private void WriteImport(GuideWriter w)
         {
             w.Title(T("Import students", "នាំចូលនិស្សិត"));
-            w.Lead(T("Sidebar **Import Students…** (Ctrl+L) shows every source. Importing replaces the current list.",
-                     "របារចំហៀង **Import Students…** (Ctrl+L) បង្ហាញប្រភពទាំងអស់។ ការនាំចូលនឹងជំនួសបញ្ជីបច្ចុប្បន្ន។"));
+            w.Lead(T("Menu **Data → Import Students…** (Ctrl+L) shows every source. Importing replaces the current list.",
+                     "ម៉ឺនុយ **ទិន្នន័យ → Import Students…** (Ctrl+L) បង្ហាញប្រភពទាំងអស់។ ការនាំចូលនឹងជំនួសបញ្ជីបច្ចុប្បន្ន។"));
 
             w.Heading(T("Sources", "ប្រភព"));
             w.Key("From Excel…", T("An .xlsx, .xlsm or .xls workbook. (Ctrl+E)", "ឯកសារ Excel ប្រភេទ .xlsx, .xlsm ឬ .xls។ (Ctrl+E)"));
@@ -712,8 +714,8 @@ namespace NPIC_CARD_APP
                      "កាតនីមួយៗបង្ហាញរូបថតដែលមានឈ្មោះឯកសារដូចអត្តលេខនិស្សិត។"));
 
             w.Heading(T("Photo folder", "ថតរូបថត"));
-            w.Bullet(T("Sidebar **Photo Folder…** lets you choose the folder, or open it in Explorer to add or rename photos.",
-                       "របារចំហៀង **Photo Folder…** អនុញ្ញាតឱ្យជ្រើសរើសថត ឬបើកវាក្នុង Explorer ដើម្បីបន្ថែម ឬប្តូរឈ្មោះរូបថត។"));
+            w.Bullet(T("Menu **Card → Photo Folder…** lets you choose the folder, or open it in Explorer to add or rename photos.",
+                       "ម៉ឺនុយ **កាត → Photo Folder…** អនុញ្ញាតឱ្យជ្រើសរើសថត ឬបើកវាក្នុង Explorer ដើម្បីបន្ថែម ឬប្តូរឈ្មោះរូបថត។"));
             w.Bullet(T("Name each photo **{StudentId}.jpg** (or .jpeg, .png, .bmp) — for example **NPIC24001.jpg**. " +
                        "The name must match the ID in the list exactly.",
                        "ដាក់ឈ្មោះរូបថតនីមួយៗជា **{StudentId}.jpg** (ឬ .jpeg, .png, .bmp) — ឧទាហរណ៍ **NPIC24001.jpg**។ " +
@@ -728,10 +730,10 @@ namespace NPIC_CARD_APP
                        "**OneDrive Photos…** (Ctrl+Shift+O) — ចម្លងរូបថតពីថត OneDrive (ដែលធ្វើសមកាលកម្មលើកុំព្យូទ័រនេះ ឬតាមតំណភ្ជាប់ក្រោយពេលចូលគណនី)។"));
 
             w.Heading(T("Remove the background", "លុបផ្ទៃខាងក្រោយ"));
-            w.Para(T("Select a student, then sidebar **Remove Background…** (Ctrl+B). Crop the photo and remove the wall or " +
+            w.Para(T("Select a student, then menu **Card → Remove Background…** (Ctrl+B). Crop the photo and remove the wall or " +
                      "screen behind the student. The original is kept in the **_original** sub-folder, so you can redo it or " +
                      "**Restore Original** at any time.",
-                     "ជ្រើសរើសនិស្សិត រួចចុចរបារចំហៀង **Remove Background…** (Ctrl+B)។ កាត់រូបថត ហើយលុបជញ្ជាំង ឬផ្ទាំងខាងក្រោយនិស្សិតចេញ។ " +
+                     "ជ្រើសរើសនិស្សិត រួចចុចម៉ឺនុយ **កាត → Remove Background…** (Ctrl+B)។ កាត់រូបថត ហើយលុបជញ្ជាំង ឬផ្ទាំងខាងក្រោយនិស្សិតចេញ។ " +
                      "រូបដើមត្រូវបានរក្សាទុកក្នុងថតរង **_original** ដូច្នេះអ្នកអាចធ្វើម្តងទៀត ឬចុច **Restore Original** នៅពេលណាក៏បាន។"));
 
             w.Note(T("**Gallery** (Ctrl+G) shows every student with their photo — the quickest way to spot missing photos.",
@@ -743,10 +745,10 @@ namespace NPIC_CARD_APP
             w.Title(T("Card text & preview", "អត្ថបទកាត និងការមើលជាមុន"));
 
             w.Heading(T("Card text", "អត្ថបទកាត"));
-            w.Para(T("Sidebar **Card Text…** edits the fixed text printed on every card (institute details, issue date, " +
+            w.Para(T("Menu **Card → Card Text…** edits the fixed text printed on every card (institute details, issue date, " +
                      "contact lines and so on) and chooses the **director signature** image. **Save** applies it to the preview " +
                      "straight away; **Cancel** or Esc changes nothing.",
-                     "របារចំហៀង **Card Text…** កែអត្ថបទថេរដែលបោះពុម្ពលើកាតគ្រប់សន្លឹក (ព័ត៌មានវិទ្យាស្ថាន ថ្ងៃចេញកាត ព័ត៌មានទំនាក់ទំនង ។ល។) " +
+                     "ម៉ឺនុយ **កាត → Card Text…** កែអត្ថបទថេរដែលបោះពុម្ពលើកាតគ្រប់សន្លឹក (ព័ត៌មានវិទ្យាស្ថាន ថ្ងៃចេញកាត ព័ត៌មានទំនាក់ទំនង ។ល។) " +
                      "និងជ្រើសរើសរូប **ហត្ថលេខានាយក**។ **Save** អនុវត្តលើការមើលជាមុនភ្លាមៗ ចំណែក **Cancel** ឬ Esc មិនផ្លាស់ប្តូរអ្វីទេ។"));
 
             w.Heading(T("Preview", "ការមើលជាមុន"));
@@ -878,8 +880,8 @@ namespace NPIC_CARD_APP
                        "used as it is; otherwise the current one is copied to the new place.",
                        "**Change…** ផ្លាស់ទីឯកសារនេះ ឧទាហរណ៍ទៅថតចែករំលែកលើបណ្តាញ ដែលកុំព្យូទ័រច្រើនគ្រឿងប្រើរួមគ្នា។ " +
                        "ប្រសិនបើមានឯកសារ RFID នៅទីនោះរួចហើយ វានឹងត្រូវប្រើដដែល បើមិនដូច្នោះទេ ឯកសារបច្ចុប្បន្ននឹងត្រូវចម្លងទៅទីតាំងថ្មី។"));
-            w.Bullet(T("Sidebar **RFID Cards** (Ctrl+Shift+R) lists every saved number and the loaded students who have no card yet.",
-                       "របារចំហៀង **RFID Cards** (Ctrl+Shift+R) បង្ហាញលេខកាតទាំងអស់ដែលបានរក្សាទុក និងនិស្សិតដែលមិនទាន់មានកាត។"));
+            w.Bullet(T("Menu **Data → RFID Cards** (Ctrl+Shift+R) lists every saved number and the loaded students who have no card yet.",
+                       "ម៉ឺនុយ **ទិន្នន័យ → RFID Cards** (Ctrl+Shift+R) បង្ហាញលេខកាតទាំងអស់ដែលបានរក្សាទុក និងនិស្សិតដែលមិនទាន់មានកាត។"));
         }
 
         private void WriteHistory(GuideWriter w)
@@ -977,7 +979,6 @@ namespace NPIC_CARD_APP
             w.Key("F11", T("Full-screen card preview", "មើលកាតជាមុនពេញអេក្រង់"));
             w.Key("Shift+F11", T("3D card preview", "មើលកាតជាមុន 3D"));
             w.Key("Ctrl+Shift+N", T("Notifications", "ការជូនដំណឹង"));
-            w.Key("Ctrl+\\", T("Sidebar: icons only / icons and names", "របារចំហៀង៖ តែរូបតំណាង / រូបតំណាង និងឈ្មោះ"));
             w.Key("Ctrl+L", T("Import Students page", "ទំព័រ Import Students"));
             w.Key("Ctrl+E / Ctrl+O", T("Import from Excel / CSV", "នាំចូលពី Excel / CSV"));
             w.Key("Ctrl+I / Ctrl+D", T("Import from the web API / SQL Server", "នាំចូលពី Web API / SQL Server"));
@@ -1062,9 +1063,9 @@ namespace NPIC_CARD_APP
         private void WriteSystemInfo(GuideWriter w)
         {
             w.Title(T("System info", "ព័ត៌មានប្រព័ន្ធ"));
-            w.Lead(T("Live details of this installation. Open it any time with **Settings & Help…** → **System Info** in the sidebar (Ctrl+Shift+I). " +
+            w.Lead(T("Live details of this installation. Open it any time with **App → Settings & Help…** → **System Info** in the menu bar (Ctrl+Shift+I). " +
                      "**Copy System Info** puts all of it on the clipboard.",
-                     "ព័ត៌មានផ្ទាល់នៃការដំឡើងនេះ។ បើកវាបានគ្រប់ពេលតាម **Settings & Help…** → **System Info** នៅរបារចំហៀង (Ctrl+Shift+I)។ " +
+                     "ព័ត៌មានផ្ទាល់នៃការដំឡើងនេះ។ បើកវាបានគ្រប់ពេលតាម **កម្មវិធី → Settings & Help…** → **System Info** នៅរបារម៉ឺនុយ (Ctrl+Shift+I)។ " +
                      "ប៊ូតុង **ចម្លងព័ត៌មានប្រព័ន្ធ** ចម្លងទាំងអស់ទៅ clipboard។"));
 
             w.Heading(T("Application", "កម្មវិធី"));
@@ -1121,9 +1122,6 @@ namespace NPIC_CARD_APP
             w.Row(T("Guide language", "ភាសាការណែនាំ"), _kh ? T("Khmer", "ខ្មែរ") : T("English", "អង់គ្លេស"));
             w.Row(T("Colour theme", "ពណ៌ផ្ទៃ"), _settings.DarkMode ? T("Dark", "ងងឹត") : T("Light", "ភ្លឺ"));
             w.Row(T("Primary colour", "ពណ៌ចម្បង"), AccentPalette.Describe(_settings.AccentColor));
-            w.Row(T("Sidebar", "របារចំហៀង"), _settings.SidebarCollapsed
-                ? T("Icons only", "តែរូបតំណាង")
-                : T("Icons and labels", "រូបតំណាង និងឈ្មោះ"));
             bool breaks = KhmerBreaks.Available;
             w.Row(T("Khmer line breaks", "ការកាត់បន្ទាត់អក្សរខ្មែរ"), breaks
                 ? T("Available", "អាចប្រើបាន")
