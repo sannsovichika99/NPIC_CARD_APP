@@ -34,8 +34,8 @@ namespace NPIC_CARD_APP
                 "មិនទាន់បានធ្វើ 'ការកំណត់ Driver…' ទេ ដូច្នេះប្រភពក្រដាស / ប្រភេទក្រដាស នៅតែជាលំនាំដើមរបស់ driver។");
             A("Paper Source is \"{0}\", not the ID card tray. Fix it in 'Driver Setup...'.",
                 "ប្រភពក្រដាសគឺ \"{0}\" មិនមែនថាសកាត ID ទេ។ កែវានៅ 'ការកំណត់ Driver…'។");
-            A("Slot 2 (X {0}, Y {1} mm) overlaps slot 1 (X {2}, Y {3} mm). Change the Slot 2 X / Y and check it with 'Test Print'.",
-                "រន្ធ 2 (X {0}, Y {1} mm) ត្រួតលើរន្ធ 1 (X {2}, Y {3} mm)។ ប្ដូរ X / Y របស់រន្ធ 2 ហើយពិនិត្យវាដោយ 'បោះពុម្ពសាកល្បង'។");
+            A("Slot {0} (X {1}, Y {2} mm) overlaps slot {3} (X {4}, Y {5} mm). Change the Slot {0} X / Y and check it with 'Test Print'.",
+                "រន្ធ {0} (X {1}, Y {2} mm) ត្រួតលើរន្ធ {3} (X {4}, Y {5} mm)។ ប្ដូរ X / Y របស់រន្ធ {0} ហើយពិនិត្យវាដោយ 'បោះពុម្ពសាកល្បង'។");
             A("Slot {0} (X {1}, Y {2} mm, card {3} x {4} mm) is outside the page ({5} x {6} mm), so it will print blank. Change the Slot X / Y.",
                 "រន្ធ {0} (X {1}, Y {2} mm, កាត {3} x {4} mm) នៅក្រៅទំព័រ ({5} x {6} mm) ដូច្នេះវានឹងបោះពុម្ពទទេ។ ប្ដូរ X / Y របស់រន្ធ។");
             A("(Could not read printer status from Windows: {0})", "(មិនអាចអានស្ថានភាពម៉ាស៊ីនបោះពុម្ពពី Windows បានទេ៖ {0})");

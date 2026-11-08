@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -807,14 +808,14 @@ namespace NPIC_CARD_APP
         }
     }
 
-    /// <summary>What the next print job does with tray slot 2 (slot 1 is always printed).</summary>
+    /// <summary>What the next print job does with a tray slot (slot 1 is always printed).</summary>
     internal enum TraySlotUse { Off, Idle, InUse }
 
     /// <summary>
     /// Mini map of the printer page as the Tray page types it: X runs right, Y runs down, in mm. Each slot is drawn at
     /// its X / Y with the card size of the chosen orientation. Accent fill = the next job prints there, dashed = set up but
-    /// not used now, amber = cannot be used (outside the page, or slot 2 on top of slot 1). Clicking a slot raises
-    /// <see cref="SlotClicked"/> with 1 or 2. With the page size unknown (no printer), A4 is drawn with a dashed edge.
+    /// not used now, dotted = off, amber = cannot be used (outside the page, or on top of an earlier slot). Clicking a slot
+    /// raises <see cref="SlotClicked"/> with 1 … 4. With the page size unknown (no printer), A4 is drawn with a dashed edge.
     /// </summary>
     internal sealed class TrayMap : Control
     {
@@ -822,13 +823,20 @@ namespace NPIC_CARD_APP
         private static readonly SizeF A4 = new SizeF(210f, 297f);
 
         private SizeF? _page;
-        private RectangleF _slot1, _slot2;
-        private TraySlotUse _slot2Use = TraySlotUse.Off;
-        private RectangleF[] _hit = new RectangleF[2];
-        private int _hover = -1;
+        private RectangleF[] _slots = new RectangleF[0];
+        private TraySlotUse[] _use = new TraySlotUse[0];
+        private RectangleF[] _hit = new RectangleF[0];
+        private int _hover = -1, _selected = -1;
 
-        /// <summary>1 or 2: the slot the user clicked.</summary>
+        /// <summary>1 … 4: the slot the user clicked.</summary>
         public event Action<int> SlotClicked;
+
+        /// <summary>Slot drawn with a bold edge (0 = slot 1), e.g. the one being edited; -1 = none.</summary>
+        public int SelectedSlot
+        {
+            get { return _selected; }
+            set { if (_selected == value) return; _selected = value; Invalidate(); }
+        }
 
         public TrayMap()
         {
@@ -845,12 +853,13 @@ namespace NPIC_CARD_APP
             set { if (_page == value) return; _page = value; Invalidate(); }
         }
 
-        /// <summary>Slot rectangles in page mm (X, Y, card width, card height) and what happens to slot 2.</summary>
-        public void SetSlots(RectangleF slot1, RectangleF slot2, TraySlotUse slot2Use)
+        /// <summary>Slot rectangles in page mm (X, Y, card width, card height) and what the next job does with each.</summary>
+        public void SetSlots(RectangleF[] slots, TraySlotUse[] use)
         {
-            _slot1 = slot1;
-            _slot2 = slot2;
-            _slot2Use = slot2Use;
+            _slots = (RectangleF[])slots.Clone();
+            _use = new TraySlotUse[_slots.Length];
+            for (int i = 0; i < _use.Length; i++) _use[i] = i == 0 ? TraySlotUse.InUse : i < use.Length ? use[i] : TraySlotUse.Off;
+            _hit = new RectangleF[_slots.Length];
             Invalidate();
         }
 
@@ -861,9 +870,24 @@ namespace NPIC_CARD_APP
             return s.X < -Tolerance || s.Y < -Tolerance || s.Right > p.Width + Tolerance || s.Bottom > p.Height + Tolerance;
         }
 
-        private bool Overlaps()
+        /// <summary>True when slot <paramref name="i"/> sits on an earlier slot that is not off.</summary>
+        private bool Overlaps(int i)
         {
-            return Math.Abs(_slot2.X - _slot1.X) < _slot1.Width - 1f && Math.Abs(_slot2.Y - _slot1.Y) < _slot1.Height - 1f;
+            for (int j = 0; j < i; j++)
+            {
+                if (_use[j] == TraySlotUse.Off) continue;
+                if (Math.Abs(_slots[i].X - _slots[j].X) < _slots[j].Width - 1f && Math.Abs(_slots[i].Y - _slots[j].Y) < _slots[j].Height - 1f)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>Paint order: slots that are off or idle first, then the printing ones (a later one on top), so an
+        /// overlap shows the slot that is wrong.</summary>
+        private IEnumerable<int> DrawOrder()
+        {
+            for (int i = 0; i < _slots.Length; i++) if (_use[i] != TraySlotUse.InUse) yield return i;
+            for (int i = 0; i < _slots.Length; i++) if (_use[i] == TraySlotUse.InUse) yield return i;
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
@@ -882,11 +906,13 @@ namespace NPIC_CARD_APP
             base.OnMouseDown(e);
         }
 
-        /// <summary>0 / 1 for slot 1 / 2 under the point; slot 2 wins where they overlap (it is drawn on top).</summary>
+        /// <summary>0 … 3 for the slot under the point; where slots overlap, the one drawn on top wins.</summary>
         private int HitSlot(Point pt)
         {
-            if (_slot2Use != TraySlotUse.Off && _hit[1].Contains(pt)) return 1;
-            return _hit[0].Contains(pt) ? 0 : -1;
+            int hit = -1;
+            foreach (int i in DrawOrder())
+                if (i < _hit.Length && _hit[i].Contains(pt)) hit = i;
+            return hit;
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -899,8 +925,8 @@ namespace NPIC_CARD_APP
             SizeF page = _page ?? A4;
             // Fit the page, and any slot hanging off it, so a misplaced slot is still visible.
             RectangleF view = new RectangleF(0, 0, page.Width, page.Height);
-            view = RectangleF.Union(view, _slot1);
-            if (_slot2Use != TraySlotUse.Off) view = RectangleF.Union(view, _slot2);
+            for (int i = 0; i < _slots.Length; i++)
+                if (_use[i] != TraySlotUse.Off) view = RectangleF.Union(view, _slots[i]);
 
             const float pad = 3f, gap = 12f;
             float availW = Width - 2 * pad, availH = Height - 2 * pad;
@@ -958,13 +984,12 @@ namespace NPIC_CARD_APP
                 g.DrawLine(pen, pageRect.Left + 1.5f, pageRect.Top + 1.5f, pageRect.Left + 1.5f, pageRect.Top + 1.5f + l);
             }
 
-            _hit[0] = px(_slot1);
-            _hit[1] = px(_slot2);
-            bool slot2Bad = _slot2Use != TraySlotUse.Off && (Outside(_slot2) || Overlaps());
-            // Slot 2 goes on top only when it prints, so an overlap shows the slot that is wrong
-            if (_slot2Use != TraySlotUse.InUse) DrawSlot(g, _hit[1], 2, _slot2Use, slot2Bad, _hover == 1);
-            DrawSlot(g, _hit[0], 1, TraySlotUse.InUse, Outside(_slot1), _hover == 0);
-            if (_slot2Use == TraySlotUse.InUse) DrawSlot(g, _hit[1], 2, _slot2Use, slot2Bad, _hover == 1);
+            for (int i = 0; i < _slots.Length; i++) _hit[i] = px(_slots[i]);
+            foreach (int i in DrawOrder())
+            {
+                bool bad = _use[i] != TraySlotUse.Off && (Outside(_slots[i]) || Overlaps(i));
+                DrawSlot(g, _hit[i], i + 1, _use[i], bad, _hover == i || _selected == i);
+            }
         }
 
         /// <summary>Swatch + name for each slot look, then the page size, stacked up from <paramref name="bottomLeft"/>.</summary>

@@ -1,4 +1,5 @@
 using System;
+using System.Drawing;
 using System.IO;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -8,13 +9,18 @@ using NPIC_CARD_APP.Rendering;
 
 namespace NPIC_CARD_APP.Services
 {
-    /// <summary>How many tray slots one print job (tray load) uses.</summary>
+    /// <summary>How many tray slots one print job (tray load) uses. Saved by name: keep the order (the Tray page picker).</summary>
     public enum SlotMode
     {
-        /// <summary>2 cards per load when 2+ cards are printed and slot 2 is usable, otherwise slot 1 only.</summary>
+        /// <summary>
+        /// When 2+ cards are printed: as many per load as slots 1, 2, 3 … in a row are usable (on the page, not on top of
+        /// an earlier slot), otherwise slot 1 only.
+        /// </summary>
         Auto,
         One,
-        Two
+        Two,
+        Three,
+        Four
     }
 
     /// <summary>How the card lies in the tray pocket, seen on the (portrait) page.</summary>
@@ -222,14 +228,72 @@ namespace NPIC_CARD_APP.Services
             }
         }
 
-        // Card position on the page, in millimetres (calibrate with Test Print)
+        /// <summary>Card pockets on the tray: slots 1 … 4 (one card each per tray load).</summary>
+        public const int MaxSlots = 4;
+
+        // Card position on the page, in millimetres (calibrate with Test Print).
+        // Slots 3 and 4 start at 0, 0 (on top of slot 1), so Auto does not use them until they are set up.
         public float Slot1X { get; set; }
         public float Slot1Y { get; set; }
         public float Slot2X { get; set; }
         public float Slot2Y { get; set; }
+        public float Slot3X { get; set; }
+        public float Slot3Y { get; set; }
+        public float Slot4X { get; set; }
+        public float Slot4Y { get; set; }
+
+        /// <summary>Top-left corner (mm) of slot <paramref name="index"/> (0 = slot 1 … 3 = slot 4).</summary>
+        public PointF SlotPosition(int index)
+        {
+            switch (index)
+            {
+                case 0: return new PointF(Slot1X, Slot1Y);
+                case 1: return new PointF(Slot2X, Slot2Y);
+                case 2: return new PointF(Slot3X, Slot3Y);
+                case 3: return new PointF(Slot4X, Slot4Y);
+                default: throw new ArgumentOutOfRangeException("index");
+            }
+        }
+
+        /// <summary>Sets the top-left corner (mm) of slot <paramref name="index"/> (0 = slot 1 … 3 = slot 4).</summary>
+        public void SetSlotPosition(int index, float x, float y)
+        {
+            switch (index)
+            {
+                case 0: Slot1X = x; Slot1Y = y; break;
+                case 1: Slot2X = x; Slot2Y = y; break;
+                case 2: Slot3X = x; Slot3Y = y; break;
+                case 3: Slot4X = x; Slot4Y = y; break;
+                default: throw new ArgumentOutOfRangeException("index");
+            }
+        }
+
+        /// <summary>Slot <paramref name="index"/> on the page in mm: its X / Y and the card size of the chosen orientation.</summary>
+        public RectangleF SlotRect(int index)
+        {
+            PointF p = SlotPosition(index);
+            return new RectangleF(p.X, p.Y, SlotWidthMm, SlotHeightMm);
+        }
+
+        /// <summary>Slots a full tray load always uses in a fixed mode (1 … 4), or 0 for Auto.</summary>
+        [XmlIgnore]
+        public int FixedSlots
+        {
+            get
+            {
+                switch (SlotMode)
+                {
+                    case SlotMode.One: return 1;
+                    case SlotMode.Two: return 2;
+                    case SlotMode.Three: return 3;
+                    case SlotMode.Four: return 4;
+                    default: return 0;
+                }
+            }
+        }
 
         /// <summary>
-        /// True when slot 2 is in use (Slot mode Auto or 2). Still saved so older versions of the app
+        /// True when slot 2 is in use (Slot mode Auto or 2 … 4). Still saved so older versions of the app
         /// read the setting; the app itself uses <see cref="SlotMode"/>.
         /// </summary>
         public bool UseTwoSlots { get; set; }
@@ -349,6 +413,10 @@ namespace NPIC_CARD_APP.Services
             Slot1Y = 0f;
             Slot2X = 0f;
             Slot2Y = 60f;
+            Slot3X = 0f;
+            Slot3Y = 0f;
+            Slot4X = 0f;
+            Slot4Y = 0f;
             SlotModeText = "";
             CardOrientation = CardOrientation.VerticalRight;
             CardText = new CardText();

@@ -159,6 +159,8 @@ namespace NPIC_CARD_APP
             A("Tray layout", "ប្លង់ថាស");
             A("Slot 1 position", "ទីតាំងរន្ធ 1");
             A("Slot 2 position", "ទីតាំងរន្ធ 2");
+            A("Slot 3 position", "ទីតាំងរន្ធ 3");
+            A("Slot 4 position", "ទីតាំងរន្ធ 4");
             A("Slot size on page", "ទំហំរន្ធលើទំព័រ");
             A("Rotate front 180°", "បង្វិលផ្នែកមុខ 180°");
             A("Rotate back 180°", "បង្វិលផ្នែកក្រោយ 180°");
@@ -237,8 +239,10 @@ namespace NPIC_CARD_APP
             A("Saved, but unreadable — run Driver Setup… again", "បានរក្សាទុក ប៉ុន្តែមិនអាចអានបាន — ដំណើរការ ការកំណត់ Driver… ម្ដងទៀត");
             A("1 — always slot 1 only", "1 — តែរន្ធ 1 ជានិច្ច");
             A("2 — always slot 1 + slot 2", "2 — រន្ធ 1 + រន្ធ 2 ជានិច្ច");
-            A("Auto — 2 cards per load when 2 or more are selected and slot 2 is set up",
-                "ស្វ័យប្រវត្តិ — កាត 2 ក្នុងមួយថាស ពេលជ្រើស 2 ឡើងទៅ ហើយរន្ធ 2 ត្រូវបានកំណត់");
+            A("3 — always slots 1 to 3", "3 — រន្ធ 1 ដល់ 3 ជានិច្ច");
+            A("4 — always slots 1 to 4", "4 — រន្ធ 1 ដល់ 4 ជានិច្ច");
+            A("Auto — when 2 or more are selected, one card per slot that is set up (up to 4)",
+                "ស្វ័យប្រវត្តិ — ពេលជ្រើស 2 ឡើងទៅ កាតមួយក្នុងរន្ធនីមួយៗដែលបានកំណត់ (រហូតដល់ 4)");
             A("{0} mm,  Y {1} mm", "{0} mm,  Y {1} mm");
         }
     }

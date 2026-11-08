@@ -518,6 +518,8 @@ namespace NPIC_CARD_APP
             const string tray = "Tray layout";
             add(tray, "Slot 1 position", "X " + s.Slot1X.ToString("0.0") + " mm,  Y " + s.Slot1Y.ToString("0.0") + " mm", false, null, null);
             add(tray, "Slot 2 position", "X " + s.Slot2X.ToString("0.0") + " mm,  Y " + s.Slot2Y.ToString("0.0") + " mm", false, null, null);
+            add(tray, "Slot 3 position", "X " + s.Slot3X.ToString("0.0") + " mm,  Y " + s.Slot3Y.ToString("0.0") + " mm", false, null, null);
+            add(tray, "Slot 4 position", "X " + s.Slot4X.ToString("0.0") + " mm,  Y " + s.Slot4Y.ToString("0.0") + " mm", false, null, null);
             add(tray, "Per tray load", DescribeSlotMode(s.SlotMode), false, null, null);
             add(tray, "Card on tray", DescribeOrientation(s.CardOrientation), false, null, null);
             add(tray, "Slot size on page", s.SlotWidthMm.ToString("0.0") + " x " + s.SlotHeightMm.ToString("0.0") + " mm", false, null, null);
@@ -679,7 +681,9 @@ namespace NPIC_CARD_APP
             {
                 case SlotMode.One: return "1 — always slot 1 only";
                 case SlotMode.Two: return "2 — always slot 1 + slot 2";
-                default: return "Auto — 2 cards per load when 2 or more are selected and slot 2 is set up";
+                case SlotMode.Three: return "3 — always slots 1 to 3";
+                case SlotMode.Four: return "4 — always slots 1 to 4";
+                default: return "Auto — when 2 or more are selected, one card per slot that is set up (up to 4)";
             }
         }
 

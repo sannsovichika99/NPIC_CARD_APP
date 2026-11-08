@@ -25,10 +25,10 @@ namespace NPIC_CARD_APP
 
         /// <param name="settings">Card design and tray settings (the back is rendered from them).</param>
         /// <param name="suggested">Copies shown at first, e.g. the number of selected students.</param>
-        /// <param name="perLoad">Cards per tray load when printing 2 or more (1 or 2, see CardPrinter.CardsPerLoad).</param>
+        /// <param name="perLoad">Cards per tray load when printing 2 or more (1 … 4, see CardPrinter.CardsPerLoad).</param>
         public PrintBackForm(AppSettings settings, int suggested, int perLoad)
         {
-            _perLoad = Math.Max(1, Math.Min(2, perLoad));
+            _perLoad = Math.Max(1, Math.Min(AppSettings.MaxSlots, perLoad));
 
             Text = "Print Back";
             Subtitle = "The back is the same for every student — no student needs to be selected";

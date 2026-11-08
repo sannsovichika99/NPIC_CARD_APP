@@ -57,7 +57,7 @@ export type StudentPage = { total: number; offset: number; items: StudentSummary
 
 /** What is selected in Card Studio on the PC (Print tab). */
 export type PcSelection = {
-  /** Selected for Print Selected, in tray slot order (at most 2). */
+  /** Selected for Print Selected, in tray slot order (at most 4). */
   students: StudentSummary[];
   /** Side tab shown on the PC. */
   side: 'front' | 'back';

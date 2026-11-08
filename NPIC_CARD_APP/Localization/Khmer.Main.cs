@@ -201,6 +201,8 @@ namespace NPIC_CARD_APP
             A("Print", "បោះពុម្ព");
             A("Slot 1: Back side", "រន្ធ 1៖ ផ្នែកខាងក្រោយ");
             A("Slot 2: Back side", "រន្ធ 2៖ ផ្នែកខាងក្រោយ");
+            A("Slot 3: Back side", "រន្ធ 3៖ ផ្នែកខាងក្រោយ");
+            A("Slot 4: Back side", "រន្ធ 4៖ ផ្នែកខាងក្រោយ");
             A("Printing cancelled after {0} card back(s).", "បានបោះបង់ការបោះពុម្ព បន្ទាប់ពីខាងក្រោយកាត {0}។");
             A("Done: {0} card back(s) printed.", "រួចរាល់៖ បានបោះពុម្ពខាងក្រោយកាត {0}។");
             A("Total students", "និស្សិតសរុប");
@@ -245,21 +247,20 @@ namespace NPIC_CARD_APP
             A("Load the student list from Excel, CSV, the web API or SQL Server (Ctrl+L)",
                 "ផ្ទុកបញ្ជីនិស្សិតពី Excel, CSV, web API ឬ SQL Server (Ctrl+L)");
             A("View List", "មើលបញ្ជី");
-            A("View every loaded student with photo, details and print status; choose up to 2 to print (Ctrl+G)",
-                "មើលនិស្សិតដែលបានផ្ទុកទាំងអស់ ជាមួយរូបថត ព័ត៌មានលម្អិត និងស្ថានភាពបោះពុម្ព ហើយជ្រើសរហូតដល់ 2 នាក់ដើម្បីបោះពុម្ព (Ctrl+G)");
-            // Selected students (at most 2: one per tray slot)
-            A("1 / 2 selected — pick one more student for slot 2.", "បានជ្រើស 1 / 2 — ជ្រើសនិស្សិតម្នាក់ទៀតសម្រាប់រន្ធ 2។");
-            A("2 / 2 selected — the most for one tray load. Remove one (✕) to pick another.",
-                "បានជ្រើស 2 / 2 — ច្រើនបំផុតសម្រាប់ការដាក់ថាសម្ដង។ ដកម្នាក់ចេញ (✕) ដើម្បីជ្រើសម្នាក់ទៀត។");
-            A("Not added: {0}. 2 students are already selected (one per tray slot) — remove one (✕) first.",
-                "មិនបានបន្ថែម៖ {0}។ បានជ្រើសនិស្សិត 2 នាក់រួចហើយ (ម្នាក់ក្នុងមួយរន្ធ) — សូមដកម្នាក់ចេញ (✕) ជាមុនសិន។");
-            A("Slot 1 · click to show this student", "រន្ធ 1 · ចុចដើម្បីបង្ហាញនិស្សិតនេះ");
-            A("Slot 2 · click to show this student", "រន្ធ 2 · ចុចដើម្បីបង្ហាញនិស្សិតនេះ");
-            A("Slot 1 · click to show this student · double-click to enlarge", "រន្ធ 1 · ចុចដើម្បីបង្ហាញនិស្សិតនេះ · ចុចពីរដងដើម្បីពង្រីក");
-            A("Slot 2 · click to show this student · double-click to enlarge", "រន្ធ 2 · ចុចដើម្បីបង្ហាញនិស្សិតនេះ · ចុចពីរដងដើម្បីពង្រីក");
+            A("View every loaded student with photo, details and print status; choose up to 4 to print (Ctrl+G)",
+                "មើលនិស្សិតដែលបានផ្ទុកទាំងអស់ ជាមួយរូបថត ព័ត៌មានលម្អិត និងស្ថានភាពបោះពុម្ព ហើយជ្រើសរហូតដល់ 4 នាក់ដើម្បីបោះពុម្ព (Ctrl+G)");
+            // Selected students (at most 4: one per tray slot)
+            A("{0} / {1} selected — you can pick {2} more.", "បានជ្រើស {0} / {1} — អាចជ្រើសបាន {2} នាក់ទៀត។");
+            A("{0} / {0} selected — the most at once. Remove one (✕) to pick another.",
+                "បានជ្រើស {0} / {0} — ច្រើនបំផុតក្នុងពេលតែមួយ។ ដកម្នាក់ចេញ (✕) ដើម្បីជ្រើសម្នាក់ទៀត។");
+            A("Not added: {0}. {1} students are already selected (one per tray slot) — remove one (✕) first.",
+                "មិនបានបន្ថែម៖ {0}។ បានជ្រើសនិស្សិត {1} នាក់រួចហើយ (ម្នាក់ក្នុងមួយរន្ធ) — សូមដកម្នាក់ចេញ (✕) ជាមុនសិន។");
+            A("Slot {0} · click to show this student", "រន្ធ {0} · ចុចដើម្បីបង្ហាញនិស្សិតនេះ");
+            A("Slot {0} · click to show this student · double-click to enlarge", "រន្ធ {0} · ចុចដើម្បីបង្ហាញនិស្សិតនេះ · ចុចពីរដងដើម្បីពង្រីក");
+            A("Empty slot", "រន្ធទទេ");
             A("Remove from the selection", "ដកចេញពីការជ្រើស");
             A("Clear", "សម្អាត");
-            A("Remove both students from the selection", "ដកនិស្សិតទាំងពីរចេញពីការជ្រើស");
+            A("Remove every student from the selection", "ដកនិស្សិតទាំងអស់ចេញពីការជ្រើស");
             A("{0} students", "និស្សិត {0} នាក់");
             A("{0} of {1} students", "និស្សិត {0} ក្នុងចំណោម {1} នាក់");
             A("{0}  ·  {1} selected", "{0}  ·  បានជ្រើស {1}");
@@ -321,11 +322,18 @@ namespace NPIC_CARD_APP
             // ---- Print setup: Tray ----
             A("Slot 1", "រន្ធ 1");
             A("Slot 2", "រន្ធ 2");
+            A("Slot 3", "រន្ធ 3");
+            A("Slot 4", "រន្ធ 4");
+            A("Position", "ទីតាំង");
+            A("The tray slot whose X / Y you edit below. You can also click a slot on the map.",
+                "រន្ធថាសដែលអ្នកកែ X / Y ខាងក្រោម។ អ្នកក៏អាចចុចលើរន្ធនៅលើផែនទីបានដែរ។");
             A("Per tray load", "ក្នុងមួយថាស");
-            A("Auto = 2 cards per tray load when 2 or more students are selected and slot 2 is set up; otherwise slot 1 only.\n" +
-              "1 = always slot 1 only.   2 = always slot 1 + slot 2.",
-                "ស្វ័យប្រវត្តិ = កាត 2 ក្នុងមួយថាស នៅពេលជ្រើសនិស្សិត 2 នាក់ឡើងទៅ ហើយរន្ធ 2 ត្រូវបានកំណត់ បើមិនដូច្នោះទេ តែរន្ធ 1។\n" +
-                "1 = តែរន្ធ 1 ជានិច្ច។   2 = រន្ធ 1 + រន្ធ 2 ជានិច្ច។");
+            A("Auto = when 2 or more cards are printed, one card per slot that is set up (slot 1, 2, 3, 4 in order: " +
+              "on the page and not on top of another slot); otherwise slot 1 only.\n" +
+              "1 … 4 = always that many slots (slot 1 up to slot 4).",
+                "ស្វ័យប្រវត្តិ = នៅពេលបោះពុម្ពកាត 2 ឡើងទៅ កាតមួយក្នុងរន្ធនីមួយៗដែលបានកំណត់ (រន្ធ 1, 2, 3, 4 តាមលំដាប់៖ " +
+                "នៅលើទំព័រ ហើយមិនជាន់លើរន្ធផ្សេង) បើមិនដូច្នោះទេ តែរន្ធ 1។\n" +
+                "1 … 4 = ប្រើរន្ធចំនួននោះជានិច្ច (ពីរន្ធ 1 ដល់រន្ធ 4)។");
             A("Card on tray", "កាតលើថាស");
             A("Horizontal", "ផ្ដេក");
             A("Vertical (turn right 90°)", "បញ្ឈរ (បង្វិលស្ដាំ 90°)");
@@ -344,15 +352,19 @@ namespace NPIC_CARD_APP
             A("Slot 1 Y: distance from the top edge of the page (mm)", "រន្ធ 1 Y៖ ចម្ងាយពីគែមខាងលើនៃទំព័រ (mm)");
             A("Slot 2 X: distance from the left edge of the page (mm)", "រន្ធ 2 X៖ ចម្ងាយពីគែមឆ្វេងនៃទំព័រ (mm)");
             A("Slot 2 Y: distance from the top edge of the page (mm)", "រន្ធ 2 Y៖ ចម្ងាយពីគែមខាងលើនៃទំព័រ (mm)");
+            A("Slot {0} X: distance from the left edge of the page (mm)", "រន្ធ {0} X៖ ចម្ងាយពីគែមឆ្វេងនៃទំព័រ (mm)");
+            A("Slot {0} Y: distance from the top edge of the page (mm)", "រន្ធ {0} Y៖ ចម្ងាយពីគែមខាងលើនៃទំព័រ (mm)");
             A("Prints", "បោះពុម្ព");
             A("Not used now", "មិនប្រើពេលនេះ");
             A("Problem", "មានបញ្ហា");
             A("Page {0:0.#} × {1:0.#} mm", "ទំព័រ {0:0.#} × {1:0.#} mm");
             A("Page size unknown", "មិនស្គាល់ទំហំទំព័រ");
+            A("Where each tray slot lands on the printer page. Click a slot to edit its X / Y.",
+                "ទីតាំងរន្ធថាសនីមួយៗនៅលើទំព័របោះពុម្ព។ ចុចលើរន្ធមួយ ដើម្បីកែ X / Y របស់វា។");
             A("Where slot 1 and slot 2 land on the printer page. Click a slot to edit its X / Y.",
                 "ទីតាំងរន្ធ 1 និងរន្ធ 2 នៅលើទំព័របោះពុម្ព។ ចុចលើរន្ធមួយ ដើម្បីកែ X / Y របស់វា។");
             A("{0} card(s) → {1} tray load(s)", "កាត {0} → ដាក់ថាស {1} ដង");
-            A("{0} card(s) → {1} tray load(s), 2 per load", "កាត {0} → ដាក់ថាស {1} ដង, 2 ក្នុងមួយដង");
+            A("{0} card(s) → {1} tray load(s), {2} per load", "កាត {0} → ដាក់ថាស {1} ដង, {2} ក្នុងមួយដង");
             A("{0} card(s) → {1} tray load(s), slot 1 only — slot 2 not usable",
                 "កាត {0} → ដាក់ថាស {1} ដង, តែរន្ធ 1 — រន្ធ 2 មិនអាចប្រើបាន");
 
@@ -464,7 +476,7 @@ namespace NPIC_CARD_APP
             A("Print anyway?", "នៅតែបោះពុម្ពឬ?");
             A("Slots per tray load: {0} ({1})", "រន្ធក្នុងមួយថាស៖ {0} ({1})");
             A("Slots per tray load: {0}", "រន្ធក្នុងមួយថាស៖ {0}");
-            A("2 cards when 2+ are selected", "កាត 2 នៅពេលជ្រើស 2 ឡើងទៅ");
+            A("up to {0} cards when 2+ are selected", "រហូតដល់កាត {0} នៅពេលជ្រើស 2 ឡើងទៅ");
             A("slot 1 only — {0}", "តែរន្ធ 1 — {0}");
             A("Printer: {0}", "ម៉ាស៊ីនបោះពុម្ព៖ {0}");
             A("No problems found.", "រកមិនឃើញបញ្ហាទេ។");
@@ -484,6 +496,8 @@ namespace NPIC_CARD_APP
             A("Side: {0}", "ផ្នែក៖ {0}");
             A("Slot 1: {0}", "រន្ធ 1៖ {0}");
             A("Slot 2: {0}", "រន្ធ 2៖ {0}");
+            A("Slot 3: {0}", "រន្ធ 3៖ {0}");
+            A("Slot 4: {0}", "រន្ធ 4៖ {0}");
             A("Click OK to send the job, then insert the tray when the printer light turns on.",
                 "ចុច យល់ព្រម ដើម្បីផ្ញើការងារ រួចដាក់ថាសនៅពេលភ្លើងម៉ាស៊ីនបោះពុម្ពភ្លឺ។");
             A("Tray load {0} of {1}", "ថាសទី {0} ក្នុងចំណោម {1}");

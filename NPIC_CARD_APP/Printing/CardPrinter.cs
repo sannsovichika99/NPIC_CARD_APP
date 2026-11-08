@@ -71,17 +71,21 @@ namespace NPIC_CARD_APP.Printing
             return devMode;
         }
 
-        /// <summary>Prints one tray load. slot1 / slot2 may be null.</summary>
-        public void Print(Bitmap slot1, Bitmap slot2, string documentName)
+        /// <summary>Prints one tray load: slots[0] on slot 1, slots[1] on slot 2 … (null = leave that slot blank).</summary>
+        public void Print(IList<Bitmap> slots, string documentName)
         {
-            Send(documentName, (g, page) => DrawLoad(g, slot1, slot2));
+            Send(documentName, (g, page) => DrawLoad(g, slots));
         }
 
-        /// <summary>Draws one tray load (slot1 / slot2 may be null) at the calibrated slot positions.</summary>
-        public void DrawLoad(Graphics g, Bitmap slot1, Bitmap slot2)
+        /// <summary>Draws one tray load (slots[i] on slot i + 1, nulls skipped) at the calibrated slot positions.</summary>
+        public void DrawLoad(Graphics g, IList<Bitmap> slots)
         {
-            if (slot1 != null) DrawCard(g, slot1, _settings.Slot1X, _settings.Slot1Y);
-            if (slot2 != null) DrawCard(g, slot2, _settings.Slot2X, _settings.Slot2Y);
+            for (int i = 0; i < slots.Count && i < AppSettings.MaxSlots; i++)
+            {
+                if (slots[i] == null) continue;
+                PointF p = _settings.SlotPosition(i);
+                DrawCard(g, slots[i], p.X, p.Y);
+            }
         }
 
         /// <summary>
@@ -167,12 +171,12 @@ namespace NPIC_CARD_APP.Printing
             using (var font = new Font("Arial", 6f, FontStyle.Bold, GraphicsUnit.Point))
             using (var brush = new SolidBrush(Color.Red))
             {
-                g.DrawRectangle(pen, _settings.Slot1X, _settings.Slot1Y, _settings.SlotWidthMm, _settings.SlotHeightMm);
-                g.DrawString("Slot 1", font, brush, _settings.Slot1X, _settings.Slot1Y - 3f);
-                if (_settings.UseTwoSlots)
+                int shown = SlotsInUse();
+                for (int i = 0; i < shown; i++)
                 {
-                    g.DrawRectangle(pen, _settings.Slot2X, _settings.Slot2Y, _settings.SlotWidthMm, _settings.SlotHeightMm);
-                    g.DrawString("Slot 2", font, brush, _settings.Slot2X, _settings.Slot2Y - 3f);
+                    RectangleF r = _settings.SlotRect(i);
+                    g.DrawRectangle(pen, r.X, r.Y, r.Width, r.Height);
+                    g.DrawString("Slot " + (i + 1), font, brush, r.X, r.Y - 3f);
                 }
             }
         }
@@ -265,9 +269,10 @@ namespace NPIC_CARD_APP.Printing
                 problems.Add("Paper Source is \"" + source + "\", not the ID card tray. Fix it in 'Driver Setup...'.");
 
             SizeF page = PageSizeMm(PortraitPage(ps));
-            AddIfNotNull(problems, SlotProblem(1, _settings.Slot1X, _settings.Slot1Y, page));
-            // In Auto mode an unusable slot 2 is not a problem: CardsPerLoad() simply prints 1 card per load.
-            if (_settings.SlotMode == SlotMode.Two) AddIfNotNull(problems, Slot2Problem(page));
+            // In Auto mode an unusable slot is not a problem: CardsPerLoad() simply prints fewer cards per load.
+            // A fixed mode (2 … 4) prints on every one of its slots, so each of them must be usable.
+            int needed = Math.Max(1, _settings.FixedSlots);
+            for (int i = 0; i < needed; i++) AddIfNotNull(problems, SlotProblem(i, page));
 
             problems.AddRange(PrinterStatus.Check(_settings.PrinterName));
             return problems;
@@ -275,44 +280,69 @@ namespace NPIC_CARD_APP.Printing
 
         /// <summary>
         /// How many cards go in one tray load when printing cardCount cards.
-        /// Auto: 2 when there are 2+ cards and slot 2 is usable (on the page, not overlapping slot 1), else 1.
-        /// reason = why Auto fell back to 1 slot although there are 2+ cards, otherwise null. Never throws.
+        /// Fixed mode (1 … 4): that many. Auto: 1 for a single card; otherwise as many as there are usable slots in a row
+        /// (see <see cref="UsableSlots"/>), but never more than cardCount.
+        /// reason = why Auto fell back to slot 1 only although there are 2+ cards, otherwise null. Never throws.
         /// </summary>
         public int CardsPerLoad(int cardCount, out string reason)
         {
             reason = null;
-            switch (_settings.SlotMode)
-            {
-                case SlotMode.One: return 1;
-                case SlotMode.Two: return 2;
-            }
+            if (_settings.FixedSlots > 0) return _settings.FixedSlots;
             if (cardCount < 2) return 1;
 
-            SizeF? page = null;
-            try { page = PageSizeMm(PortraitPage(CreatePrinterSettings())); }
-            catch { /* printer not available: only the overlap check is possible */ }
-
-            reason = Slot2Problem(page);
-            return reason == null ? 2 : 1;
+            string why;
+            int usable = UsableSlots(TryGetPageSizeMm(), out why);   // printer not available: only the overlap check
+            if (usable == 1) reason = why;   // slot 3 / 4 not set up is normal (a 2-pocket tray): no warning for those
+            return Math.Min(usable, cardCount);
         }
 
-        /// <summary>Why slot 2 cannot be used (outside the page or on top of slot 1), or null when it is fine.</summary>
-        private string Slot2Problem(SizeF? page)
+        /// <summary>
+        /// Slots 1 … n that can print together: each one on the page (when its size is known) and not on top of an earlier
+        /// slot. Slot 1 always counts. reason = why slot n + 1 cannot be used, or null when all
+        /// <see cref="AppSettings.MaxSlots"/> can.
+        /// </summary>
+        public int UsableSlots(SizeF? page, out string reason)
         {
-            float dx = Math.Abs(_settings.Slot2X - _settings.Slot1X);
-            float dy = Math.Abs(_settings.Slot2Y - _settings.Slot1Y);
-            if (dx < _settings.SlotWidthMm - 1f && dy < _settings.SlotHeightMm - 1f)
+            reason = null;
+            for (int i = 1; i < AppSettings.MaxSlots; i++)
             {
-                return string.Format(CultureInfo.InvariantCulture,
-                    "Slot 2 (X {0:0.0}, Y {1:0.0} mm) overlaps slot 1 (X {2:0.0}, Y {3:0.0} mm). " +
-                    "Change the Slot 2 X / Y and check it with 'Test Print'.",
-                    _settings.Slot2X, _settings.Slot2Y, _settings.Slot1X, _settings.Slot1Y);
+                reason = SlotProblem(i, page);
+                if (reason != null) return i;
             }
-            return page.HasValue ? SlotProblem(2, _settings.Slot2X, _settings.Slot2Y, page.Value) : null;
+            return AppSettings.MaxSlots;
+        }
+
+        /// <summary>Slots a full tray load prints on: the fixed mode's count, or the usable slots in Auto. Never throws.</summary>
+        public int SlotsInUse()
+        {
+            if (_settings.FixedSlots > 0) return _settings.FixedSlots;
+            string reason;
+            return UsableSlots(TryGetPageSizeMm(), out reason);
+        }
+
+        /// <summary>
+        /// Why slot <paramref name="index"/> (0 = slot 1) cannot be used — on top of an earlier slot, or outside the page
+        /// (checked only when <paramref name="page"/> is known) — or null when it is fine.
+        /// </summary>
+        private string SlotProblem(int index, SizeF? page)
+        {
+            RectangleF me = _settings.SlotRect(index);
+            for (int j = 0; j < index; j++)
+            {
+                RectangleF other = _settings.SlotRect(j);
+                if (Math.Abs(me.X - other.X) < me.Width - 1f && Math.Abs(me.Y - other.Y) < me.Height - 1f)
+                {
+                    return string.Format(CultureInfo.InvariantCulture,
+                        "Slot {0} (X {1:0.0}, Y {2:0.0} mm) overlaps slot {3} (X {4:0.0}, Y {5:0.0} mm). " +
+                        "Change the Slot {0} X / Y and check it with 'Test Print'.",
+                        index + 1, me.X, me.Y, j + 1, other.X, other.Y);
+                }
+            }
+            return page.HasValue ? OutsideProblem(index + 1, me.X, me.Y, page.Value) : null;
         }
 
         /// <summary>A card drawn outside the page is cut off by Windows → the card comes out blank.</summary>
-        private string SlotProblem(int slot, float x, float y, SizeF page)
+        private string OutsideProblem(int slot, float x, float y, SizeF page)
         {
             const float tolerance = 3f;
             if (x < -tolerance || y < -tolerance ||

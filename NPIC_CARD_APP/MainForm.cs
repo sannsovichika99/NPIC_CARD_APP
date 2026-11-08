@@ -40,8 +40,8 @@ namespace NPIC_CARD_APP
 
         private const int MaxSuggestions = 200;   // matches listed under the search box (type more to narrow them down)
 
-        /// <summary>Most students selected at once: one card per tray slot (slot 1 + slot 2 = one tray load).</summary>
-        private const int MaxSelected = 2;
+        /// <summary>Most students selected at once: one card per tray slot (slots 1 … 4 = one full tray load).</summary>
+        private const int MaxSelected = AppSettings.MaxSlots;
 
         // ===================== State =====================
         private readonly AppSettings _settings;
@@ -69,16 +69,19 @@ namespace NPIC_CARD_APP
         private Label _lblCount, _lblNoStudent;
         private FlowLayoutPanel _chosenBar;                   // chips of the selected students (at most MaxSelected)
         private Label _lblChosenHint;
-        private Label _capTitle1, _capSub1, _capTitle2, _capSub2;   // captions under the two preview tiles
+        private readonly Label[] _capTitles = new Label[MaxSelected], _capSubs = new Label[MaxSelected];   // under the preview tiles
         private TableLayoutPanel _studentFacts;
         private readonly Dictionary<string, Label> _factValues = new Dictionary<string, Label>();
-        private PreviewTile _picFront, _picBack;
+        // One student: tile 0 | 1 = front | back. Two or more: one tile per slot (slots 3 | 4 in a second row).
+        private readonly PreviewTile[] _tiles = new PreviewTile[MaxSelected];
+        private TableLayoutPanel _tileGrid;
         private PillButton _btnGrid;
         private bool _showGrid;                               // mm grid over the front / back previews (screen only)
         private ComboBox _cboPrinter;
         private CheckBox _chkAllPrinters;
-        private NumericUpDown _numS1X, _numS1Y, _numS2X, _numS2Y;
-        private SegmentPicker _segSlots, _segOrientation;
+        private NumericUpDown _numSlotX, _numSlotY;           // X / Y of the slot picked in _segEditSlot
+        private SegmentPicker _segSlots, _segOrientation, _segEditSlot;
+        private int _editSlot;                                // slot the X / Y boxes show (0 = slot 1)
         private TrayMap _trayMap;
         private CheckBox _chkRotateBack, _chkRotateFront;
         private Label _lblSlotHint;
@@ -201,8 +204,7 @@ namespace NPIC_CARD_APP
             StopAdminAgent();
             StopMobileLink();
             SaveSettings(false);
-            ReplaceImage(_picFront, null);
-            ReplaceImage(_picBack, null);
+            foreach (PreviewTile tile in _tiles) ReplaceImage(tile, null);
             base.OnFormClosing(e);
         }
 
@@ -665,7 +667,7 @@ namespace NPIC_CARD_APP
                 MakeButton("Import…", PillKind.Ghost, (s, e) => ShowImportPage(),
                     "Load the student list from Excel, CSV, the web API or SQL Server (Ctrl+L)"),
                 MakeButton("View List", PillKind.Ghost, (s, e) => ShowGallery(),
-                    "View every loaded student with photo, details and print status; choose up to 2 to print (Ctrl+G)"));
+                    "View every loaded student with photo, details and print status; choose up to 4 to print (Ctrl+G)"));
         }
 
         /// <summary>One "name  value" pair of the Student card; wide = the value spans the rest of the row.</summary>
@@ -765,30 +767,36 @@ namespace NPIC_CARD_APP
             searchRow.Controls.Add(_btnPrev, 1, 0);
             searchRow.Controls.Add(_btnNext, 2, 0);
 
-            // One student: front | back. Two students: slot 1 | slot 2, each on the side that will print.
-            _picFront = new PreviewTile { Margin = new Padding(0, 0, 6, 0) };
-            _picBack = new PreviewTile { Margin = new Padding(6, 0, 0, 0), EmptyText = "Back side" };
-            _picFront.DoubleClick += (s, e) => OnTileDoubleClick(0);
-            _picBack.DoubleClick += (s, e) => OnTileDoubleClick(1);
-            _picFront.Click += (s, e) => OnTileClick(0);
-            _picBack.Click += (s, e) => OnTileClick(1);
+            // One student: front | back. Two or more: slot 1 | slot 2 (slot 3 | slot 4 below), each on the side that will print.
+            for (int i = 0; i < MaxSelected; i++)
+            {
+                int tile = i;
+                _tiles[i] = new PreviewTile { Margin = i % 2 == 0 ? new Padding(0, 0, 6, 0) : new Padding(6, 0, 0, 0) };
+                _tiles[i].DoubleClick += (s, e) => OnTileDoubleClick(tile);
+                _tiles[i].Click += (s, e) => OnTileClick(tile);
+            }
+            _tiles[1].EmptyText = "Back side";
 
-            var tiles = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = new Padding(0) };
+            var tiles = _tileGrid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4, Margin = new Padding(0) };
             tiles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
             tiles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
-            tiles.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            tiles.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));    // front | back, or slot 1 | slot 2
             tiles.RowStyles.Add(new RowStyle(SizeType.Absolute, 28f));
-            tiles.Controls.Add(_picFront, 0, 0);
-            tiles.Controls.Add(_picBack, 1, 0);
-            tiles.Controls.Add(TileCaption(out _capTitle1, out _capSub1), 0, 1);
-            tiles.Controls.Add(TileCaption(out _capTitle2, out _capSub2), 1, 1);
+            tiles.RowStyles.Add(new RowStyle(SizeType.Absolute, 0f));     // slot 3 | slot 4: only with 3+ students (ShowSlotRow2)
+            tiles.RowStyles.Add(new RowStyle(SizeType.Absolute, 0f));
+            for (int i = 0; i < MaxSelected; i++)
+            {
+                tiles.Controls.Add(_tiles[i], i % 2, i / 2 * 2);
+                tiles.Controls.Add(TileCaption(out _capTitles[i], out _capSubs[i]), i % 2, i / 2 * 2 + 1);
+            }
+            ShowSlotRow2(false);
 
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Margin = new Padding(0) };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50f));      // search + ◀ ▶
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));           // selected students (hidden = no height)
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));           // Gallery pick bar (hidden = no height)
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));      // front | back, or slot 1 | slot 2
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));      // front | back, or slot 1 | slot 2 (| 3 | 4)
             layout.Controls.Add(searchRow, 0, 0);
             layout.Controls.Add(BuildChosenBar(), 0, 1);
             layout.Controls.Add(BuildPickBar(), 0, 2);
@@ -841,10 +849,24 @@ namespace NPIC_CARD_APP
         private void SetPreviewGrid(bool show)
         {
             _showGrid = show;
-            _picFront.ShowGrid = show;
-            _picBack.ShowGrid = show;
+            foreach (PreviewTile tile in _tiles) tile.ShowGrid = show;
             _btnGrid.Checked = show;
             _btnGrid.Text = show ? "Grid ✓" : "Grid";
+        }
+
+        /// <summary>Second row of preview tiles (slot 3 | slot 4): shown only while 3 or more students are selected.</summary>
+        private void ShowSlotRow2(bool show)
+        {
+            _tileGrid.SuspendLayout();
+            _tileGrid.RowStyles[2].SizeType = show ? SizeType.Percent : SizeType.Absolute;
+            _tileGrid.RowStyles[2].Height = show ? 100f : 0f;
+            _tileGrid.RowStyles[3].Height = show ? 28f : 0f;
+            for (int i = 2; i < MaxSelected; i++)
+            {
+                _tiles[i].Visible = show;
+                _capTitles[i].Parent.Visible = show;
+            }
+            _tileGrid.ResumeLayout(true);
         }
 
         /// <summary>Caption under a preview tile: "Front  ព័ត៌មាននិស្សិត", or "Slot 1  NPIC25161 · name" (set in UpdatePreview).</summary>
@@ -862,7 +884,7 @@ namespace NPIC_CARD_APP
 
         /// <summary>
         /// Chips of the selected students under the search ("① NPIC25161 · name ✕"), at most <see cref="MaxSelected"/>:
-        /// one card per tray slot. Clicking a chip shows that student; ✕ removes it; Clear removes both.
+        /// one card per tray slot. Clicking a chip shows that student; ✕ removes it; Clear removes them all.
         /// </summary>
         private Control BuildChosenBar()
         {
@@ -878,7 +900,7 @@ namespace NPIC_CARD_APP
             return _chosenBar;
         }
 
-        /// <summary>Rebuilds the chips of the selected students and the "1 / 2" hint.</summary>
+        /// <summary>Rebuilds the chips of the selected students and the "1 / 4" hint.</summary>
         private void UpdateChosenBar(bool full = false)
         {
             if (_chosenBar == null) return;
@@ -892,24 +914,24 @@ namespace NPIC_CARD_APP
             for (int i = 0; i < _selection.Count; i++)
             {
                 Student s = _selection[i];
-                // ID only, so both chips + Clear fit on one row; the name is in the tooltip and under the tile
-                var chip = (PillButton)MakeButton((i == 0 ? "①" : "②") + "  " + s.StudentId, PillKind.Ghost, (o, e) => MoveTo(s));
+                // ID only, so the chips + Clear fit on few rows; the name is in the tooltip and under the tile
+                var chip = (PillButton)MakeButton("①②③④".Substring(i, 1) + "  " + s.StudentId, PillKind.Ghost, (o, e) => MoveTo(s));
                 chip.Checked = s == _current;
                 chip.UseMnemonic = false;
                 chip.Margin = new Padding(0, 4, 0, 2);
                 _tip.SetToolTip(chip, Describe(s) + Environment.NewLine +
-                    Lang.T(i == 0 ? "Slot 1 · click to show this student" : "Slot 2 · click to show this student"));
+                    Lang.F("Slot {0} · click to show this student", i + 1));
                 var remove = MakeButton("✕", PillKind.Ghost, (o, e) => RemoveFromSelection(s), "Remove from the selection");
                 remove.Margin = new Padding(0, 4, 10, 2);
                 _chosenBar.Controls.Add(Lang.Keep(chip));
                 _chosenBar.Controls.Add(remove);
             }
             if (_selection.Count > 0)
-                _chosenBar.Controls.Add(MakeButton("Clear", PillKind.Ghost, (o, e) => SelectStudent(null), "Remove both students from the selection"));
+                _chosenBar.Controls.Add(MakeButton("Clear", PillKind.Ghost, (o, e) => SelectStudent(null), "Remove every student from the selection"));
 
-            _lblChosenHint.Text = Lang.T(_selection.Count >= MaxSelected
-                ? "2 / 2 selected — the most for one tray load. Remove one (✕) to pick another."
-                : "1 / 2 selected — pick one more student for slot 2.");
+            _lblChosenHint.Text = _selection.Count >= MaxSelected
+                ? Lang.F("{0} / {0} selected — the most at once. Remove one (✕) to pick another.", MaxSelected)
+                : Lang.F("{0} / {1} selected — you can pick {2} more.", _selection.Count, MaxSelected, MaxSelected - _selection.Count);
             _lblChosenHint.ForeColor = full ? Warning : TextMuted;
             _chosenBar.Controls.Add(_lblChosenHint);
 
@@ -1000,15 +1022,16 @@ namespace NPIC_CARD_APP
 
         //  Tray page (fits the 174 px card body, no scrolling; the hint + Save strip is docked under the grid):
         //  ┌──────────────────────────────────────────┬───────────┐
-        //  │               X (mm)     Y (mm)          │ ┌───────┐ │
-        //  │ Slot 1        [  0.0 ]   [  0.0 ]        │ │ 1     │ │  mini map of the page:
-        //  │ Slot 2        [  0.0 ]   [ 60.0 ]        │ │   2   │ │  where each slot lands,
-        //  │ Per tray load [Auto| 1 | 2 ]             │ │       │ │  live as the values change
+        //  │ Slot          [ 1 | 2 | 3 | 4 ]          │ ┌───────┐ │
+        //  │               X (mm)     Y (mm)          │ │ 1  3  │ │  mini map of the page:
+        //  │ Position      [  0.0 ]   [ 60.0 ]        │ │ 2  4  │ │  where each slot lands,
+        //  │ Per tray load [Auto| 1 | 2 | 3 | 4 ]     │ │       │ │  live as the values change
         //  │ Card on tray  [ ▭ | ▯ | ▯ ]              │ │       │ │
         //  │ Rotate 180°   ☐ Front  ☐ Back            │ └───────┘ │
         //  ├──────────────────────────────────────────┴───────────┤
-        //  │ 5 card(s) → 3 tray load(s), 2 per load        [Save] │
+        //  │ 5 card(s) → 2 tray load(s), 4 per load        [Save] │
         //  └──────────────────────────────────────────────────────┘
+        // The X / Y boxes edit one slot at a time (four pairs would not fit): pick it with Slot or click it on the map.
         private Control BuildTrayPage()
         {
             const float rowH = 26f;
@@ -1021,33 +1044,37 @@ namespace NPIC_CARD_APP
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));          // X / Front
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));          // Y / Back
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));     // mini map
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, rowH));          // slot being edited
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 14f));           // X / Y column heads
-            for (int i = 0; i < 5; i++) grid.RowStyles.Add(new RowStyle(SizeType.Absolute, rowH));
+            for (int i = 0; i < 4; i++) grid.RowStyles.Add(new RowStyle(SizeType.Absolute, rowH));
 
-            grid.Controls.Add(ColumnHead("X (mm)"), 1, 0);
-            grid.Controls.Add(ColumnHead("Y (mm)"), 2, 0);
+            _segEditSlot = new SegmentPicker(new[] { "1", "2", "3", "4" }) { Anchor = AnchorStyles.Left, Margin = new Padding(0) };
+            _segEditSlot.SelectedIndex = 0;
+            _segEditSlot.SelectedIndexChanged += (s, e) => { if (_segEditSlot.SelectedIndex >= 0) ShowSlotPosition(_segEditSlot.SelectedIndex); };
+            _tip.SetTip(_segEditSlot, "The tray slot whose X / Y you edit below. You can also click a slot on the map.");
+            grid.Controls.Add(TrayLabel("Slot"), 0, 0);
+            grid.Controls.Add(_segEditSlot, 1, 0);
+            grid.SetColumnSpan(_segEditSlot, 2);
 
-            _numS1X = TrayNumber(); _numS1Y = TrayNumber();
-            _numS2X = TrayNumber(); _numS2Y = TrayNumber();
-            foreach (NumericUpDown n in new[] { _numS1X, _numS1Y, _numS2X, _numS2Y })
-                n.ValueChanged += (s, e) => UpdateSlotHint();
-            _tip.SetTip(_numS1X, "Slot 1 X: distance from the left edge of the page (mm)");
-            _tip.SetTip(_numS1Y, "Slot 1 Y: distance from the top edge of the page (mm)");
-            _tip.SetTip(_numS2X, "Slot 2 X: distance from the left edge of the page (mm)");
-            _tip.SetTip(_numS2Y, "Slot 2 Y: distance from the top edge of the page (mm)");
-            grid.Controls.Add(TrayLabel("Slot 1"), 0, 1);
-            grid.Controls.Add(_numS1X, 1, 1);
-            grid.Controls.Add(_numS1Y, 2, 1);
-            grid.Controls.Add(TrayLabel("Slot 2"), 0, 2);
-            grid.Controls.Add(_numS2X, 1, 2);
-            grid.Controls.Add(_numS2Y, 2, 2);
+            grid.Controls.Add(ColumnHead("X (mm)"), 1, 1);
+            grid.Controls.Add(ColumnHead("Y (mm)"), 2, 1);
+            _numSlotX = TrayNumber();
+            _numSlotY = TrayNumber();
+            _numSlotX.ValueChanged += (s, e) => UpdateSlotHint();   // UpdateSlotHint stores the boxes in the edited slot
+            _numSlotY.ValueChanged += (s, e) => UpdateSlotHint();
+            _tip.SetTip(_numSlotX, "Slot 1 X: distance from the left edge of the page (mm)");   // ShowSlotPosition updates them
+            _tip.SetTip(_numSlotY, "Slot 1 Y: distance from the top edge of the page (mm)");
+            grid.Controls.Add(TrayLabel("Position"), 0, 2);
+            grid.Controls.Add(_numSlotX, 1, 2);
+            grid.Controls.Add(_numSlotY, 2, 2);
 
-            // Order must match the SlotMode enum: Auto, One, Two
-            _segSlots = new SegmentPicker(new[] { "Auto", "1", "2" }) { Anchor = AnchorStyles.Left, Margin = new Padding(0) };
+            // Order must match the SlotMode enum: Auto, One, Two, Three, Four
+            _segSlots = new SegmentPicker(new[] { "Auto", "1", "2", "3", "4" }) { Anchor = AnchorStyles.Left, Margin = new Padding(0) };
             _segSlots.SelectedIndexChanged += (s, e) => UpdateSlotHint();
             _tip.SetTip(_segSlots,
-                "Auto = 2 cards per tray load when 2 or more students are selected and slot 2 is set up; " +
-                "otherwise slot 1 only.\n1 = always slot 1 only.   2 = always slot 1 + slot 2.");
+                "Auto = when 2 or more cards are printed, one card per slot that is set up (slot 1, 2, 3, 4 in order: " +
+                "on the page and not on top of another slot); otherwise slot 1 only.\n" +
+                "1 … 4 = always that many slots (slot 1 up to slot 4).");
             grid.Controls.Add(TrayLabel("Per tray load"), 0, 3);
             grid.Controls.Add(_segSlots, 1, 3);
             grid.SetColumnSpan(_segSlots, 2);
@@ -1083,14 +1110,14 @@ namespace NPIC_CARD_APP
             grid.Controls.Add(_chkRotateFront, 1, 5);
             grid.Controls.Add(_chkRotateBack, 2, 5);
 
-            _trayMap = new TrayMap { Dock = DockStyle.Fill, Margin = new Padding(12, 2, 0, 2) };
+            _trayMap = new TrayMap { Dock = DockStyle.Fill, Margin = new Padding(12, 2, 0, 2), SelectedSlot = 0 };
             _trayMap.SlotClicked += slot =>
             {
-                NumericUpDown box = slot == 1 ? _numS1X : _numS2X;
-                box.Focus();
-                box.Select(0, box.Text.Length);
+                _segEditSlot.SelectedIndex = slot - 1;   // loads that slot's X / Y
+                _numSlotX.Focus();
+                _numSlotX.Select(0, _numSlotX.Text.Length);
             };
-            _tip.SetTip(_trayMap, "Where slot 1 and slot 2 land on the printer page. Click a slot to edit its X / Y.");
+            _tip.SetTip(_trayMap, "Where each tray slot lands on the printer page. Click a slot to edit its X / Y.");
             grid.Controls.Add(_trayMap, 3, 0);
             grid.SetRowSpan(_trayMap, 6);
 
@@ -1115,6 +1142,27 @@ namespace NPIC_CARD_APP
             page.Controls.Add(grid);     // fill first, docked edge last (docking runs in reverse add order)
             page.Controls.Add(footer);
             return page;
+        }
+
+        /// <summary>
+        /// Shows slot <paramref name="slot"/> (0 = slot 1) in the X / Y boxes and outlines it on the map. A number still
+        /// being typed is first stored in the slot it was typed for.
+        /// </summary>
+        private void ShowSlotPosition(int slot)
+        {
+            if (!_loading) ReadUiToSettings();   // reading Value commits typed text, into the slot shown until now
+            _editSlot = slot;
+            bool wasLoading = _loading;
+            _loading = true;   // loading the boxes must not count as an edit
+            PointF p = _settings.SlotPosition(slot);
+            _numSlotX.Value = Clamp(_numSlotX, p.X);
+            _numSlotY.Value = Clamp(_numSlotY, p.Y);
+            _loading = wasLoading;
+            if (_segEditSlot.SelectedIndex != slot) _segEditSlot.SelectedIndex = slot;
+            _tip.SetTip(_numSlotX, "Slot " + (slot + 1) + " X: distance from the left edge of the page (mm)");
+            _tip.SetTip(_numSlotY, "Slot " + (slot + 1) + " Y: distance from the top edge of the page (mm)");
+            _trayMap.SelectedSlot = slot;
+            UpdateSlotHint();
         }
 
         private static Label TrayLabel(string text)
@@ -1377,7 +1425,7 @@ namespace NPIC_CARD_APP
         /// <summary>Print side changed: outline the side that prints, or re-render both slots on it.</summary>
         private void UpdateSideHighlight()
         {
-            if (_selection.Count > 1) UpdatePreview();   // two students: the tiles show the side that prints
+            if (_selection.Count > 1) UpdatePreview();   // two or more students: the tiles show the side that prints
             else UpdateTileHighlight();
             UpdateSlotHint();
         }
@@ -1492,7 +1540,7 @@ namespace NPIC_CARD_APP
 
         /// <summary>
         /// Picking a match in the search: adds the student to the selection and shows their card. At most
-        /// <see cref="MaxSelected"/> students: a third one is refused until one is removed (✕).
+        /// <see cref="MaxSelected"/> students: one more is refused until one is removed (✕).
         /// </summary>
         private bool AddStudent(Student s)
         {
@@ -1501,9 +1549,9 @@ namespace NPIC_CARD_APP
             {
                 if (_selection.Count >= MaxSelected)
                 {
-                    UpdateChosenBar(true);   // the "2 / 2 selected" hint turns orange
-                    SetStatus(string.Format("Not added: {0}. 2 students are already selected (one per tray slot) — remove one (✕) first.",
-                        Describe(s)));
+                    UpdateChosenBar(true);   // the "4 / 4 selected" hint turns orange
+                    SetStatus(string.Format("Not added: {0}. {1} students are already selected (one per tray slot) — remove one (✕) first.",
+                        Describe(s), MaxSelected));
                     System.Media.SystemSounds.Beep.Play();
                     return false;
                 }
@@ -1514,7 +1562,7 @@ namespace NPIC_CARD_APP
             return true;
         }
 
-        /// <summary>✕ on a chip: the student leaves the selection; the other one (if any) is shown.</summary>
+        /// <summary>✕ on a chip: the student leaves the selection; the first one left (if any) is shown.</summary>
         private void RemoveFromSelection(Student s)
         {
             if (!_selection.Remove(s)) return;
@@ -1524,7 +1572,7 @@ namespace NPIC_CARD_APP
 
         /// <summary>
         /// Shows <paramref name="s"/> (◀ ▶, the full-screen preview, the next student after an RFID upload). A selected
-        /// student just comes to the front; any other one takes the slot of the student shown now, so the other slot stays.
+        /// student just comes to the front; any other one takes the slot of the student shown now, so the other slots stay.
         /// </summary>
         private void MoveTo(Student s)
         {
@@ -1540,21 +1588,22 @@ namespace NPIC_CARD_APP
             OnSelectionChanged();
         }
 
-        /// <summary>Click on a preview tile: one student = print that side; two = show that slot's student.</summary>
+        /// <summary>Click on a preview tile: one student = print that side; two or more = show that slot's student.</summary>
         private void OnTileClick(int tile)
         {
-            if (_selection.Count > 1) MoveTo(_selection[tile]);
-            else _sideTabs.SelectedIndex = tile;
+            if (_selection.Count > 1) { if (tile < _selection.Count) MoveTo(_selection[tile]); }
+            else if (tile < 2) _sideTabs.SelectedIndex = tile;
         }
 
         private void OnTileDoubleClick(int tile)
         {
             if (_selection.Count > 1)
             {
+                if (tile >= _selection.Count) return;   // empty slot
                 MoveTo(_selection[tile]);
                 ShowFullScreen(PrintFront ? PreviewSide.Front : PreviewSide.Back);
             }
-            else ShowFullScreen(tile == 0 ? PreviewSide.Front : PreviewSide.Back);
+            else if (tile < 2) ShowFullScreen(tile == 0 ? PreviewSide.Front : PreviewSide.Back);
         }
 
         private void OnSelectionChanged()
@@ -1699,7 +1748,7 @@ namespace NPIC_CARD_APP
             var s = item as Student;
             bool selected = s != null && (e.State & DrawItemState.Selected) != 0;
             bool chosen = s != null && _selection.Contains(s);
-            bool blocked = s != null && !chosen && _selection.Count >= MaxSelected;   // can't be added: 2 already selected
+            bool blocked = s != null && !chosen && _selection.Count >= MaxSelected;   // can't be added: the selection is full
             using (var b = new SolidBrush(selected ? AccentSoft : Surface)) g.FillRectangle(b, e.Bounds);
 
             const TextFormatFlags flags = TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine |
@@ -1838,10 +1887,9 @@ namespace NPIC_CARD_APP
         private void ApplySettingsToUi()
         {
             _loading = true;   // the controls below must not write back into _settings half-way
-            _numS1X.Value = Clamp(_numS1X, _settings.Slot1X);
-            _numS1Y.Value = Clamp(_numS1Y, _settings.Slot1Y);
-            _numS2X.Value = Clamp(_numS2X, _settings.Slot2X);
-            _numS2Y.Value = Clamp(_numS2Y, _settings.Slot2Y);
+            PointF slot = _settings.SlotPosition(_editSlot);
+            _numSlotX.Value = Clamp(_numSlotX, slot.X);
+            _numSlotY.Value = Clamp(_numSlotY, slot.Y);
             _segSlots.SelectedIndex = (int)_settings.SlotMode;
             _chkRotateBack.Checked = _settings.RotateBack180;
             _chkRotateFront.Checked = _settings.RotateFront180;
@@ -1859,10 +1907,7 @@ namespace NPIC_CARD_APP
 
         private void ReadUiToSettings()
         {
-            _settings.Slot1X = (float)_numS1X.Value;
-            _settings.Slot1Y = (float)_numS1Y.Value;
-            _settings.Slot2X = (float)_numS2X.Value;
-            _settings.Slot2Y = (float)_numS2Y.Value;
+            _settings.SetSlotPosition(_editSlot, (float)_numSlotX.Value, (float)_numSlotY.Value);
             if (_segSlots.SelectedIndex >= 0) _settings.SlotMode = (SlotMode)_segSlots.SelectedIndex;
             _settings.RotateBack180 = _chkRotateBack.Checked;
             _settings.RotateFront180 = _chkRotateFront.Checked;
@@ -1897,7 +1942,7 @@ namespace NPIC_CARD_APP
             try { _lblPage.Text = printer.DescribePage().Replace("  |  ", Environment.NewLine); }
             catch (Exception ex) { _lblPage.Text = ex.Message; }
             _trayMap.PageMm = printer.TryGetPageSizeMm();
-            UpdateSlotHint();   // the page size decides whether slot 2 fits
+            UpdateSlotHint();   // the page size decides whether slots 2 … 4 fit
         }
 
         /// <summary>Shows next to the Slots box how the selected cards will be split into tray loads.</summary>
@@ -1907,19 +1952,33 @@ namespace NPIC_CARD_APP
             ReadUiToSettings();
 
             int count = SelectedStudents().Count;
+            var printer = new CardPrinter(_settings);
             string reason;
-            int perLoad = new CardPrinter(_settings).CardsPerLoad(count, out reason);
+            int perLoad = printer.CardsPerLoad(count, out reason);
             int loads = (count + perLoad - 1) / perLoad;
 
             string text = count == 0 ? "" : string.Format("{0} card(s) → {1} tray load(s)", count, loads);
             if (_settings.SlotMode == SlotMode.Auto && count >= 2)
-                text += perLoad == 2 ? ", 2 per load" : ", slot 1 only — slot 2 not usable";
+                text += perLoad >= 2 ? string.Format(", {0} per load", perLoad) : ", slot 1 only — slot 2 not usable";
             _lblSlotHint.Text = text;
             _lblSlotHint.ForeColor = reason != null ? Warning : TextMuted;
-            _trayMap.SetSlots(
-                new RectangleF(_settings.Slot1X, _settings.Slot1Y, _settings.SlotWidthMm, _settings.SlotHeightMm),
-                new RectangleF(_settings.Slot2X, _settings.Slot2Y, _settings.SlotWidthMm, _settings.SlotHeightMm),
-                _settings.SlotMode == SlotMode.One ? TraySlotUse.Off : perLoad == 2 ? TraySlotUse.InUse : TraySlotUse.Idle);
+
+            // Map: fixed mode = its slots print, the rest are off. Auto = the slots the selection fills print, the other
+            // usable ones are idle; slot 2 always shows (amber when it cannot be used), slots 3 / 4 only once set up.
+            string why;
+            bool auto = _settings.FixedSlots == 0;
+            int usable = auto ? printer.UsableSlots(_trayMap.PageMm, out why) : _settings.FixedSlots;
+            int printing = auto ? (count >= 2 ? perLoad : 1) : _settings.FixedSlots;
+            var rects = new RectangleF[AppSettings.MaxSlots];
+            var use = new TraySlotUse[AppSettings.MaxSlots];
+            for (int i = 0; i < rects.Length; i++)
+            {
+                rects[i] = _settings.SlotRect(i);
+                use[i] = i < printing ? TraySlotUse.InUse
+                    : auto && (i < usable || i == 1) ? TraySlotUse.Idle
+                    : TraySlotUse.Off;
+            }
+            _trayMap.SetSlots(rects, use);
             _statSelected.Caption = count == 0
                 ? "Search for a student"
                 : string.Format("{0} tray load(s)  ·  {1} side", loads, PrintFront ? "front" : "back");
@@ -2475,46 +2534,62 @@ namespace NPIC_CARD_APP
         // ===================== Preview =====================
         /// <summary>Front and back of the picked student; empty tiles (with a hint) until a student is picked.</summary>
         /// <remarks>
-        /// One student selected: their front | back, the side that prints outlined. Two: slot 1 | slot 2, both on the side
-        /// that prints (what one tray load will look like), the student shown in the Student card outlined.
+        /// One student selected: their front | back, the side that prints outlined. Two or more: one tile per slot (slot 1 |
+        /// slot 2, and slot 3 | slot 4 below with 3+), all on the side that prints (what one full tray load will look
+        /// like), the student shown in the Student card outlined.
         /// </remarks>
         private void UpdatePreview()
         {
             Student s = CurrentStudent();
-            bool pair = _selection.Count > 1;
+            int count = _selection.Count;
+            bool slots = count > 1;
+            ShowSlotRow2(count > 2);
             if (s == null)
             {
-                _picFront.EmptyText = _students.Count == 0 ? "No students loaded yet" : "Search for a student to see the card";
-                _picBack.EmptyText = "Back side";
+                _tiles[0].EmptyText = _students.Count == 0 ? "No students loaded yet" : "Search for a student to see the card";
+                _tiles[1].EmptyText = "Back side";
             }
 
-            if (pair)
+            if (slots)
             {
                 string side = Lang.T(PrintFront ? "Front" : "Back");
-                SetCaption(_capTitle1, _capSub1, Lang.T("Slot 1"), side + " · " + Describe(_selection[0]));
-                SetCaption(_capTitle2, _capSub2, Lang.T("Slot 2"), side + " · " + Describe(_selection[1]));
-                _tip.SetTip(_picFront, "Slot 1 · click to show this student · double-click to enlarge");
-                _tip.SetTip(_picBack, "Slot 2 · click to show this student · double-click to enlarge");
+                for (int i = 0; i < MaxSelected; i++)
+                {
+                    string title = Lang.T("Slot " + (i + 1));
+                    if (i < count)
+                    {
+                        SetCaption(i, title, side + " · " + Describe(_selection[i]));
+                        _tip.SetTip(_tiles[i], "Slot " + (i + 1) + " · click to show this student · double-click to enlarge");
+                    }
+                    else
+                    {
+                        SetCaption(i, title, Lang.T("Empty slot"));
+                        _tiles[i].EmptyText = "Empty slot";
+                        _tip.SetTip(_tiles[i], "");
+                    }
+                }
             }
             else
             {
-                SetCaption(_capTitle1, _capSub1, Lang.T("Front"), "ព័ត៌មាននិស្សិត");
-                SetCaption(_capTitle2, _capSub2, Lang.T("Back"), "ព័ត៌មានវិទ្យាស្ថាន");
-                _tip.SetTip(_picFront, "Click to print this side · double-click to enlarge");
-                _tip.SetTip(_picBack, "Click to print this side · double-click to enlarge");
+                SetCaption(0, Lang.T("Front"), "ព័ត៌មាននិស្សិត");
+                SetCaption(1, Lang.T("Back"), "ព័ត៌មានវិទ្យាស្ថាន");
+                _tip.SetTip(_tiles[0], "Click to print this side · double-click to enlarge");
+                _tip.SetTip(_tiles[1], "Click to print this side · double-click to enlarge");
             }
 
             try
             {
-                if (pair)
+                if (slots)
                 {
-                    ReplaceImage(_picFront, PrintFront ? CardRenderer.RenderFront(_selection[0], _settings) : CardRenderer.RenderBack(_settings));
-                    ReplaceImage(_picBack, PrintFront ? CardRenderer.RenderFront(_selection[1], _settings) : CardRenderer.RenderBack(_settings));
+                    for (int i = 0; i < MaxSelected; i++)
+                        ReplaceImage(_tiles[i], i >= count ? null
+                            : PrintFront ? CardRenderer.RenderFront(_selection[i], _settings) : CardRenderer.RenderBack(_settings));
                 }
                 else
                 {
-                    ReplaceImage(_picFront, s == null ? null : CardRenderer.RenderFront(s, _settings));
-                    ReplaceImage(_picBack, s == null ? null : CardRenderer.RenderBack(_settings));
+                    ReplaceImage(_tiles[0], s == null ? null : CardRenderer.RenderFront(s, _settings));
+                    ReplaceImage(_tiles[1], s == null ? null : CardRenderer.RenderBack(_settings));
+                    for (int i = 2; i < MaxSelected; i++) ReplaceImage(_tiles[i], null);
                 }
             }
             catch (Exception ex)
@@ -2524,25 +2599,21 @@ namespace NPIC_CARD_APP
             UpdateTileHighlight();
         }
 
-        private static void SetCaption(Label title, Label sub, string titleText, string subText)
+        private void SetCaption(int tile, string titleText, string subText)
         {
-            if (title == null) return;
-            title.Text = titleText;
-            sub.Text = subText;
+            if (_capTitles[tile] == null) return;
+            _capTitles[tile].Text = titleText;
+            _capSubs[tile].Text = subText;
         }
 
-        /// <summary>Violet outline: the side that prints (one student), or the student shown in the Student card (two).</summary>
+        /// <summary>Violet outline: the side that prints (one student), or the student shown in the Student card (two or more).</summary>
         private void UpdateTileHighlight()
         {
-            if (_selection.Count > 1)
+            for (int i = 0; i < MaxSelected; i++)
             {
-                _picFront.Highlight = _current == _selection[0];
-                _picBack.Highlight = _current == _selection[1];
-            }
-            else
-            {
-                _picFront.Highlight = PrintFront;
-                _picBack.Highlight = !PrintFront;
+                _tiles[i].Highlight = _selection.Count > 1
+                    ? i < _selection.Count && _current == _selection[i]
+                    : i < 2 && (i == 0) == PrintFront;
             }
         }
 
@@ -2753,10 +2824,10 @@ namespace NPIC_CARD_APP
             finally { Cursor = Cursors.Default; }
 
             string slotReason;
-            int perLoad = printer.CardsPerLoad(2, out slotReason);
+            int perLoad = printer.CardsPerLoad(AppSettings.MaxSlots, out slotReason);
             string slots = "Slots per tray load: " + _segSlots.SelectedText +
                 (_settings.SlotMode == SlotMode.Auto
-                    ? " (" + (perLoad == 2 ? "2 cards when 2+ are selected" : "slot 1 only — " + slotReason) + ")"
+                    ? " (" + (perLoad >= 2 ? string.Format("up to {0} cards when 2+ are selected", perLoad) : "slot 1 only — " + slotReason) + ")"
                     : "");
 
             string report = "Printer: " + _settings.PrinterName + "\n" + page.Replace("  |  ", "\n") + "\n" + slots + "\n\n" +
@@ -2772,16 +2843,17 @@ namespace NPIC_CARD_APP
             var printer = new CardPrinter(_settings);
             if (!ConfirmPrinterReady(printer)) return;
 
+            // Every slot a full tray load uses; in Auto also slot 2 when it is not usable yet, so it can be found
+            int slots = Math.Max(_settings.SlotMode == SlotMode.One ? 1 : 2, printer.SlotsInUse());
+            var cards = new List<Bitmap>();
             try
             {
-                using (Bitmap c1 = CardPrinter.TrayImage(
-                           CardRenderer.RenderCalibration(1, _settings.Slot1X, _settings.Slot1Y), _settings, false))
-                using (Bitmap c2 = _settings.UseTwoSlots
-                           ? CardPrinter.TrayImage(CardRenderer.RenderCalibration(2, _settings.Slot2X, _settings.Slot2Y), _settings, false)
-                           : null)
+                for (int i = 0; i < slots; i++)
                 {
-                    printer.Print(c1, c2, "Card Studio Calibration");
+                    PointF p = _settings.SlotPosition(i);
+                    cards.Add(CardPrinter.TrayImage(CardRenderer.RenderCalibration(i + 1, p.X, p.Y), _settings, false));
                 }
+                printer.Print(cards, "Card Studio Calibration");
 
                 AppDialog.Show(this,
                     "Calibration job sent. Insert the tray when the printer light turns on.\n\n" +
@@ -2793,6 +2865,10 @@ namespace NPIC_CARD_APP
             catch (Exception ex)
             {
                 ShowError(ex);
+            }
+            finally
+            {
+                foreach (Bitmap card in cards) card.Dispose();
             }
         }
 
@@ -2821,16 +2897,14 @@ namespace NPIC_CARD_APP
 
             for (int i = 0, load = 1; i < list.Count; i += perLoad, load++)
             {
-                Student a = list[i];
-                Student b = (perLoad == 2 && i + 1 < list.Count) ? list[i + 1] : null;
+                List<Student> batch = list.Skip(i).Take(perLoad).ToList();   // batch[k] goes on slot k + 1
 
                 string message =
                     (load == 1 && requestedBy != null ? "Print asked from the mobile app (" + requestedBy + ").\n\n" : "") +
                     (load > 1 ? "Wait until the previous card is finished and the tray is ejected.\n\n" : "") +
                     (load == 1 && slotReason != null ? "Auto slots: printing 1 card per tray load.\n" + slotReason + "\n\n" : "") +
                     "Side: " + side + "\n\n" +
-                    "Slot 1: " + Describe(a) + "\n" +
-                    (b != null ? "Slot 2: " + Describe(b) + "\n" : "") +
+                    string.Concat(batch.Select((x, k) => "Slot " + (k + 1) + ": " + Describe(x) + "\n")) +
                     "\nClick OK to send the job, then insert the tray when the printer light turns on.";
 
                 DialogResult answer = AppDialog.Show(this, message,
@@ -2840,14 +2914,19 @@ namespace NPIC_CARD_APP
 
                 try
                 {
-                    string document = "Card Studio " + a.StudentId + " " + side;
-                    using (Bitmap img1 = RenderSide(a, front))
-                    using (Bitmap img2 = b != null ? RenderSide(b, front) : null)
+                    string document = "Card Studio " + batch[0].StudentId + " " + side;
+                    var images = new List<Bitmap>();
+                    try
                     {
-                        printer.Print(img1, img2, document);
+                        foreach (Student x in batch) images.Add(RenderSide(x, front));
+                        printer.Print(images, document);
+                    }
+                    finally
+                    {
+                        foreach (Bitmap image in images) image.Dispose();
                     }
                     SetStatus(string.Format("Sent tray load {0} of {1} ({2}).", load, totalLoads, side));
-                    historyError = RecordPrinted(side, document, a, b) ?? historyError;
+                    historyError = RecordPrinted(side, document, batch) ?? historyError;
                 }
                 catch (Exception ex)
                 {
@@ -2869,7 +2948,7 @@ namespace NPIC_CARD_APP
 
         /// <summary>
         /// Header "Print Back…": prints any number of card backs without picking students (the back is the same for
-        /// everyone), tray load by tray load, both slots used when available. Not added to the print history — the
+        /// everyone), tray load by tray load, every usable slot filled. Not added to the print history — the
         /// cards belong to no student yet. Printing the back for specific students is still Print side = Back + Print Selected.
         /// </summary>
         private void PrintBacks()
@@ -2879,7 +2958,7 @@ namespace NPIC_CARD_APP
             var printer = new CardPrinter(_settings);
 
             string slotReason;
-            int perLoadMany = printer.CardsPerLoad(2, out slotReason);
+            int perLoadMany = printer.CardsPerLoad(AppSettings.MaxSlots, out slotReason);
             int copies;
             using (var dlg = new PrintBackForm(_settings, Math.Max(1, SelectedStudents().Count), perLoadMany))
             {
@@ -2901,13 +2980,12 @@ namespace NPIC_CARD_APP
                 int sent = 0;
                 for (int load = 1; sent < copies; load++)
                 {
-                    bool two = perLoad == 2 && copies - sent >= 2;
+                    int n = Math.Min(perLoad, copies - sent);   // cards in this load: slot 1 … n
                     string message =
                         (load > 1 ? "Wait until the previous card is finished and the tray is ejected.\n\n" : "") +
                         (load == 1 && slotReason != null ? "Auto slots: printing 1 card per tray load.\n" + slotReason + "\n\n" : "") +
                         "Side: " + side + "\n\n" +
-                        "Slot 1: Back side\n" +
-                        (two ? "Slot 2: Back side\n" : "") +
+                        string.Concat(Enumerable.Range(1, n).Select(k => "Slot " + k + ": Back side\n")) +
                         "\nClick OK to send the job, then insert the tray when the printer light turns on.";
 
                     DialogResult answer = AppDialog.Show(this, message,
@@ -2921,14 +2999,14 @@ namespace NPIC_CARD_APP
 
                     try
                     {
-                        printer.Print(back, two ? back : null, string.Format("Card Studio BACK {0} of {1}", load, totalLoads));
+                        printer.Print(Enumerable.Repeat(back, n).ToList(), string.Format("Card Studio BACK {0} of {1}", load, totalLoads));
                     }
                     catch (Exception ex)
                     {
                         ShowError(ex);
                         return;
                     }
-                    sent += two ? 2 : 1;
+                    sent += n;
                     SetStatus(string.Format("Sent tray load {0} of {1} ({2}).", load, totalLoads, side));
                 }
                 SetStatus(string.Format("Done: {0} card back(s) printed.", copies));
@@ -2939,10 +3017,11 @@ namespace NPIC_CARD_APP
         /// Adds one tray load to the print history. Never throws — a full disk must not stop the cards printing.
         /// Returns the error message, or null when saved.
         /// </summary>
-        private string RecordPrinted(string side, string document, Student slot1, Student slot2)
+        /// <param name="slots">The students of the load: slots[k] printed on slot k + 1.</param>
+        private string RecordPrinted(string side, string document, IList<Student> slots)
         {
-            var records = new List<PrintRecord> { PrintRecord.For(slot1, side, 1, _settings.PrinterName, document) };
-            if (slot2 != null) records.Add(PrintRecord.For(slot2, side, 2, _settings.PrinterName, document));
+            List<PrintRecord> records = slots
+                .Select((s, k) => PrintRecord.For(s, side, k + 1, _settings.PrinterName, document)).ToList();
             try
             {
                 PrintHistory.Add(records);

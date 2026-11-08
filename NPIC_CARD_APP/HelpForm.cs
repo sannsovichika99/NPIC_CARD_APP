@@ -576,8 +576,8 @@ namespace NPIC_CARD_APP
                        "and expiry date, and the back with the institute's details.",
                        "**គូរកាតទាំងពីរផ្នែក** តាមទំហំពិត (85.6 × 54 mm)៖ ផ្នែកខាងមុខមានព័ត៌មាននិស្សិត រូបថត QR code និងថ្ងៃផុតកំណត់ " +
                        "ហើយផ្នែកខាងក្រោយមានព័ត៌មានវិទ្យាស្ថាន។"));
-            w.Bullet(T("**Prints one or two cards per tray load**, front and back separately, and checks the printer before every job.",
-                       "**បោះពុម្ពកាតមួយ ឬពីរក្នុងមួយថាស** ផ្នែកខាងមុខ និងខាងក្រោយដាច់ដោយឡែកពីគ្នា ហើយពិនិត្យម៉ាស៊ីនបោះពុម្ពមុនពេលបោះពុម្ពរាល់ដង។"));
+            w.Bullet(T("**Prints one to four cards per tray load**, front and back separately, and checks the printer before every job.",
+                       "**បោះពុម្ពកាតពីមួយដល់បួនក្នុងមួយថាស** ផ្នែកខាងមុខ និងខាងក្រោយដាច់ដោយឡែកពីគ្នា ហើយពិនិត្យម៉ាស៊ីនបោះពុម្ពមុនពេលបោះពុម្ពរាល់ដង។"));
             w.Bullet(T("**Keeps a print history** of every card side printed: who, which side, when, on which printer.",
                        "**រក្សាទុកប្រវត្តិបោះពុម្ព** នៃផ្នែកកាតនីមួយៗដែលបានបោះពុម្ព៖ អ្នកណា ផ្នែកណា ពេលណា និងលើម៉ាស៊ីនណា។"));
             w.Bullet(T("**Saves the RFID card number** (UID) of each printed card to a CSV file, which can be shared by several PCs.",
@@ -782,10 +782,16 @@ namespace NPIC_CARD_APP
                                     "ការងារដែលកំពុងរង់ចាំក្នុង Windows — បោះបង់ការងារដែលជាប់គាំងនៅទីនេះ។"));
 
             w.Heading(T("Tray tab", "ផ្ទាំង Tray"));
-            w.Key("Slot 1 / Slot 2", T("Position of each card pocket on the tray, X and Y in millimetres.",
-                                       "ទីតាំងរន្ធដាក់កាតនីមួយៗលើថាស គិតជាមីលីម៉ែត្រ (X និង Y)។"));
-            w.Key("Per tray load", T("**Auto** = 2 cards per load when 2 or more are selected and slot 2 is set up. **1** = slot 1 only. **2** = always both slots.",
-                                     "**Auto** = កាត 2 ក្នុងមួយថាស នៅពេលជ្រើសរើស 2 ឬច្រើនជាងនេះ ហើយរន្ធទី 2 បានរៀបចំរួច។ **1** = តែរន្ធទី 1។ **2** = ប្រើរន្ធទាំងពីរជានិច្ច។"));
+            w.Key("Slot", T("The card pocket (1 to 4) whose position you edit. You can also click a slot on the map.",
+                            "រន្ធដាក់កាត (1 ដល់ 4) ដែលអ្នកកែទីតាំង។ អ្នកក៏អាចចុចលើរន្ធនៅលើផែនទីបានដែរ។"));
+            w.Key("Position", T("X and Y of that pocket on the tray, in millimetres.",
+                                "X និង Y នៃរន្ធនោះលើថាស គិតជាមីលីម៉ែត្រ។"));
+            w.Key("Per tray load", T("**Auto** = when 2 or more are selected, one card per slot that is set up (slot 1, 2, 3, 4 in order: on the page " +
+                                     "and not on top of another slot). Slots 3 and 4 are not used until you give them a position. " +
+                                     "**1** … **4** = always that many slots.",
+                                     "**Auto** = នៅពេលជ្រើសរើស 2 ឬច្រើនជាងនេះ កាតមួយក្នុងរន្ធនីមួយៗដែលបានរៀបចំរួច (រន្ធទី 1, 2, 3, 4 តាមលំដាប់៖ នៅលើទំព័រ " +
+                                     "ហើយមិនជាន់លើរន្ធផ្សេង)។ រន្ធទី 3 និង 4 មិនត្រូវបានប្រើទេ រហូតដល់អ្នកកំណត់ទីតាំងឱ្យវា។ " +
+                                     "**1** … **4** = ប្រើរន្ធចំនួននោះជានិច្ច។"));
             w.Key("Card on tray", T("Horizontal, or Vertical (turn right / left 90°). If cards come out upside down, pick the other Vertical option.",
                                     "ផ្តេក ឬបញ្ឈរ (បង្វិលស្តាំ / ឆ្វេង 90°)។ ប្រសិនបើកាតចេញមកបញ្ច្រាស សូមជ្រើសជម្រើសបញ្ឈរមួយទៀត។"));
             w.Key("Rotate 180°", T("Turn the front and/or back side round when printing.",
@@ -817,9 +823,9 @@ namespace NPIC_CARD_APP
                         "**ជ្រើសរើសផ្នែក**៖ **Front** ឬ **Back** នៅផ្នែកខាងលើ ឬចុចលើរូបមើលជាមុននៃផ្នែកនោះ។"));
             w.Step(3, T("Click **Print Selected** (Ctrl+P). The app checks the printer first and warns you about any problem.",
                         "ចុច **Print Selected** (Ctrl+P)។ កម្មវិធីពិនិត្យម៉ាស៊ីនបោះពុម្ពជាមុន ហើយព្រមានអ្នកប្រសិនបើមានបញ្ហា។"));
-            w.Step(4, T("For each tray load a message lists the students in **Slot 1** and **Slot 2**. Click **OK** to send the job, " +
-                        "then insert the tray when the printer light turns on.",
-                        "សម្រាប់ថាសនីមួយៗ សារមួយបង្ហាញឈ្មោះនិស្សិតនៅ **Slot 1** និង **Slot 2**។ ចុច **OK** ដើម្បីផ្ញើការងារ " +
+            w.Step(4, T("For each tray load a message lists the students in **Slot 1**, **Slot 2** and so on (up to **Slot 4**). " +
+                        "Click **OK** to send the job, then insert the tray when the printer light turns on.",
+                        "សម្រាប់ថាសនីមួយៗ សារមួយបង្ហាញឈ្មោះនិស្សិតនៅ **Slot 1**, **Slot 2** ជាដើម (រហូតដល់ **Slot 4**)។ ចុច **OK** ដើម្បីផ្ញើការងារ " +
                         "រួចបញ្ចូលថាស នៅពេលភ្លើងម៉ាស៊ីនបោះពុម្ពភ្លឺ។"));
             w.Step(5, T("Wait until the card is finished and the tray is ejected before you click **OK** for the next load. " +
                         "**Cancel** stops the remaining loads.",
@@ -1312,7 +1318,10 @@ namespace NPIC_CARD_APP
             {
                 case SlotMode.One: return T("1 — always slot 1 only", "1 — តែរន្ធទី 1 ជានិច្ច");
                 case SlotMode.Two: return T("2 — always slot 1 + slot 2", "2 — រន្ធទី 1 + រន្ធទី 2 ជានិច្ច");
-                default: return T("Auto — 2 cards per load when possible", "ស្វ័យប្រវត្តិ — 2 កាតក្នុងមួយដង នៅពេលអាច");
+                case SlotMode.Three: return T("3 — always slots 1 to 3", "3 — រន្ធទី 1 ដល់ទី 3 ជានិច្ច");
+                case SlotMode.Four: return T("4 — always slots 1 to 4", "4 — រន្ធទី 1 ដល់ទី 4 ជានិច្ច");
+                default: return T("Auto — up to 4 cards per load, one per slot that is set up",
+                                  "ស្វ័យប្រវត្តិ — រហូតដល់ 4 កាតក្នុងមួយដង មួយក្នុងរន្ធនីមួយៗដែលបានរៀបចំ");
             }
         }
 
