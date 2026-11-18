@@ -199,9 +199,9 @@ namespace NPIC_CARD_APP
 
         // ===================== UI =====================
         //  ┌──────────────────────────────────────────────────────────────────────┐
-        //  │ [logo] Card Studio   Data   Card   App                               │
+        //  │ [logo] Card Studio │ Data Card App   bell [EN▾] │ [Front|Back] │ Print │
         //  ├──────────────────────────────────────────────────────────────────────┤
-        //  │ Good afternoon, …              bell [EN ▾]  [Front|Back]  Print      │
+        //  │ Good afternoon, …                                                    │
         //  │ 120 students · 2 selected · 1 tray load · 5 printed today            │
         //  │ ┌ Card preview ──────────────────┐  ┌ Student ───────────────────┐   │
         //  │ │ search + matches  ◀ ▶          │  │ details of the pick        │   │
@@ -221,9 +221,28 @@ namespace NPIC_CARD_APP
             // Docking runs in reverse add order: the fill control first, the edges last.
             Controls.Add(content);
             Controls.Add(divider);
-            Controls.Add(BuildMenuBar());
+            Controls.Add(BuildTopBar());
 
             ResumeLayout(true);
+        }
+
+        /// <summary>
+        /// Top bar of the window: logo, name and the three menus on the left; bell, language, print side and the print
+        /// buttons on the right, all on one white strip.
+        /// </summary>
+        private Control BuildTopBar()
+        {
+            var top = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 2, RowCount = 1,
+                BackColor = Surface, Padding = new Padding(10, 8, 16, 8), Margin = new Padding(0)
+            };
+            top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            top.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            top.Controls.Add(BuildMenuBar(), 0, 0);
+            top.Controls.Add(BuildBarActions(), 1, 0);
+            return top;
         }
 
         /// <summary>
@@ -234,9 +253,10 @@ namespace NPIC_CARD_APP
         {
             var bar = _menuBar = new MenuStrip
             {
-                Dock = DockStyle.Top, BackColor = Surface, ForeColor = TextMain, Font = Theme.Nav,
-                GripStyle = ToolStripGripStyle.Hidden, Padding = new Padding(10, 5, 10, 5),
-                Renderer = ThemedMenu.Renderer(), ShowItemToolTips = true
+                Dock = DockStyle.None, AutoSize = true, Stretch = false, Anchor = AnchorStyles.Left,
+                BackColor = Surface, ForeColor = TextMain, Font = Theme.Nav, Margin = new Padding(0),
+                GripStyle = ToolStripGripStyle.Hidden, Padding = new Padding(0, 2, 0, 2),
+                Renderer = ThemedMenu.BarRenderer(), ShowItemToolTips = true
             };
             MainMenuStrip = bar;
             bar.Disposed += (s, e) => { foreach (Image icon in _menuIcons) icon.Dispose(); };
@@ -254,6 +274,7 @@ namespace NPIC_CARD_APP
                 brand.TextImageRelation = TextImageRelation.ImageBeforeText;
             }
             bar.Items.Add(brand);
+            bar.Items.Add(new ToolStripSeparator { Margin = new Padding(0, 0, 8, 0) });
 
             ToolStripMenuItem data = TopMenu("Data");
             AddCommand(data, "Find Student", Theme.IcoSearch, () => { _txtSearch.Focus(); _txtSearch.SelectAll(); },
@@ -311,10 +332,13 @@ namespace NPIC_CARD_APP
         private static ToolStripMenuItem TopMenu(string text)
         {
             ToolStripMenuItem menu = ThemedMenu.SubMenu(text);
-            menu.Padding = new Padding(8, 0, 8, 0);
+            menu.Padding = new Padding(12, 6, 12, 6);
+            menu.Margin = new Padding(0, 0, 2, 0);
             var drop = (ToolStripDropDownMenu)menu.DropDown;
             drop.ShowImageMargin = true;
             drop.ShowItemToolTips = true;
+            drop.Renderer = ThemedMenu.BarRenderer();
+            drop.Padding = new Padding(2, 6, 2, 6);
             return menu;
         }
 
@@ -392,7 +416,7 @@ namespace NPIC_CARD_APP
         /// </summary>
         private Control BuildLanguageSwitch()
         {
-            var button = new LanguageButton { Margin = new Padding(2, 6, 0, 0) };
+            var button = new LanguageButton();
             _tip.SetToolTip(button, "English · ភាសាខ្មែរ  (Ctrl+Shift+L)");
 
             ContextMenuStrip menu = null;
@@ -465,16 +489,15 @@ namespace NPIC_CARD_APP
             return grid;
         }
 
-        /// <summary>"Good afternoon, …" and the summary line on the left; print side pills and the print buttons on the right.</summary>
+        /// <summary>"Good afternoon, …" and the summary line (the print side and print buttons are in the menu bar).</summary>
         private Control BuildHeader()
         {
             var header = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Color.Transparent,
+                Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 1, BackColor = Color.Transparent,
                 Padding = new Padding(Theme.ShadowPad, 0, Theme.ShadowPad, 0), Margin = new Padding(0)
             };
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             header.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
             var titles = new FlowLayoutPanel
@@ -489,17 +512,23 @@ namespace NPIC_CARD_APP
             });
             titles.Controls.Add(BuildSummary());
 
-            _sideTabs = new PillTabs("Front", "Back") { Margin = new Padding(0, 6, 4, 0) };
-            _tip.SetTip(_sideTabs, "Side of the card that Print Selected sends to the printer");
-            _sideTabs.SelectedIndexChanged += (s, e) => UpdateSideHighlight();
+            header.Controls.Add(titles, 0, 0);
+            return header;
+        }
 
+        /// <summary>
+        /// Right side of the menu bar: notifications bell and language, the print side (Front | Back on a soft track),
+        /// then Print Back… and Print Selected, all centred vertically in the bar.
+        /// </summary>
+        private Control BuildBarActions()
+        {
             var actions = new FlowLayoutPanel
             {
-                AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, BackColor = Color.Transparent,
-                Margin = new Padding(0)
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false,
+                Anchor = AnchorStyles.Right, BackColor = Color.Transparent, Margin = new Padding(0)
             };
 
-            _bell = new NotificationBell { Margin = new Padding(0, 5, 6, 0) };
+            _bell = new NotificationBell { Margin = new Padding(0, 0, 2, 0) };
             _bell.Click += (s, e) => ShowNotifications();
             _tip.SetTip(_bell, "Notifications: warnings, errors and finished jobs (Ctrl+Shift+N)");
             _notices.Changed += (s, e) =>
@@ -509,24 +538,49 @@ namespace NPIC_CARD_APP
             };
             _notices.Added += n => { if (n.Kind >= NoticeKind.Warning) _bell.Ring(); };
             actions.Controls.Add(_bell);
-            actions.Controls.Add(BuildLanguageSwitch());
-            actions.Controls.Add(new Panel { Width = 1, Height = 26, BackColor = Border, Margin = new Padding(6, 12, 10, 0) });
+
+            Control language = BuildLanguageSwitch();
+            language.Margin = new Padding(0, 4, 0, 4);
+            actions.Controls.Add(language);
+            actions.Controls.Add(BarDivider());
 
             actions.Controls.Add(new Label
             {
                 Text = "Print side", Font = Theme.Small, ForeColor = TextMuted, AutoSize = true,
-                BackColor = Color.Transparent, Margin = new Padding(0, 14, 6, 0)
+                BackColor = Color.Transparent, Margin = new Padding(0, 12, 6, 0)
             });
-            actions.Controls.Add(_sideTabs);
-            actions.Controls.Add(new Panel { Width = 1, Height = 26, BackColor = Border, Margin = new Padding(8, 9, 6, 0) });
-            actions.Controls.Add(MakeButton("Print Back…", PillKind.Secondary, (s, e) => PrintBacks(),
-                "Print copies of the card back — the same for every student, no student needed (Ctrl+Shift+P)"));
-            actions.Controls.Add(MakeButton("Print Selected", PillKind.Primary, (s, e) => PrintSelected(),
-                "Print the selected students, tray load by tray load (Ctrl+P)"));
+            _sideTabs = new PillTabs("Front", "Back") { Margin = new Padding(0) };
+            _tip.SetTip(_sideTabs, "Side of the card that Print Selected sends to the printer");
+            _sideTabs.SelectedIndexChanged += (s, e) => UpdateSideHighlight();
+            var track = new RoundTrack { Margin = new Padding(0, 1, 0, 1) };
+            track.Controls.Add(_sideTabs);
+            actions.Controls.Add(track);
+            actions.Controls.Add(BarDivider());
 
-            header.Controls.Add(titles, 0, 0);
-            header.Controls.Add(actions, 1, 0);
-            return header;
+            Button back = MakeButton("Print Back…", PillKind.Secondary, (s, e) => PrintBacks(),
+                "Print copies of the card back — the same for every student, no student needed (Ctrl+Shift+P)");
+            back.MinimumSize = new Size(0, 36);
+            back.Margin = new Padding(0, 2, 0, 2);
+            actions.Controls.Add(back);
+            Button print = MakeButton("Print Selected", PillKind.Primary, (s, e) => PrintSelected(),
+                "Print the selected students, tray load by tray load (Ctrl+P)");
+            print.MinimumSize = new Size(132, 36);
+            print.Margin = new Padding(8, 2, 0, 2);
+            actions.Controls.Add(print);
+
+            // Centre every control vertically in the row (Anchor None), whatever the display scaling makes their heights.
+            foreach (Control c in actions.Controls)
+            {
+                c.Anchor = AnchorStyles.None;
+                c.Margin = new Padding(c.Margin.Left, 0, c.Margin.Right, 0);
+            }
+            return actions;
+        }
+
+        /// <summary>Short vertical hairline between groups of the menu bar.</summary>
+        private static Control BarDivider()
+        {
+            return new Panel { Width = 1, Height = 22, BackColor = Border, Margin = new Padding(12, 9, 12, 9) };
         }
 
         private static string Greeting()

@@ -1780,6 +1780,85 @@ namespace NPIC_CARD_APP
             return new ToolStripProfessionalRenderer(new MenuColors()) { RoundedEdges = false };
         }
 
+        /// <summary>
+        /// Modern renderer of the main window's menu bar and its drop-downs: flat bar, the open / hovered menu title in a
+        /// rounded soft-accent pill with accent text, drop-down rows highlighted by an inset rounded pill.
+        /// </summary>
+        public static ToolStripRenderer BarRenderer()
+        {
+            return new ModernBarRenderer();
+        }
+
+        private sealed class ModernBarRenderer : ToolStripProfessionalRenderer
+        {
+            public ModernBarRenderer() : base(new MenuColors()) { RoundedEdges = false; }
+
+            protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
+            {
+                if (e.ToolStrip is ToolStripDropDown) { base.OnRenderToolStripBackground(e); return; }
+                using (var b = new SolidBrush(Theme.EffectiveBack(e.ToolStrip))) e.Graphics.FillRectangle(b, e.AffectedBounds);
+            }
+
+            protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+            {
+                if (e.ToolStrip is ToolStripDropDown) base.OnRenderToolStripBorder(e);   // the bar itself has no border
+            }
+
+            protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+            {
+                ToolStripItem item = e.Item;
+                bool hot = item.Enabled && (item.Selected || item.Pressed);
+                if (!hot) return;
+                Graphics g = e.Graphics;
+                Theme.HighQuality(g);
+                RectangleF r = item.IsOnDropDown
+                    ? new RectangleF(4, 1, item.Width - 7, item.Height - 2)      // inset pill inside the drop-down
+                    : new RectangleF(1, 2, item.Width - 2, item.Height - 4);     // pill around the menu title
+                bool open = !item.IsOnDropDown && item.Pressed;
+                using (System.Drawing.Drawing2D.GraphicsPath p = Theme.RoundRect(r, item.IsOnDropDown ? 6 : 8))
+                using (var b = new SolidBrush(open ? Theme.AccentSoftDown : Theme.AccentSoft))
+                    g.FillPath(b, p);
+            }
+
+            protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+            {
+                var item = e.Item as ToolStripMenuItem;
+                if (item != null && item.Enabled)
+                {
+                    bool hot = item.Selected || item.Pressed;
+                    bool shortcut = item.IsOnDropDown && !string.IsNullOrEmpty(item.ShortcutKeyDisplayString)
+                                    && e.Text == item.ShortcutKeyDisplayString;
+                    if (shortcut) e.TextColor = hot ? Theme.TextSoft : Theme.TextMuted;   // shortcut column quieter
+                    else if (hot) e.TextColor = Theme.Accent;
+                }
+                base.OnRenderItemText(e);
+            }
+
+            protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
+            {
+                e.ArrowColor = e.Item != null && e.Item.Selected ? Theme.Accent : Theme.TextMuted;
+                base.OnRenderArrow(e);
+            }
+
+            protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+            {
+                Graphics g = e.Graphics;
+                using (var pen = new Pen(Theme.Border))
+                {
+                    if (e.Vertical)
+                    {
+                        int x = e.Item.Width / 2;
+                        g.DrawLine(pen, x, 6, x, e.Item.Height - 6);
+                    }
+                    else
+                    {
+                        int y = e.Item.Height / 2;
+                        g.DrawLine(pen, 10, y, e.Item.Width - 10, y);
+                    }
+                }
+            }
+        }
+
         public static ToolStripLabel Header(string text)
         {
             return new ToolStripLabel(text) { Font = Theme.SmallCaps, ForeColor = Theme.TextMuted, Margin = new Padding(6, 6, 0, 2) };

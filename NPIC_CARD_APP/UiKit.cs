@@ -572,6 +572,36 @@ namespace NPIC_CARD_APP
     }
 
     /// <summary>Segmented pill switch (Today / Week / Month in the sample). Selected item gets a lavender pill.</summary>
+    /// <summary>
+    /// Rounded soft track behind a segmented control (e.g. the Front | Back <see cref="PillTabs"/> in the menu bar):
+    /// sizes itself to its child plus a 3 px rim. The child must have a transparent back colour.
+    /// </summary>
+    internal sealed class RoundTrack : Panel
+    {
+        public RoundTrack()
+        {
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.ResizeRedraw |
+                     ControlStyles.UserPaint, true);
+            AutoSize = true;
+            AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            Padding = new Padding(3);
+            BackColor = Theme.Surface;
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.Clear(Theme.EffectiveBack(Parent));
+            Theme.HighQuality(g);
+            var r = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
+            using (GraphicsPath p = Theme.RoundRect(r, r.Height / 2))
+            {
+                using (var b = new SolidBrush(Theme.Tile)) g.FillPath(b, p);
+                using (var pen = new Pen(Theme.GridLine)) g.DrawPath(pen, p);
+            }
+        }
+    }
+
     internal sealed class PillTabs : Control
     {
         private readonly string[] _items;
